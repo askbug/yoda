@@ -72,3 +72,6 @@ Thumbs.db
 
 src/main/appConfig.json
 .pi/extensions/emdash-hook.ts
+
+# Local logo design drafts (not packaged with releases)
+/assets/logo-drafts/
