@@ -358,6 +358,21 @@ export class ProjectManagerStore {
     }
   }
 
+  async archiveProject(projectId: string): Promise<void> {
+    const snapshot = this.projects.get(projectId);
+    runInAction(() => {
+      this.projects.delete(projectId);
+    });
+    try {
+      await rpc.projects.archiveProject(projectId);
+    } catch (err) {
+      runInAction(() => {
+        if (snapshot) this.projects.set(projectId, snapshot);
+      });
+      throw err;
+    }
+  }
+
   async updateProjectConnection(projectId: string, newConnectionId: string): Promise<void> {
     await rpc.projects.updateProjectConnection(projectId, newConnectionId);
 

@@ -34,6 +34,7 @@ export type Task = {
   lastInteractedAt?: string;
   linkedIssue?: Issue;
   isPinned: boolean;
+  isUserNamed: boolean;
   prs: PullRequest[];
   conversations: Record<string, number>;
   workspaceProvider?: 'byoi';

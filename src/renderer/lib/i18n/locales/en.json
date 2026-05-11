@@ -38,6 +38,7 @@
   },
   "sidebar": {
     "newSession": "New session",
+    "searchSession": "Search session",
     "skills": "Skills",
     "automation": "Automation",
     "settings": "Settings",
@@ -54,7 +55,7 @@
     "projectNotFound": "Project not found at path",
     "reconnect": "Reconnect",
     "changeSshConnection": "Change SSH connection",
-    "removeProject": "Remove project",
+    "archiveProject": "Archive project",
     "archiveTask": "Archive task",
     "phase": {
       "creatingRepo": "Creating repository…",
@@ -62,12 +63,6 @@
       "registering": "Registering…",
       "error": "Failed",
       "loading": "Loading…"
-    },
-    "deleteProject": {
-      "title": "Delete project",
-      "description": "\"{{name}}\" will be deleted. The project folder and worktrees will stay on the filesystem.",
-      "confirmLabel": "Delete",
-      "fallbackName": "this project"
     },
     "deleteTask": {
       "title": "Delete task",

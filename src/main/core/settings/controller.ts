@@ -14,8 +14,10 @@ export const appSettingsController = createRPCController({
     overrides: Partial<AppSettings[T]>;
   }> => appSettingsService.getWithMeta(key),
 
-  update: <T extends AppSettingsKey>(key: T, value: AppSettings[T]): Promise<void> =>
-    appSettingsService.update(key, value),
+  update: <T extends AppSettingsKey>(
+    key: T,
+    value: AppSettings[T] | Partial<AppSettings[T]>
+  ): Promise<void> => appSettingsService.update(key, value),
 
   reset: <T extends AppSettingsKey>(key: T): Promise<void> => appSettingsService.reset(key),
 

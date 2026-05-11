@@ -45,6 +45,7 @@ export const projects = sqliteTable(
     sshConnectionId: text('ssh_connection_id').references(() => sshConnections.id, {
       onDelete: 'set null',
     }),
+    archivedAt: text('archived_at'), // null = active, timestamp = archived
     createdAt: text('created_at')
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -55,6 +56,7 @@ export const projects = sqliteTable(
   (table) => ({
     pathIdx: uniqueIndex('idx_projects_path').on(table.path),
     sshConnectionIdIdx: index('idx_projects_ssh_connection_id').on(table.sshConnectionId),
+    archivedAtIdx: index('idx_projects_archived_at').on(table.archivedAt),
   })
 );
 
@@ -125,6 +127,7 @@ export const tasks = sqliteTable(
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
     isPinned: integer('is_pinned').notNull().default(0), // boolean, 0=false, 1=true
+    isUserNamed: integer('is_user_named').notNull().default(0), // 1 if user manually renamed; blocks agent auto-sync
     workspaceProvider: text('workspace_provider'), // 'local' | 'ssh' | null (null = inherit from project settings)
     workspaceId: text('workspace_id'),
     workspaceProviderData: text('workspace_provider_data'), // JSON, BYOI only

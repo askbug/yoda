@@ -1,0 +1,1 @@
+ALTER TABLE `tasks` ADD `is_user_named` integer DEFAULT 0 NOT NULL;

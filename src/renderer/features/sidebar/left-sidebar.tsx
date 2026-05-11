@@ -1,10 +1,19 @@
-import { FolderInput, FolderPlus, MessageSquareShare, Plug, Puzzle, Settings } from 'lucide-react';
+import {
+  FolderInput,
+  FolderPlus,
+  MessageSquareShare,
+  Puzzle,
+  Search,
+  Settings,
+  Workflow,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   isCurrentView,
   useNavigate,
+  useParams,
   useWorkspaceSlots,
 } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
@@ -32,7 +41,18 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
   const { currentView } = useWorkspaceSlots();
 
   const showFeedbackModal = useShowModal('feedbackModal');
+  const showCommandPalette = useShowModal('commandPaletteModal');
   const { isDragOver, onDragOver, onDragEnter, onDragLeave, onDrop } = useSidebarDrop();
+
+  const { params: taskParams } = useParams('task');
+  const { params: projectParams } = useParams('project');
+  const currentProjectId =
+    currentView === 'task'
+      ? taskParams.projectId
+      : currentView === 'project'
+        ? projectParams.projectId
+        : undefined;
+  const currentTaskId = currentView === 'task' ? taskParams.taskId : undefined;
 
   return (
     <div
@@ -70,6 +90,34 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               <ShortcutHint settingsKey="newProject" />
             </SidebarMenuButton>
             <SidebarMenuButton
+              onClick={() =>
+                showCommandPalette({ projectId: currentProjectId, taskId: currentTaskId })
+              }
+              aria-label={t('sidebar.searchSession')}
+              className="w-full justify-between"
+            >
+              <span className="flex items-center gap-2 min-w-0 w-full">
+                <Search className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="truncate min-w-0">{t('sidebar.searchSession')}</span>
+              </span>
+              <ShortcutHint settingsKey="commandPalette" />
+            </SidebarMenuButton>
+          </SidebarMenu>
+        </SidebarFooter>
+        <SidebarContent className="flex flex-col">
+          <SidebarPinnedTaskList />
+          <SidebarGroup className="mb-0 min-h-0 flex-1 flex flex-col">
+            <ProjectsGroupLabel />
+            <SidebarGroupContent className="min-h-0 flex-1 flex flex-col">
+              <SidebarMenu className="flex-1 min-h-0 flex flex-col">
+                <SidebarVirtualList />
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <div className="flex flex-col border-t border-border">
+          <SidebarMenu className="px-2 pt-2">
+            <SidebarMenuButton
               isActive={isCurrentView(currentView, 'skills')}
               onClick={() => navigate('skills')}
               aria-label={t('sidebar.skills')}
@@ -84,7 +132,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               aria-label={t('sidebar.automation')}
               className="w-full justify-start"
             >
-              <Plug className="h-5 w-5 sm:h-4 sm:w-4" />
+              <Workflow className="h-5 w-5 sm:h-4 sm:w-4" />
               {t('sidebar.automation')}
             </SidebarMenuButton>
             <SidebarMenuButton
@@ -100,28 +148,17 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               <ShortcutHint settingsKey="settings" />
             </SidebarMenuButton>
           </SidebarMenu>
-        </SidebarFooter>
-        <SidebarContent className="flex flex-col">
-          <SidebarPinnedTaskList />
-          <SidebarGroup className="mb-0 min-h-0 flex-1 flex flex-col">
-            <ProjectsGroupLabel />
-            <SidebarGroupContent className="min-h-0 flex-1 flex flex-col">
-              <SidebarMenu className="flex-1 min-h-0 flex flex-col">
-                <SidebarVirtualList />
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-        <div className="flex items-center gap-2 justify-between px-3 py-2 border-t border-border">
-          <button
-            type="button"
-            className="flex h-6 items-center min-w-0 w-full cursor-pointer gap-2 rounded-lg px-3 text-sm text-foreground-muted focus:outline-none focus-visible:outline-none"
-            onClick={() => showFeedbackModal({})}
-          >
-            <MessageSquareShare className="size-4 shrink-0" />
-            <span className="truncate">{t('sidebar.giveFeedback')}</span>
-          </button>
-          <UpdateSection />
+          <div className="flex items-center gap-2 justify-between px-3 py-2 border-t border-border">
+            <button
+              type="button"
+              className="flex h-6 items-center min-w-0 w-full cursor-pointer gap-2 rounded-lg px-3 text-sm text-foreground-muted focus:outline-none focus-visible:outline-none"
+              onClick={() => showFeedbackModal({})}
+            >
+              <MessageSquareShare className="size-4 shrink-0" />
+              <span className="truncate">{t('sidebar.giveFeedback')}</span>
+            </button>
+            <UpdateSection />
+          </div>
         </div>
       </SidebarContainer>
     </div>

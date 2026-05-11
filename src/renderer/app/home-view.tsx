@@ -154,7 +154,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-background text-foreground">
-      <div className="container mx-auto flex min-h-full max-w-3xl flex-1 flex-col px-8 py-12">
+      <div className="container mx-auto flex min-h-full max-w-3xl flex-1 flex-col px-8 pb-12 pt-24">
         <div className="mb-8 text-center">
           <div className="mb-4 flex items-center justify-center">
             <img
@@ -185,28 +185,30 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                   if (canSubmit) void handleSubmit();
                 }
               }}
-              className="min-h-28 resize-none border-0 bg-transparent px-5 py-4 text-base placeholder:text-foreground-muted focus-visible:ring-0"
+              className="min-h-28 resize-none border-0 bg-transparent px-5 pb-2 pt-4 text-base placeholder:text-foreground-muted focus-visible:ring-0"
             />
-            <div className="flex items-center justify-between gap-2 px-3 pb-3">
-              <button
-                type="button"
-                aria-label={t('home.addAria')}
-                onClick={() => showAddProjectModal({ strategy: 'local', mode: 'pick' })}
-                className="flex size-7 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
-              >
-                <Plus className="size-4" />
-              </button>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5 pt-1">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={t('home.addAria')}
+                  onClick={() => showAddProjectModal({ strategy: 'local', mode: 'pick' })}
+                  className="flex size-8 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5">
                 <AgentSelector
                   value={providerId}
                   onChange={setProviderOverride}
                   connectionId={connectionId}
-                  className="h-7 border-0 bg-transparent px-2 text-xs hover:bg-background-2"
+                  className="h-8 gap-1.5 rounded-full border-0 bg-background-2/60 px-3 text-xs font-medium text-foreground transition-colors hover:bg-background-2"
                 />
                 <button
                   type="button"
                   aria-label={t('home.voiceAria')}
-                  className="flex size-7 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+                  className="flex size-8 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
                 >
                   <Mic className="size-4" />
                 </button>
@@ -216,13 +218,15 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                   disabled={!canSubmit}
                   onClick={() => void handleSubmit()}
                   className={cn(
-                    'flex size-8 items-center justify-center rounded-full transition-colors',
+                    'flex size-8 items-center justify-center rounded-full transition-all duration-150',
                     canSubmit
-                      ? 'bg-foreground text-background hover:opacity-90'
-                      : 'bg-background-2 text-foreground-muted'
+                      ? 'scale-100 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
+                      : 'scale-95 text-foreground-muted/60'
                   )}
                 >
-                  <ArrowUp className="size-4" />
+                  <ArrowUp
+                    className={cn('size-4 transition-transform', canSubmit && 'scale-110')}
+                  />
                 </button>
               </div>
             </div>

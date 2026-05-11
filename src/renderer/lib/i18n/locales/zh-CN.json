@@ -38,6 +38,7 @@
   },
   "sidebar": {
     "newSession": "新建会话",
+    "searchSession": "搜索会话",
     "skills": "Skills",
     "automation": "自动化",
     "settings": "设置",
@@ -54,7 +55,7 @@
     "projectNotFound": "项目路径未找到",
     "reconnect": "重新连接",
     "changeSshConnection": "更换 SSH 连接",
-    "removeProject": "移除项目",
+    "archiveProject": "归档项目",
     "archiveTask": "归档任务",
     "phase": {
       "creatingRepo": "创建仓库中…",
@@ -62,12 +63,6 @@
       "registering": "注册中…",
       "error": "失败",
       "loading": "加载中…"
-    },
-    "deleteProject": {
-      "title": "删除项目",
-      "description": "“{{name}}”将被删除。项目目录与 worktree 仍会保留在文件系统中。",
-      "confirmLabel": "删除",
-      "fallbackName": "此项目"
     },
     "deleteTask": {
       "title": "删除任务",

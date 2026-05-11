@@ -1,9 +1,7 @@
 import { ChevronDown, GitBranch } from 'lucide-react';
 import { BranchDisplay } from '@renderer/lib/components/branch-display';
 import { ProjectBranchSelector } from '@renderer/lib/components/project-branch-selector';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@renderer/lib/ui/collapsible';
 import { ComboboxTrigger, ComboboxValue } from '@renderer/lib/ui/combobox';
-import { Field, FieldLabel } from '@renderer/lib/ui/field';
 import { Switch } from '@renderer/lib/ui/switch';
 import { cn } from '@renderer/utils/utils';
 import { type BranchSelectionState } from './use-branch-selection';
@@ -56,29 +54,28 @@ export function BranchPickerField({
         />
       ) : null}
       {!isUnborn && (
-        <Collapsible className="border-t border-border">
-          <CollapsibleTrigger className="w-full p-2 hover:bg-background-1 data-open:bg-background-1 flex text-xs text-foreground-muted items-center gap-2 justify-between">
-            Should create and push feature branch
-            <ChevronDown className="size-4 shrink-0 text-foreground-muted" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="overflow-hidden h-(--collapsible-panel-height) transition-[height] duration-200 ease-out">
-            <div className="p-2 flex flex-col gap-2">
-              <Field orientation="horizontal">
-                <Switch
-                  checked={createBranchAndWorktree}
-                  onCheckedChange={setCreateBranchAndWorktree}
-                />
-                <FieldLabel>Create task branch and worktree</FieldLabel>
-              </Field>
-              {createBranchAndWorktree && (
-                <Field orientation="horizontal">
-                  <Switch checked={pushBranch} onCheckedChange={setPushBranch} />
-                  <FieldLabel>Push branch to remote</FieldLabel>
-                </Field>
-              )}
+        <div className="border-t border-border p-2 flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-sm text-foreground-muted select-none">
+            <Switch
+              checked={createBranchAndWorktree}
+              onCheckedChange={setCreateBranchAndWorktree}
+            />
+            <span
+              className="cursor-pointer"
+              onClick={() => setCreateBranchAndWorktree(!createBranchAndWorktree)}
+            >
+              Create task branch and worktree
+            </span>
+          </div>
+          {createBranchAndWorktree && (
+            <div className="flex items-center gap-2 text-sm text-foreground-muted select-none">
+              <Switch checked={pushBranch} onCheckedChange={setPushBranch} />
+              <span className="cursor-pointer" onClick={() => setPushBranch(!pushBranch)}>
+                Push branch to remote
+              </span>
             </div>
-          </CollapsibleContent>
-        </Collapsible>
+          )}
+        </div>
       )}
       {isUnborn && (
         <p className="border-t border-border bg-background-1 px-2 py-1 text-xs text-foreground-muted">

@@ -38,11 +38,7 @@ export function useAppSettingsKey<K extends AppSettingsKey>(key: K) {
     Partial<AppSettings[K]>,
     { prev: SettingsMeta<K> | undefined }
   >({
-    mutationFn: (partial) => {
-      const current = queryClient.getQueryData<SettingsMeta<K>>(['appSettings', key, 'meta']);
-      const merged = mergeValue(current?.value, partial);
-      return rpc.appSettings.update(key, merged) as Promise<void>;
-    },
+    mutationFn: (partial) => rpc.appSettings.update(key, partial) as Promise<void>,
     onMutate: async (partial) => {
       await queryClient.cancelQueries({ queryKey: ['appSettings', key, 'meta'] });
       const prev = queryClient.getQueryData<SettingsMeta<K>>(['appSettings', key, 'meta']);

@@ -41,7 +41,11 @@ if (!hasApiKeyAuth && !hasAppleIdAuth) {
 }
 
 let keyFile = apiKeyPath ?? '';
-if (hasApiKeyAuth && apiKeyPath && (apiKeyPath.includes('BEGIN PRIVATE KEY') || apiKeyPath.length > 500)) {
+if (
+  hasApiKeyAuth &&
+  apiKeyPath &&
+  (apiKeyPath.includes('BEGIN PRIVATE KEY') || apiKeyPath.length > 500)
+) {
   const { writeFileSync } = await import('node:fs');
   keyFile = join(tmpdir(), `apple_api_key_${Date.now()}.p8`);
   writeFileSync(keyFile, apiKeyPath);

@@ -1,10 +1,44 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import type { LocalProject, SshProject } from '@shared/projects';
 import { db } from '@main/db/client';
 import { projects } from '@main/db/schema';
 
 export async function getProjects(): Promise<(LocalProject | SshProject)[]> {
-  const rows = await db.select().from(projects).orderBy(desc(projects.updatedAt));
+  const rows = await db
+    .select()
+    .from(projects)
+    .where(isNull(projects.archivedAt))
+    .orderBy(desc(projects.updatedAt));
+  return rows.map((row) =>
+    row.workspaceProvider === 'local'
+      ? {
+          type: 'local' as const,
+          id: row.id,
+          name: row.name,
+          path: row.path,
+          baseRef: row.baseRef ?? 'main',
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        }
+      : {
+          type: 'ssh' as const,
+          id: row.id,
+          name: row.name,
+          path: row.path,
+          baseRef: row.baseRef ?? 'main',
+          connectionId: row.sshConnectionId!,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        }
+  );
+}
+
+export async function getArchivedProjects(): Promise<(LocalProject | SshProject)[]> {
+  const rows = await db
+    .select()
+    .from(projects)
+    .where(isNotNull(projects.archivedAt))
+    .orderBy(desc(projects.updatedAt));
   return rows.map((row) =>
     row.workspaceProvider === 'local'
       ? {

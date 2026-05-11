@@ -40,6 +40,8 @@ class SearchService {
 
     projectEvents.on('project:created', (project) => this.upsertProject(project));
     projectEvents.on('project:deleted', (projectId) => this.removeByType('project', projectId));
+    projectEvents.on('project:archived', (projectId) => this.removeByType('project', projectId));
+    projectEvents.on('project:unarchived', (project) => this.upsertProject(project));
 
     conversationEvents.on('conversation:created', (conversation) =>
       this.upsertConversation(conversation)
@@ -266,6 +268,7 @@ class SearchService {
           upsertStmt.run('task', t.id, t.projectId, null, t.name, t.taskBranch ?? '');
         }
         for (const p of allProjects) {
+          if (p.archivedAt) continue;
           upsertStmt.run('project', p.id, null, null, p.name, p.path);
         }
         for (const c of allConversations) {
@@ -275,7 +278,7 @@ class SearchService {
 
       log.info('SearchService: backfilled search index', {
         tasks: allTasks.filter((t) => !t.archivedAt).length,
-        projects: allProjects.length,
+        projects: allProjects.filter((p) => !p.archivedAt).length,
         conversations: allConversations.length,
       });
     } catch (e) {

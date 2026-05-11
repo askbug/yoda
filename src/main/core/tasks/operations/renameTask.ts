@@ -1,10 +1,12 @@
 import { and, eq, sql } from 'drizzle-orm';
+import { taskRenamedChannel } from '@shared/events/taskEvents';
 import { deriveTaskSlug, normalizeTaskDisplayName } from '@shared/task-name';
 import { projectManager } from '@main/core/projects/project-manager';
 import { taskEvents } from '@main/core/tasks/task-events';
 import { mapTaskRowToTask } from '@main/core/tasks/utils/utils';
 import { db } from '@main/db/client';
 import { tasks } from '@main/db/schema';
+import { events } from '@main/lib/events';
 import { appSettingsService } from '../../settings/settings-service';
 
 export async function renameTask(
@@ -52,6 +54,7 @@ export async function renameTask(
     .update(tasks)
     .set({
       name: displayName,
+      isUserNamed: 1,
       taskBranch: newBranch ?? row.taskBranch,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
@@ -60,5 +63,11 @@ export async function renameTask(
 
   if (updatedRow) {
     taskEvents._emit('task:updated', mapTaskRowToTask(updatedRow));
+    events.emit(taskRenamedChannel, {
+      taskId,
+      projectId,
+      name: displayName,
+      isUserNamed: true,
+    });
   }
 }

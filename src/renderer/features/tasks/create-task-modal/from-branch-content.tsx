@@ -25,14 +25,14 @@ export function FromBranchContent({
 }: FromBranchContentProps) {
   return (
     <div className="flex flex-col gap-4">
+      <TaskNameField state={state} />
+      <InitialConversationField state={initialConversation} connectionId={connectionId} />
       <BranchPickerField
         state={state}
         projectId={projectId}
         currentBranch={currentBranch}
         isUnborn={isUnborn}
       />
-      <TaskNameField state={state} />
-      <InitialConversationField state={initialConversation} connectionId={connectionId} />
     </div>
   );
 }

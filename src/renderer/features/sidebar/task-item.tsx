@@ -1,4 +1,4 @@
-import { MoreHorizontal } from 'lucide-react';
+import { Archive, MoreHorizontal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,6 @@ import {
   getTaskStore,
 } from '@renderer/features/tasks/stores/task-selectors';
 import { rpc } from '@renderer/lib/ipc';
-import { useWorkspaceLayoutContext } from '@renderer/lib/layout/layout-provider';
 import {
   useNavigate,
   useParams,
@@ -42,7 +41,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
 }: SidebarTaskItemProps) {
   const { t } = useTranslation();
   const { navigate } = useNavigate();
-  const { setCollapsed } = useWorkspaceLayoutContext();
   const showRename = useShowModal('renameTaskModal');
   const showConfirm = useShowModal('confirmActionModal');
   const showManageRunScripts = useShowModal('manageRunScriptsModal');
@@ -149,7 +147,10 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
           handleProvision();
           navigate('task', { projectId, taskId });
         }}
-        onDoubleClick={() => setCollapsed('left', true)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          handleRename();
+        }}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 self-stretch overflow-hidden">
           <span
@@ -183,6 +184,16 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
               </SidebarItemMiniButton>
             }
           />
+          <SidebarItemMiniButton
+            type="button"
+            aria-label={t('sidebar.archiveTask')}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleArchive();
+            }}
+          >
+            <Archive className="h-4 w-4" />
+          </SidebarItemMiniButton>
         </div>
         <div className={cn('items-center', isMenuOpen ? 'hidden' : 'flex group-hover/row:hidden')}>
           <TaskSidebarAgentStatus task={task} />

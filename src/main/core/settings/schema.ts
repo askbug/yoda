@@ -5,6 +5,7 @@ import { DEFAULT_AGENT_ID, DEFAULT_REVIEW_PROMPT } from './settings-registry';
 
 export const projectSettingsSchema = z.object({
   pushOnCreate: z.boolean(),
+  createBranchAndWorktree: z.boolean(),
   branchPrefix: z.string(),
   tmuxByDefault: z.boolean(),
 });

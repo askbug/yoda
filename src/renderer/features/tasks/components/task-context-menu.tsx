@@ -201,7 +201,10 @@ export function TaskContextMenu({ children, ...actions }: TaskContextMenuProps) 
               <ContextMenuItem
                 disabled={item.disabled}
                 variant={item.variant}
-                onClick={item.onSelect}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  item.onSelect();
+                }}
               >
                 <Icon className="size-4" />
                 {item.label}
@@ -243,7 +246,10 @@ export function TaskActionsMenu({
               <DropdownMenuItem
                 disabled={item.disabled}
                 variant={item.variant}
-                onClick={item.onSelect}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  item.onSelect();
+                }}
               >
                 <Icon className="size-4" />
                 {item.label}

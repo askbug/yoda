@@ -20,9 +20,7 @@ const winSigning =
       };
 
 const macSigning =
-  process.env.YODA_DISABLE_MAC_SIGNING === '1'
-    ? { identity: null as unknown as string }
-    : {};
+  process.env.YODA_DISABLE_MAC_SIGNING === '1' ? { identity: null as unknown as string } : {};
 
 const config: Configuration = {
   appId: APP_ID,

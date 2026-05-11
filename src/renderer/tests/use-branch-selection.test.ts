@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Branch } from '@shared/git';
 
 vi.mock('@renderer/features/settings/use-app-settings-key', () => ({
-  useAppSettingsKey: () => ({ value: { pushOnCreate: true } }),
+  useAppSettingsKey: () => ({
+    value: { pushOnCreate: true, createBranchAndWorktree: true },
+    update: vi.fn(),
+  }),
 }));
 
 /**

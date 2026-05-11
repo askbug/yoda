@@ -66,17 +66,13 @@ export function FromIssueContent({
         </div>
       )}
 
+      <TaskNameField state={state} />
+      <InitialConversationField state={initialConversation} connectionId={connectionId} />
       <BranchPickerField
         state={state}
         projectId={projectId}
         currentBranch={currentBranch}
         isUnborn={isUnborn}
-      />
-      <TaskNameField state={state} />
-      <InitialConversationField
-        state={initialConversation}
-        linkedIssue={state.linkedIssue ?? undefined}
-        connectionId={connectionId}
       />
     </div>
   );

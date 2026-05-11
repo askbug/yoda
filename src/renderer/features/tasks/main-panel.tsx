@@ -1,4 +1,4 @@
-import { Eye, Loader2, MessageSquare, Pencil } from 'lucide-react';
+import { Eye, Loader2, Pencil } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { Activity, useEffect, useRef } from 'react';
 import { usePanelRef } from 'react-resizable-panels';
@@ -9,10 +9,7 @@ import {
 } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { panelDragStore } from '@renderer/lib/layout/panel-drag-store';
-import { useShowModal } from '@renderer/lib/modal/modal-provider';
-import { Button } from '@renderer/lib/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@renderer/lib/ui/resizable';
-import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 import { ConversationsPanel } from './conversations/conversations-panel';
 import { DiffView } from './diff-view/main-panel/diff-view';
@@ -21,7 +18,6 @@ import { useEditorContext } from './editor/editor-provider';
 import { MarkdownEditorPanel } from './editor/markdown-editor-panel';
 import { TerminalsPanel } from './terminals/terminal-panel';
 import { TaskSidebar } from './view/task-sidebar';
-import { UnifiedMainTabBar } from './view/unified-main-tab-bar';
 
 export const TaskMainPanel = observer(function TaskMainPanel() {
   const { projectId, taskId } = useTaskViewContext();
@@ -197,11 +193,8 @@ const TaskMainColumn = observer(function TaskMainColumn() {
 });
 
 const UnifiedMainContent = observer(function UnifiedMainContent() {
-  const { projectId, taskId } = useTaskViewContext();
   const { taskView } = useProvisionedTask();
-  const { tabManager } = taskView;
   const { setEditorHost, triggerLayout } = useEditorContext();
-  const showCreateConversationModal = useShowModal('createConversationModal');
 
   const renderer = taskView.activeRenderer;
 
@@ -211,36 +204,8 @@ const UnifiedMainContent = observer(function UnifiedMainContent() {
     if (renderer === 'monaco') triggerLayout();
   }, [renderer, triggerLayout]);
 
-  if (tabManager.resolvedTabs.length === 0) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-        <MessageSquare className="h-10 w-10 opacity-20" />
-        <div className="text-center">
-          <p className="text-sm font-medium opacity-50">No open tabs</p>
-          <p className="mt-1 text-xs opacity-35">Open a conversation from the sidebar</p>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            showCreateConversationModal({
-              projectId,
-              taskId,
-              onSuccess: ({ conversationId }) => tabManager.openConversation(conversationId),
-            })
-          }
-          className="flex items-center gap-2"
-        >
-          New conversation
-          <ShortcutHint settingsKey="newConversation" />
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <UnifiedMainTabBar />
       <div className="relative min-h-0 flex-1">
         {/*
          * Persistent Monaco host — always in the DOM, never inside an Activity.

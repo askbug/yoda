@@ -32,6 +32,8 @@ export function FromPrContent({
         repositoryUrl={repositoryUrl}
         disabled={disabled}
       />
+      <TaskNameField state={state} />
+      <InitialConversationField state={initialConversation} connectionId={connectionId} />
       <CheckoutModeGroup
         value={state.checkoutMode}
         onValueChange={state.setCheckoutMode}
@@ -39,8 +41,6 @@ export function FromPrContent({
         onPushBranchChange={state.branchSelection.setPushBranch}
         disabled={disabled}
       />
-      <TaskNameField state={state} />
-      <InitialConversationField state={initialConversation} connectionId={connectionId} />
     </div>
   );
 }

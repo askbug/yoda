@@ -15,6 +15,7 @@ type SettingsDefaultsMap = {
 export const SETTINGS_DEFAULTS = {
   project: {
     pushOnCreate: true,
+    createBranchAndWorktree: true,
     branchPrefix: 'yoda',
     tmuxByDefault: false,
   },

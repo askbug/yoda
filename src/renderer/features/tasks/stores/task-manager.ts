@@ -2,7 +2,11 @@ import { makeObservable, observable, reaction, runInAction, toJS } from 'mobx';
 import { toast } from 'sonner';
 import type { Conversation } from '@shared/conversations';
 import { prSyncProgressChannel, prUpdatedChannel } from '@shared/events/prEvents';
-import { taskProvisionProgressChannel, taskStatusUpdatedChannel } from '@shared/events/taskEvents';
+import {
+  taskProvisionProgressChannel,
+  taskRenamedChannel,
+  taskStatusUpdatedChannel,
+} from '@shared/events/taskEvents';
 import type {
   CreateTaskError,
   CreateTaskParams,
@@ -149,6 +153,16 @@ export class TaskManagerStore {
           store.data.status = status as TaskLifecycleStatus;
         });
       }
+    });
+
+    events.on(taskRenamedChannel, ({ taskId, projectId: evtProjectId, name, isUserNamed }) => {
+      if (evtProjectId !== this.projectId) return;
+      const store = this.tasks.get(taskId);
+      if (!store || !isRegistered(store)) return;
+      runInAction(() => {
+        (store.data as Task).name = name;
+        (store.data as Task).isUserNamed = isUserNamed;
+      });
     });
 
     this._unsubProvisionProgress = events.on(

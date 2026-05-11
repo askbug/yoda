@@ -51,7 +51,6 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const { params: projectParams } = useParams('project');
   const { params: taskParams } = useParams('task');
   const showCreateTaskModal = useShowModal('taskModal');
-  const showConfirmDeleteProject = useShowModal('confirmActionModal');
   const showChangeConnectionModal = useShowModal('changeProjectConnectionModal');
   const showManageRunScripts = useShowModal('manageRunScriptsModal');
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -105,17 +104,9 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
     );
   };
 
-  const handleRemove = () => {
-    const projectLabel = project.name ?? t('sidebar.deleteProject.fallbackName');
-    showConfirmDeleteProject({
-      title: t('sidebar.deleteProject.title'),
-      description: t('sidebar.deleteProject.description', { name: projectLabel }),
-      confirmLabel: t('sidebar.deleteProject.confirmLabel'),
-      onSuccess: () => {
-        void getProjectManagerStore().deleteProject(projectId);
-        if (isProjectActive) navigate('home');
-      },
-    });
+  const handleArchive = () => {
+    void getProjectManagerStore().archiveProject(projectId);
+    if (isProjectActive) navigate('home');
   };
 
   const menuActions = {
@@ -138,7 +129,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
       project.state === 'unregistered'
         ? undefined
         : () => showManageRunScripts({ projectId, projectName: project.name ?? projectId }),
-    onRemove: handleRemove,
+    onArchive: handleArchive,
   };
 
   return (

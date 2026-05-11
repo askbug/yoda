@@ -1,4 +1,4 @@
-import { CableIcon, RotateCcw, Settings2, Trash2 } from 'lucide-react';
+import { Archive, CableIcon, RotateCcw, Settings2 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -22,7 +22,7 @@ interface ProjectMenuActions {
   onReconnect?: () => void;
   onChangeSshConnection?: () => void;
   onConfigureScripts?: () => void;
-  onRemove: () => void;
+  onArchive: () => void;
 }
 
 interface MenuItemDescriptor {
@@ -73,14 +73,13 @@ function useMenuItems(actions: ProjectMenuActions): MenuItemDescriptor[] {
     }
   }
 
-  // group 3 — destructive
+  // group 3 — archive
   items.push({
-    key: 'remove',
+    key: 'archive',
     group: 3,
-    icon: Trash2,
-    label: t('sidebar.removeProject'),
-    onSelect: actions.onRemove,
-    variant: 'destructive',
+    icon: Archive,
+    label: t('sidebar.archiveProject'),
+    onSelect: actions.onArchive,
   });
 
   return items;
@@ -106,7 +105,10 @@ export function ProjectContextMenu({ children, ...actions }: ProjectContextMenuP
               <ContextMenuItem
                 disabled={item.disabled}
                 variant={item.variant}
-                onClick={item.onSelect}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  item.onSelect();
+                }}
               >
                 <Icon className="size-4" />
                 {item.label}
@@ -148,7 +150,10 @@ export function ProjectActionsMenu({
               <DropdownMenuItem
                 disabled={item.disabled}
                 variant={item.variant}
-                onClick={item.onSelect}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  item.onSelect();
+                }}
               >
                 <Icon className="size-4" />
                 {item.label}

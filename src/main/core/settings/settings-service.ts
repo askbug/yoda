@@ -85,9 +85,26 @@ export class SettingsStore implements IInitializable {
     return { value, defaults, overrides };
   }
 
-  async update<K extends AppSettingsKey>(key: K, value: AppSettings[K]): Promise<void> {
-    const validated = APP_SETTINGS_SCHEMA_MAP[key].parse(value) as AppSettings[K];
+  async update<K extends AppSettingsKey>(
+    key: K,
+    value: AppSettings[K] | Partial<AppSettings[K]>
+  ): Promise<void> {
     const defaults = getDefaultForKey(key);
+
+    // For object settings, accept partial updates and merge with the
+    // currently stored value. This keeps the renderer simple (it sends only
+    // the changed fields) and avoids the race where the renderer's cache is
+    // not yet populated and would otherwise send an incomplete object that
+    // fails strict schema validation.
+    let toValidate: unknown = value;
+    if (isPlainObject(value) && isPlainObject(defaults)) {
+      const current = await this.get(key);
+      toValidate = isPlainObject(current)
+        ? mergeDeep(current as Record<string, unknown>, value as Record<string, unknown>)
+        : value;
+    }
+
+    const validated = APP_SETTINGS_SCHEMA_MAP[key].parse(toValidate) as AppSettings[K];
 
     if (isPlainObject(validated) && isPlainObject(defaults)) {
       const delta = computeDelta(

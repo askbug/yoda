@@ -6,6 +6,36 @@ This project resets to **0.1.0** with the rebrand from `emdash` to `yoda`. Older
 release history (`v0.4.x`, `v1.1.x`) belongs to the upstream `emdash` codebase
 and is preserved in git tags only.
 
+## 0.1.3 — 2026-05-11
+
+### Added
+
+- Project archive / unarchive operations with corresponding sidebar UI
+  affordances and right-click menu entries.
+- Session-title module (`src/main/core/session-title/`) that derives
+  human-readable conversation titles from Claude transcripts.
+- i18n string coverage for the new sidebar and create-task flows
+  (English + Simplified Chinese).
+- Drizzle migrations `0011_deep_wolf_cub` and `0012_tired_cammi` for the
+  archive flag and session-title fields.
+
+### Changed
+
+- Sidebar redesign: project items, project menu, task items, and the
+  left sidebar shell now share a consistent visual language with the
+  refreshed home view.
+- Create-task modal: branch picker, from-branch / from-issue / from-PR
+  flows, and the initial-conversation section are unified around the
+  new layout.
+- `getProjects` and the project manager surface archived state to the
+  renderer; `renameTask` and task utilities adapt to the shared task
+  naming module.
+
+### Removed
+
+- Legacy `modal-context-bar`, `editor/file-tabs`, and
+  `view/unified-main-tab-bar` components superseded by the redesign.
+
 ## 0.1.2 — 2026-05-11
 
 ### Added

@@ -17,6 +17,7 @@ import { buildAgentEnv } from '@main/core/pty/pty-env';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
 import { logLocalPtySpawnWarnings, resolveLocalPtySpawn } from '@main/core/pty/pty-spawn-platform';
 import { killTmuxSession, makeTmuxSessionName } from '@main/core/pty/tmux-session-name';
+import { sessionTitleManager } from '@main/core/session-title/session-title-manager';
 import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { events } from '@main/lib/events';
@@ -200,6 +201,13 @@ export class LocalConversationProvider implements ConversationProvider {
 
     ptySessionRegistry.register(sessionId, pty);
     this.sessions.set(sessionId, pty);
+    sessionTitleManager.start({
+      providerId: conversation.providerId,
+      conversationId: conversation.id,
+      projectId: conversation.projectId,
+      taskId: conversation.taskId,
+      cwd: this.taskPath,
+    });
     telemetryService.capture('agent_run_started', {
       provider: conversation.providerId,
       project_id: conversation.projectId,
@@ -234,6 +242,7 @@ export class LocalConversationProvider implements ConversationProvider {
   async stopSession(conversationId: string): Promise<void> {
     const sessionId = makePtySessionId(this.projectId, this.taskId, conversationId);
     this.knownSessionIds.delete(sessionId);
+    sessionTitleManager.stop(conversationId);
     const pty = this.sessions.get(sessionId);
     if (pty) {
       try {
@@ -260,6 +269,8 @@ export class LocalConversationProvider implements ConversationProvider {
 
   async detachAll(): Promise<void> {
     for (const [sessionId, pty] of this.sessions) {
+      const conversationId = sessionId.split(':').pop();
+      if (conversationId) sessionTitleManager.stop(conversationId);
       try {
         pty.kill();
       } catch {}

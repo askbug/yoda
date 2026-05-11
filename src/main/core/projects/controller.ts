@@ -1,8 +1,10 @@
 import { createRPCController } from '@shared/ipc/rpc';
+import { archiveProject } from './operations/archiveProject';
 import { createProject, inspectProjectPath } from './operations/createProject';
 import { deleteProject } from './operations/deleteProject';
-import { getProjects } from './operations/getProjects';
+import { getArchivedProjects, getProjects } from './operations/getProjects';
 import { openProject } from './operations/openProject';
+import { unarchiveProject } from './operations/unarchiveProject';
 import { updateProjectConnection } from './operations/updateProjectConnection';
 import {
   getProjectSettingsPage,
@@ -14,7 +16,10 @@ export const projectController = createRPCController({
   createProject,
   inspectProjectPath,
   getProjects,
+  getArchivedProjects,
   deleteProject,
+  archiveProject,
+  unarchiveProject,
   getProjectSettingsPage,
   updateProjectSettings,
   shareProjectSettingsToConfig,

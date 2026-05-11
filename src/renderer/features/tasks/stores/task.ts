@@ -245,14 +245,17 @@ export class TaskStore {
     if (this.state !== 'provisioned') return;
     const task = registeredTaskData(this);
     if (!task) return;
+    const previousIsUserNamed = (this.data as Task).isUserNamed;
     try {
       await rpc.tasks.renameTask(task.projectId, task.id, name);
       runInAction(() => {
         this.data.name = name;
+        (this.data as Task).isUserNamed = true;
       });
     } catch (e) {
       runInAction(() => {
         this.data.name = task.name;
+        (this.data as Task).isUserNamed = previousIsUserNamed;
       });
       log.error(e);
       throw e;

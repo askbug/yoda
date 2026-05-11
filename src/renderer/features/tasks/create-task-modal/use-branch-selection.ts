@@ -10,13 +10,9 @@ export function useBranchSelection(
   isUnborn: boolean,
   currentBranchName?: string | null
 ) {
-  const { value: project } = useAppSettingsKey('project');
-  const pushOnCreateByDefault = project?.pushOnCreate ?? true;
-
-  const [createBranchAndWorktreePreference, setCreateBranchAndWorktreePreference] = useState(true);
-  const [pushBranchOverride, setPushBranchOverride] = useState<boolean | undefined>(undefined);
-  const pushBranch = pushBranchOverride ?? pushOnCreateByDefault;
-  const createBranchAndWorktree = isUnborn ? false : createBranchAndWorktreePreference;
+  const { value: project, update: updateProject } = useAppSettingsKey('project');
+  const pushBranch = project?.pushOnCreate ?? true;
+  const createBranchAndWorktree = isUnborn ? false : (project?.createBranchAndWorktree ?? true);
 
   // Store the user's branch override alongside the project it belongs to.
   // When the project changes the override is for a different project and is
@@ -42,15 +38,18 @@ export function useBranchSelection(
     },
     [selectedProjectId]
   );
-  const setPushBranch = useCallback((value: boolean) => {
-    setPushBranchOverride(value);
-  }, []);
+  const setPushBranch = useCallback(
+    (value: boolean) => {
+      updateProject({ pushOnCreate: value });
+    },
+    [updateProject]
+  );
   const setCreateBranchAndWorktree = useCallback(
     (value: boolean) => {
       if (isUnborn) return;
-      setCreateBranchAndWorktreePreference(value);
+      updateProject({ createBranchAndWorktree: value });
     },
-    [isUnborn]
+    [isUnborn, updateProject]
   );
 
   return {

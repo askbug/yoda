@@ -5,6 +5,8 @@ import { log } from '@main/lib/logger';
 export type ProjectCrudHooks = {
   'project:created': (project: Project) => void | Promise<void>;
   'project:deleted': (projectId: string) => void | Promise<void>;
+  'project:archived': (projectId: string) => void | Promise<void>;
+  'project:unarchived': (project: Project) => void | Promise<void>;
 };
 
 class ProjectEvents implements Hookable<ProjectCrudHooks> {
