@@ -6,6 +6,15 @@ This project resets to **0.1.0** with the rebrand from `emdash` to `yoda`. Older
 release history (`v0.4.x`, `v1.1.x`) belongs to the upstream `emdash` codebase
 and is preserved in git tags only.
 
+## 0.1.2 — 2026-05-11
+
+### Added
+
+- First release with full Apple Developer ID signing and notarization
+  using the `lovstudio` org-level secrets (`APPLE_CERTIFICATE`,
+  `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_PASSWORD`,
+  `APPLE_TEAM_ID`, `APPLE_SIGNING_IDENTITY`) shared with `lovcode`.
+
 ## 0.1.1 — 2026-05-11
 
 ### Fixed
