@@ -6,6 +6,68 @@ This project resets to **0.1.0** with the rebrand from `emdash` to `yoda`. Older
 release history (`v0.4.x`, `v1.1.x`) belongs to the upstream `emdash` codebase
 and is preserved in git tags only.
 
+## 0.2.0 — 2026-05-12
+
+### Added
+
+- Home draft persistence (prompt, project, strategy, provider) via a new
+  `homeDraft` app setting. Includes an opt-in "express mode" so the
+  sidebar `+` button can create a task instantly using the last
+  configured runtime.
+- Time-of-day greeting on the home view, using the account profile name.
+- Optional **archive note** when archiving a task — surfaced inline on
+  task rows and gated behind a new `Archive task with note…` menu entry.
+  Drizzle migration `0013_rare_dagger` adds the `archive_note` column.
+- "Archived only with notes" filter in the project task view.
+- `name` field on the account profile (alongside `username`), updated
+  from device-flow and refresh-token responses, displayed on the
+  Settings → Account tab.
+
+### Changed
+
+- Sidebar: collapsible "Pinned" and "Projects" groups (persisted),
+  project filter (all / local / SSH), sort menu, expand/collapse all,
+  reset task order. Project / task / pinned-task rows share the refreshed
+  visual language.
+- Strategy chip on the home view now reads "Worktree" / "In-place" with
+  descriptive popovers explaining the trade-offs.
+- `useEffectiveProvider` accepts an external override so the home view
+  can bind provider selection to the persisted draft.
+- Resize handles in the task layout suppress panel-transition
+  animations while dragging, and guard against redundant
+  collapse/expand churn. Task titlebar shows the current branch next to
+  the project chip. Agent-selector popover sizes to content.
+
+### Fixed
+
+- Feedback submission no longer relies on a Discord webhook. The
+  renderer hook calls a new `feedback` RPC controller that posts to the
+  Yoda backend with multipart form data (message, category,
+  attachments, app version), authenticated via the session token.
+- Boot ordering in `src/main/index.ts`: `resolveUserEnv()` now runs in
+  the background so a heavy zsh login shell can no longer add 1–2s to
+  app launch; app settings and the RPC router are initialized before
+  the main window is created so the renderer's first paint never races
+  IPC.
+- New-terminal hotkey in `TerminalsPanel` uses
+  `conflictBehavior: 'replace'`.
+- PR controller and PR sync scheduler replace dynamic imports with
+  static ones (per project convention).
+
+### Dev / DX
+
+- `.npmrc` pins `use-node-version=24.14.0` for consistent pnpm runs.
+- `pnpm run d` uses `--prefer-frozen-lockfile --reporter=append-only
+  --silent` to quiet routine installs.
+- `scripts/dev.ts` filters known-noisy Electron/macOS log lines unless
+  `YODA_DEV_VERBOSE=1` is set.
+- `scripts/postinstall.ts` renames the dev Electron.app bundle to
+  "Yoda" on macOS so the dock label matches prod.
+- `electron-vite` main/preload builds use `emptyOutDir: true` and
+  suppress non-actionable `DYNAMIC_IMPORT_WILL_NOT_MOVE_MODULE`
+  warnings.
+- Kimi CLI doc URL updated to its new `moonshotai.github.io` location.
+
 ## 0.1.3 — 2026-05-11
 
 ### Added
