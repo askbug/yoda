@@ -59,6 +59,14 @@ export class FrontendPty {
   private offData: (() => void) | null = null;
   /** Last { cols, rows } sent to rpc.pty.resize(). Used by PaneSizingContext to skip redundant IPC calls. */
   lastSentDims: { cols: number; rows: number } | null = null;
+  /**
+   * Buffered output (historical + any live data) held while the terminal is
+   * still off-screen at the constructor default cols/rows. Flushed on first
+   * mount() after the terminal has been resized to real pane dimensions, so
+   * scrollback never reflows from a stale default width.
+   */
+  private pendingWrites: string[] = [];
+  private hasFlushed = false;
 
   constructor(
     readonly sessionId: string,
@@ -123,14 +131,37 @@ export class FrontendPty {
   async connect(): Promise<void> {
     const result = await rpc.pty.subscribe(this.sessionId);
     const historical = result.success ? result.data.buffer : '';
-    if (historical) this.terminal.write(historical);
+    if (historical) this.writeOrBuffer(historical);
     this.offData = events.on(
       ptyDataChannel,
       (data: string) => {
-        this.terminal.write(data);
+        this.writeOrBuffer(data);
       },
       this.sessionId
     );
+  }
+
+  private writeOrBuffer(data: string): void {
+    if (this.hasFlushed) {
+      this.terminal.write(data);
+    } else {
+      this.pendingWrites.push(data);
+    }
+  }
+
+  /**
+   * Flush any output that was buffered while the terminal was off-screen at
+   * default cols/rows. Called by usePty once the terminal has been resized to
+   * real pane dimensions, so historical scrollback is wrapped at the correct
+   * width. Idempotent — no-op after the first call.
+   */
+  flushPendingWrites(): void {
+    if (this.hasFlushed) return;
+    this.hasFlushed = true;
+    if (this.pendingWrites.length === 0) return;
+    const buffered = this.pendingWrites.join('');
+    this.pendingWrites = [];
+    this.terminal.write(buffered);
   }
 
   /**

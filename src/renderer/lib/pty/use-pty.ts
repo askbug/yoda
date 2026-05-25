@@ -226,6 +226,10 @@ export function usePty(
             term.resize(targetCols, targetRows);
           }
 
+          // Now that the terminal is sized to the real pane width, drain any
+          // output that was buffered while it was off-screen at default cols.
+          pty.flushPendingWrites();
+
           if (pane) {
             pane.reportDimensions(targetCols, targetRows);
           } else {
@@ -236,7 +240,7 @@ export function usePty(
         }
       });
     },
-    [sessionId, containerRef]
+    [sessionId, containerRef, pty]
   );
 
   // Stable ref so the retry setTimeout inside measureAndResize always calls
