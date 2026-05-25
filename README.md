@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/images/cover.png" alt="Yoda — Master agentic coding through parallel orchestration" width="100%">
+  <img src="docs/images/cover.png" alt="Yoda 封面图" width="100%">
 </p>
 
 <h1 align="center">Yoda</h1>
 
 <p align="center">
-  <strong>The Jedi‑master desktop for agentic coding.</strong><br>
-  <sub>Run many coding agents in parallel — each in its own isolated git worktree, local or over SSH.</sub>
+  <strong>面向 Agentic Coding 的多智能体桌面编排器。</strong><br>
+  <sub>在隔离的 git worktree 中并行运行多个编码代理，支持本地项目和 SSH 远程项目。</sub>
 </p>
 
 <div align="center">
@@ -35,59 +35,67 @@
 
 <br><br>
 
-[Highlights](#highlights) · [Why Yoda](#why-yoda) · [Installation](#installation) · [Providers](#providers) · [Architecture](#architecture) · [Contributing](#contributing) · [FAQ](#faq)
+[为什么选择](#why-yoda) · [亮点](#highlights) · [安装](#installation) · [提供商](#providers) · [架构](#architecture) · [技术栈](#tech-stack) · [贡献](#contributing) · [FAQ](#faq)
 
 </div>
 
 <br>
 
-## Why Yoda
+<a id="why-yoda"></a>
 
-Modern coding agents are powerful — but managing more than one at a time devolves quickly: terminals multiply, branches collide, context evaporates. Yoda was built around a single discipline: **run many agents in parallel without losing the plot.**
+## 为什么选择 Yoda
 
-Every task spawns an isolated **git worktree** (locally or over SSH), every agent stays sandboxed, every diff is reviewable side‑by‑side, and every merge is deliberate. Dispatch work, review, intervene, and merge with the calm precision of a master orchestrator — instead of the chaos of switching tabs.
+现代编码代理已经足够强大，但同时管理多个代理很快会变得混乱：终端越来越多，分支互相冲突，任务上下文也容易丢失。Yoda 的核心目标很直接：**让多个编码代理并行工作，同时保持隔离、可审查、可合并。**
 
-Yoda is **provider‑agnostic**: Claude Code, Codex, OpenCode, Gemini, Amp, Cursor, Copilot, and the rest of your coding-agent CLIs all run under the same orchestration model. It also pipes Linear / GitHub / Jira tickets straight into a session and surfaces CI/CD checks from the sidebar — so the loop from ticket → agent → review → ship lives in one window.
+每个任务都会创建独立的 **git worktree**，可以在本地执行，也可以在 SSH 远程机器上执行。代理只在自己的工作区里改代码，你可以并行派发任务、查看 diff、介入会话、运行检查、归档或合并，而不需要在一堆终端和分支之间来回切换。
 
-## Highlights
+Yoda 不绑定单一模型或厂商。Claude Code、Codex、OpenCode、Gemini、Amp、Cursor、Copilot 等编码代理 CLI 都可以在同一套编排模型下运行。Linear、GitHub、Jira 等任务也可以直接进入会话，CI/CD 状态会在侧边栏中展示，让“任务 -> 代理 -> 审查 -> 发布”的流程集中在一个桌面应用里。
 
-- **Parallel worktrees** — Each task runs in its own `git worktree`, isolated from your working tree. Multiple agents work simultaneously without stomping on each other.
-- **Provider‑agnostic** — Bring your coding-agent CLIs with you (Claude Code, Codex, OpenCode, Gemini, Amp, Cursor, Copilot, Cline, Goose, Kimi, Qwen, …). Switch providers per task, not per project.
-- **Remote dev over SSH** — Add a remote machine, mount projects on it, and run agents there with the same workflow. Credentials live in your OS keychain.
-- **Ticket → session** — Pull Linear / Jira / GitHub Issues / GitLab / Forgejo / Plain tickets straight into a new agent session as the prompt.
-- **CI/CD aware** — Watch GitHub Actions / build status next to the diff. Re‑dispatch the agent without leaving the task.
-- **Review & archive** — Mark tasks as needs‑review, run pre‑archive commands (e.g. cleanup scripts), then archive with one keystroke.
-- **MCP built‑in** — Configure Model Context Protocol servers per project, shared across all agents that support MCP.
-- **Local‑first** — App state lives in a local SQLite DB. Yoda itself never phones home with your code; only the agent CLI you chose talks to its provider.
-- **Cross‑platform** — Native Electron app for macOS (Apple Silicon + Intel), Windows, and Linux.
+<a id="highlights"></a>
 
-## Installation
+## 亮点
 
-Installers are published on GitHub Releases for macOS, Windows, and Linux.
+- **并行 worktree**：每个任务运行在独立的 `git worktree` 中，多个代理可以同时工作，不会踩到主工作区。
+- **提供商无关**：带上你已经在用的编码代理 CLI，按任务选择 Claude Code、Codex、OpenCode、Gemini、Amp、Cursor、Copilot、Cline、Goose、Kimi、Qwen 等。
+- **SSH 远程开发**：添加远程机器后，可以挂载远程项目，并用和本地一致的流程运行代理。
+- **从任务到会话**：Linear、Jira、GitHub Issues、GitLab、Forgejo、Plain 的 ticket 可以直接作为新会话提示词。
+- **CI/CD 可见**：在 diff 旁边查看 GitHub Actions 和构建状态，必要时直接重新派发代理。
+- **审查与归档**：把任务标记为待审查，执行归档前命令，然后归档或合并。
+- **内置 MCP**：按项目配置 Model Context Protocol servers，供支持 MCP 的代理共享使用。
+- **本地优先**：应用状态保存在本地 SQLite 数据库中。Yoda 自身不会上传你的代码。
+- **跨平台**：提供 macOS Apple Silicon、macOS Intel、Windows 和 Linux 桌面安装包。
 
-| Platform | Download |
+<a id="installation"></a>
+
+## 安装
+
+安装包发布在 GitHub Releases，支持 macOS、Windows 和 Linux。
+
+| 平台 | 下载 |
 | --- | --- |
 | macOS | [Apple Silicon DMG](https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.dmg) · [Intel DMG](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.dmg) · [Apple Silicon ZIP](https://github.com/lovstudio/yoda/releases/latest/download/yoda-arm64.zip) · [Intel ZIP](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.zip) |
-| Windows | [MSI installer](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.msi) · [EXE installer](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.exe) |
+| Windows | [MSI 安装包](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.msi) · [EXE 安装包](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x64.exe) |
 | Linux | [AppImage](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.AppImage) · [Debian package](https://github.com/lovstudio/yoda/releases/latest/download/yoda-amd64.deb) · [RPM package](https://github.com/lovstudio/yoda/releases/latest/download/yoda-x86_64.rpm) |
 
-> Homebrew note: `brew install --cask yoda` currently resolves to an unrelated, disabled Homebrew cask. Use the GitHub Releases downloads above until an official LovStudio Yoda cask exists.
+> Homebrew 提醒：`brew install --cask yoda` 当前会解析到一个无关且已禁用的 Homebrew cask。在 LovStudio 官方 cask 发布前，请使用上面的 GitHub Releases 安装包。
 
-**[All releases](https://github.com/lovstudio/yoda/releases/latest)** · [Changelog](./CHANGELOG.md)
+**[全部版本](https://github.com/lovstudio/yoda/releases/latest)** · [更新日志](./CHANGELOG.md)
 
-## Remote Development over SSH
+## SSH 远程开发
 
-Connect to remote machines via SSH/SFTP to work with remote codebases without leaving Yoda. Use SSH agent or key authentication; credentials are stored in your OS keychain. Run any supported coding agent on remote projects with the same parallel worktree workflow as local development.
+Yoda 可以通过 SSH/SFTP 连接远程机器，让你在远程代码库上工作，同时保留本地应用里的任务、终端、diff 和归档流程。认证支持 SSH agent、私钥和密码，凭据存储在操作系统钥匙串中。
 
-See the [remote development notes](./agents/workflows/remote-development.md) for the current implementation model.
+更多实现细节见 [远程开发说明](./agents/workflows/remote-development.md)。
 
-## Providers
+<a id="providers"></a>
 
-### Coding agents
+## 提供商
 
-Yoda is provider‑agnostic and built to add new CLIs quickly. If yours is missing, [open an issue](https://github.com/lovstudio/yoda/issues) or send a PR.
+### 编码代理
 
-| Provider | Install |
+Yoda 的提供商系统是可扩展的。如果你使用的 CLI 还不在列表里，可以 [提交 issue](https://github.com/lovstudio/yoda/issues) 或发 PR。
+
+| 提供商 | 安装方式 |
 | --- | --- |
 | [Amp](https://ampcode.com/manual#install) | `npm install -g @sourcegraph/amp@latest` |
 | [Auggie](https://docs.augmentcode.com/cli/overview) | `npm install -g @augmentcode/auggie` |
@@ -114,109 +122,127 @@ Yoda is provider‑agnostic and built to add new CLIs quickly. If yours is missi
 | [Qwen Code](https://github.com/QwenLM/qwen-code) | `npm install -g @qwen-code/qwen-code` |
 | [Rovo Dev](https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/) | `acli rovodev auth login` |
 
-### Issue trackers
+### 任务系统
 
-Pass tickets, issues, and support threads straight to your coding agent.
+Yoda 可以把 ticket、issue 和支持线程直接交给编码代理。
 
-| Tool | Auth |
+| 工具 | 认证方式 |
 | --- | --- |
 | [Linear](https://linear.app) | Linear API key |
 | [Jira](https://www.atlassian.com/software/jira) | Site URL + email + Atlassian API token |
-| [GitHub Issues](https://docs.github.com/en/issues) | OAuth, or `gh auth login` |
+| [GitHub Issues](https://docs.github.com/en/issues) | OAuth，或 `gh auth login` |
 | [GitLab Issues](https://docs.gitlab.com/user/project/issues/) | GitLab URL + PAT with `read_api` |
 | [Forgejo Issues](https://forgejo.org/) | Forgejo URL + API token |
 | [Plain Threads](https://www.plain.com/) | Plain API key |
 
-## Architecture
+<a id="architecture"></a>
 
-Yoda is an Electron app split into three parts:
+## 架构
 
-- **Main process** (`src/main/`) — Owns the SQLite store (Drizzle), PTY/session orchestration, git worktree management, SSH tunneling, and the provider registry. Exposes a typed RPC surface to the renderer.
-- **Renderer** (`src/renderer/`) — React + MobX UI. Reads via React Query, writes via RPC, mounts agent terminals via `node‑pty` round‑trips. View and modal routing are explicit registries.
-- **Shared** (`src/shared/`) — Types, IPC contracts, and the agent provider registry that both sides import from.
+Yoda 是一个 Electron 桌面应用，主要分为三层：
 
-See [`AGENTS.md`](./AGENTS.md) and [`agents/`](./agents/) for the full topic map (architecture, workflows, risky areas, conventions).
+- **Main process** (`src/main/`)：管理 SQLite 存储、Drizzle schema、PTY/session 编排、git worktree、SSH 隧道和 provider registry，并向 renderer 暴露类型化 RPC。
+- **Renderer** (`src/renderer/`)：React + MobX UI，通过 React Query 读数据，通过 RPC 写数据，终端由 `node-pty` 和 xterm 前端协作呈现。
+- **Shared** (`src/shared/`)：两端共享的类型、IPC contract 和编码代理 provider registry。
 
-## Contributing
+完整主题地图见 [`AGENTS.md`](./AGENTS.md) 和 [`agents/`](./agents/)。
 
-Small, focused PRs over big bangs. See the [Contributing Guide](CONTRIBUTING.md) for setup, conventions, and how to add a new provider. Join the [Discord](https://discord.gg/f2fv7YxuR2) to discuss design choices and provider requests.
+<a id="tech-stack"></a>
+
+## 技术栈
+
+- **桌面框架**：Electron、electron-vite、electron-builder
+- **前端**：React、MobX、TanStack Query、Radix UI、xterm.js、Tailwind CSS
+- **主进程**：TypeScript、Drizzle ORM、SQLite、node-pty、ssh2
+- **集成**：GitHub、Linear、Jira、GitLab、Forgejo、Plain、MCP
+- **质量与发布**：Vitest、ESLint、Prettier、Changesets、GitHub Actions
+
+<a id="contributing"></a>
+
+## 贡献
+
+欢迎小而聚焦的 PR。开发环境、代码约定和新增 provider 的流程见 [Contributing Guide](CONTRIBUTING.md)。如果想讨论设计或 provider 需求，也可以加入 [Discord](https://discord.gg/f2fv7YxuR2)。
+
+<a id="faq"></a>
 
 ## FAQ
 
 <details>
-<summary><b>What telemetry do you collect and can I disable it?</b></summary>
+<summary><b>Yoda 会收集哪些遥测数据？可以关闭吗？</b></summary>
 
-> We send **anonymous, allow‑listed events** (app start/close, feature usage names, app/platform versions) to PostHog.
-> We **do not** send code, file paths, repo names, prompts, or PII.
+> Yoda 只发送匿名、白名单内的事件，例如应用启动/关闭、功能使用名称、应用版本和平台版本。
+> 不会发送代码、文件路径、仓库名、提示词或个人身份信息。
 >
-> **Disable telemetry:**
+> **关闭遥测：**
 >
-> - In the app: **Settings → General → Privacy & Telemetry** (toggle off)
-> - Or via env var before launch: `TELEMETRY_ENABLED=false`
+> - 应用内：**设置 -> 通用 -> 隐私与遥测**，关闭开关
+> - 或在启动前设置环境变量：`TELEMETRY_ENABLED=false`
 >
-> The tracked event allowlist lives in [`src/shared/telemetry.ts`](./src/shared/telemetry.ts).
+> 事件白名单位于 [`src/shared/telemetry.ts`](./src/shared/telemetry.ts)。
 </details>
 
 <details>
-<summary><b>Where is my data stored?</b></summary>
+<summary><b>我的数据保存在哪里？</b></summary>
 
-> **App data is local‑first.** Yoda stores app state in a local SQLite database:
+> Yoda 是本地优先应用。应用状态保存在本地 SQLite 数据库：
 >
-> ```
+> ```text
 > macOS:   ~/Library/Application Support/yoda/yoda.db
 > Windows: %APPDATA%\yoda\yoda.db
 > Linux:   ~/.config/yoda/yoda.db
 > ```
 >
-> **Privacy note:** Yoda itself stores data locally. **When you use a coding agent (Claude Code, Codex, Qwen, …), that agent's CLI sends your code and prompts to its own provider's cloud servers** for processing. Each provider has its own data‑handling and retention policy.
+> **隐私说明：**Yoda 自身把数据保存在本地。但当你使用 Claude Code、Codex、Qwen 等编码代理时，对应 CLI 可能会把代码和提示词发送到它自己的云服务。每个 provider 都有自己的数据处理和保留政策。
 >
-> You can reset the local DB by deleting the file (quit the app first). It is recreated on next launch.
+> 如需重置本地数据库，退出应用后删除该文件即可，下次启动会重新创建。
 </details>
 
 <details>
-<summary><b>How does Yoda isolate agents?</b></summary>
+<summary><b>Yoda 如何隔离多个代理？</b></summary>
 
-> Every task gets its own **git worktree** under a Yoda‑managed directory, separate from your main working tree. Agents only see the files inside their worktree, so simultaneous edits never collide. When you finish a task you can merge, cherry‑pick, or archive — your primary working tree is untouched until you decide.
+> 每个任务都会获得独立的 **git worktree**，位于 Yoda 管理的目录下，和你的主工作区分离。代理只会看到自己的 worktree 文件，因此多个任务可以同时修改代码而不互相覆盖。任务完成后，你可以选择合并、cherry-pick 或归档。
 </details>
 
 <details>
-<summary><b>How do I add a new provider?</b></summary>
+<summary><b>如何添加新的 provider？</b></summary>
 
-> Yoda is **provider‑agnostic** and built to add CLIs quickly.
+> Yoda 的 provider registry 设计为易扩展。
 >
-> - Open a PR following the [Contributing Guide](CONTRIBUTING.md).
-> - Include: provider name, how it's invoked (CLI command), auth notes, and minimal setup steps.
-> - The provider lives in `src/shared/agent-provider-registry.ts` plus an output classifier under `src/main/core/conversations/impl/agent-event-classifiers/`.
+> - 按 [Contributing Guide](CONTRIBUTING.md) 提交 PR。
+> - PR 需要包含 provider 名称、CLI 调用方式、认证说明和最小设置步骤。
+> - provider 信息位于 `src/shared/agent-provider-registry.ts`，输出分类器位于 `src/main/core/conversations/impl/agent-event-classifiers/`。
 >
-> If you're unsure where to start, open an issue with the CLI's link and typical commands.
+> 如果不确定从哪里开始，可以先提交 issue，附上 CLI 链接和常用命令。
 </details>
 
 <details>
-<summary><b>What permissions does Yoda need?</b></summary>
+<summary><b>Yoda 需要哪些权限？</b></summary>
 
-> - **Filesystem / Git** — to read/write your repo and create git worktrees for isolation.
-> - **Network** — only for the provider CLIs you choose to use and for optional GitHub actions.
-> - **Local DB** — to store app state in SQLite on your machine.
+> - **文件系统 / Git**：读取和写入你的仓库，并创建用于隔离的 git worktree。
+> - **网络**：供你选择的 provider CLI 使用，以及可选的 GitHub Actions 状态查询。
+> - **本地数据库**：在本机 SQLite 中保存应用状态。
 >
-> Yoda itself does **not** send your code or chats anywhere. Third‑party CLIs may, per their own policies.
+> Yoda 自身不会上传你的代码或会话。第三方 CLI 是否上传数据取决于各自的政策。
 </details>
 
 <details>
-<summary><b>Can I work with remote projects over SSH?</b></summary>
+<summary><b>可以通过 SSH 处理远程项目吗？</b></summary>
 
-> **Yes.** Yoda supports remote development via SSH.
+> 可以。Yoda 支持 SSH 远程开发。
 >
-> **Setup:**
-> 1. Go to **Settings → SSH Connections** and add your server details.
-> 2. Choose authentication: SSH agent (recommended), private key, or password.
-> 3. Add a remote project and specify the path on the server.
+> **设置流程：**
 >
-> **Requirements:**
-> - SSH access to the remote server
-> - Git installed on the remote server
-> - For agent auth: SSH agent running with your key loaded (`ssh-add -l`)
+> 1. 打开 **设置 -> SSH 连接**，添加服务器信息。
+> 2. 选择认证方式：SSH agent、私钥或密码。
+> 3. 添加远程项目，并填写服务器上的项目路径。
 >
-> See the [remote development notes](./agents/workflows/remote-development.md) for implementation details.
+> **要求：**
+>
+> - 能够 SSH 登录远程服务器
+> - 远程服务器已安装 Git
+> - 如果使用 SSH agent 认证，需要本地 agent 已加载密钥，可用 `ssh-add -l` 检查
+>
+> 参考 [远程开发说明](./agents/workflows/remote-development.md) 获取更多细节。
 </details>
 
 ## Star History
@@ -225,7 +251,7 @@ Small, focused PRs over big bangs. See the [Contributing Guide](CONTRIBUTING.md)
 
 ## License
 
-Apache‑2.0 © [LovStudio](https://lovstudio.ai). See [LICENSE.md](./LICENSE.md).
+Apache-2.0 © General Action, Inc. See [LICENSE.md](./LICENSE.md).
 
 <br>
 
