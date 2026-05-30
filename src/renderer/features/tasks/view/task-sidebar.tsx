@@ -1,6 +1,7 @@
 import { observer } from 'mobx-react-lite';
 import { Activity } from 'react';
 import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
+import { ContextPanel } from '../context-panel';
 import { SidebarConversationsList } from '../conversations/sidebar-conversations-list';
 import { ChangesPanel } from '../diff-view/changes-panel/changes-panel';
 import { EditorFileTree } from '../editor/editor-file-tree';
@@ -23,6 +24,9 @@ export const TaskSidebar = observer(function TaskSidebar() {
         </Activity>
         <Activity mode={activeTab === 'files' ? 'visible' : 'hidden'}>
           <EditorFileTree />
+        </Activity>
+        <Activity mode={activeTab === 'context' ? 'visible' : 'hidden'}>
+          <ContextPanel />
         </Activity>
       </div>
     </Activity>

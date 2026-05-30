@@ -31,6 +31,34 @@ export type ClaudeSessionMetadata = {
   model: string | null;
 };
 
+export type ClaudeSessionPrompt = {
+  id: string;
+  text: string;
+  timestamp: string | null;
+};
+
+export type ClaudeMemoryFile = {
+  kind: 'global-claude' | 'project-claude' | 'project-agents';
+  path: string;
+  content: string;
+  bytes: number;
+};
+
+export type ClaudeMcpServer = {
+  name: string;
+  instructions: string;
+};
+
+export type ClaudeSessionContext = {
+  transcriptPath: string;
+  memoryFiles: ClaudeMemoryFile[];
+  tools: string[];
+  agents: string[];
+  mcpServers: ClaudeMcpServer[];
+  skillsListing: string | null;
+  prompts: ClaudeSessionPrompt[];
+};
+
 export type CreateConversationParams = {
   id: string;
   projectId: string;

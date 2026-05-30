@@ -8,6 +8,7 @@ import {
   ListChecks,
   Pin,
   RefreshCcw,
+  Sparkles,
   Terminal,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
@@ -368,6 +369,20 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
                 }
               />
               <TooltipContent>{t('tasks.files')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <ToggleGroupItem
+                    size="icon-sm"
+                    value="context"
+                    aria-label={t('tasks.contextTab')}
+                  >
+                    <Sparkles className="size-3.5" />
+                  </ToggleGroupItem>
+                }
+              />
+              <TooltipContent>{t('tasks.contextTab')}</TooltipContent>
             </Tooltip>
           </ToggleGroup>
         </div>
