@@ -1,4 +1,5 @@
-Copyright 2026 General Action, Inc.
+Copyright 2026 LovStudio
+Portions Copyright 2026 General Action, Inc.
 
 
                                  Apache License

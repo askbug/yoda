@@ -35,7 +35,7 @@
 
 <br><br>
 
-[为什么选择](#why-yoda) · [亮点](#highlights) · [安装](#installation) · [提供商](#providers) · [架构](#architecture) · [技术栈](#tech-stack) · [贡献](#contributing) · [FAQ](#faq)
+[为什么选择](#why-yoda) · [亮点](#highlights) · [安装](#installation) · [提供商](#providers) · [架构](#architecture) · [技术栈](#tech-stack) · [贡献](#contributing) · [FAQ](#faq) · [致谢](#acknowledgements)
 
 </div>
 
@@ -249,9 +249,15 @@ Yoda 是一个 Electron 桌面应用，主要分为三层：
 
 [![Star History Chart](https://api.star-history.com/svg?repos=lovstudio/yoda&type=Date)](https://star-history.com/#lovstudio/yoda&Date)
 
+<a id="acknowledgements"></a>
+
+## 致谢
+
+Yoda 是 LovStudio 独立维护和发布的项目。项目早期基于 General Action, Inc. 的 Emdash 演进而来，感谢 Emdash 项目提供的基础与启发。Emdash 仅作为上游项目和致谢对象出现，不代表当前项目身份、产品名称、发布方或背书关系。
+
 ## License
 
-Apache-2.0 © General Action, Inc. See [LICENSE.md](./LICENSE.md).
+Apache-2.0 © LovStudio, with portions © General Action, Inc. See [LICENSE.md](./LICENSE.md).
 
 <br>
 

@@ -1,4 +1,3 @@
-import { cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
@@ -44,21 +43,7 @@ deepLinkService.register();
 app.setName(PRODUCT_NAME);
 
 const yodaUserData = join(app.getPath('appData'), 'yoda');
-migrateLegacyEmdashUserData(join(app.getPath('appData'), 'emdash'), yodaUserData);
 app.setPath('userData', yodaUserData);
-
-function migrateLegacyEmdashUserData(legacyPath: string, newPath: string): void {
-  if (existsSync(newPath) || !existsSync(legacyPath)) return;
-  try {
-    mkdirSync(newPath, { recursive: true });
-    for (const entry of readdirSync(legacyPath, { withFileTypes: true })) {
-      cpSync(join(legacyPath, entry.name), join(newPath, entry.name), { recursive: true });
-    }
-    log.info(`Migrated legacy user data from ${legacyPath} to ${newPath}`);
-  } catch (err) {
-    log.error('Failed to migrate legacy emdash user data', err);
-  }
-}
 
 function createMainWindowWithDeepLinkReset(): BrowserWindow {
   deepLinkService.markRendererNotReady();

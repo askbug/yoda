@@ -7,7 +7,7 @@ import { cn } from '@renderer/utils/utils';
 
 /**
  * Renders the GitHub-style merge summary line, e.g.:
- * "lucasmerlin wants to merge into generalaction:main from lucasmerlin:feat/my-branch"
+ * "contributor wants to merge into lovstudio:main from contributor:feat/my-branch"
  */
 export function PrMergeLine({ pr, className }: { pr: PullRequest; className?: string }) {
   const { t } = useTranslation();

@@ -37,6 +37,7 @@ const config: Configuration = {
     },
   ],
   generateUpdatesFilesForAllChannels: false,
+  extraResources: ['LICENSE.md'],
   files: ['out/**/*', 'node_modules/**/*', 'drizzle/**/*'],
   asarUnpack: [
     'node_modules/better-sqlite3/**',
