@@ -32,8 +32,57 @@ const MIN_TERMINAL_ROWS = 1;
 const MAX_LAYOUT_READY_RETRIES = 8;
 const LAYOUT_READY_RETRY_MS = 50;
 const MIN_READY_TERMINAL_COLS = 10;
+const FORCE_SELECTION_DRAG_THRESHOLD_PX = 2;
 const IS_MAC_PLATFORM =
   typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+
+type BufferCellPosition = {
+  col: number;
+  row: number;
+  linear: number;
+};
+
+function getTerminalScreenElement(terminalElement: HTMLElement): HTMLElement {
+  return terminalElement.querySelector<HTMLElement>('.xterm-screen') ?? terminalElement;
+}
+
+function getBufferCellFromMouseEvent(
+  terminal: Terminal,
+  terminalElement: HTMLElement,
+  event: MouseEvent
+): BufferCellPosition | null {
+  const cell = getCellMetrics(terminal);
+  if (!cell) return null;
+
+  const screen = getTerminalScreenElement(terminalElement);
+  const rect = screen.getBoundingClientRect();
+  const col = Math.max(
+    0,
+    Math.min(terminal.cols - 1, Math.floor((event.clientX - rect.left) / cell.width))
+  );
+  const viewportRow = Math.max(
+    0,
+    Math.min(terminal.rows - 1, Math.floor((event.clientY - rect.top) / cell.height))
+  );
+  const row = terminal.buffer.active.viewportY + viewportRow;
+  return {
+    col,
+    row,
+    linear: row * terminal.cols + col,
+  };
+}
+
+function selectBetweenBufferCells(
+  terminal: Terminal,
+  anchor: BufferCellPosition,
+  focus: BufferCellPosition
+): void {
+  const start = Math.min(anchor.linear, focus.linear);
+  const end = Math.max(anchor.linear, focus.linear) + 1;
+  const length = end - start;
+  if (length <= 0) return;
+  terminal.select(start % terminal.cols, Math.floor(start / terminal.cols), length);
+}
 
 interface MeasureAndResizeOptions {
   forceRefresh?: boolean;
@@ -307,9 +356,15 @@ export function usePty(
 
   const copySelectionToClipboard = useCallback(() => {
     const selection = termRef.current?.getSelection();
-    if (selection) {
-      navigator.clipboard.writeText(selection).catch(() => {});
-    }
+    if (!selection) return;
+
+    void rpc.app
+      .clipboardWriteText(selection)
+      .then((result) => {
+        if (result?.success) return;
+        return navigator.clipboard?.writeText(selection);
+      })
+      .catch(() => navigator.clipboard?.writeText(selection).catch(() => {}));
   }, []);
 
   const sendInput = useCallback(
@@ -381,6 +436,7 @@ export function usePty(
       // Apply current theme before mounting (in case it differs from the
       // theme the terminal was constructed with).
       frontendPty.terminal.options.theme = buildTheme(themeRef.current);
+      frontendPty.terminal.options.macOptionClickForcesSelection = true;
 
       // Mount: pre-resize then appendChild (flash-free).
       frontendPty.mount(container as HTMLElement, targetDims);
@@ -561,19 +617,125 @@ export function usePty(
       cleanups.push(offPtyData);
 
       // ── Auto-copy on selection ─────────────────────────────────────────────
-      let selectionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+      let selectionCopyTimer: ReturnType<typeof setTimeout> | null = null;
+      let selectionGestureStart: string | null = null;
+      const queueSelectionCopy = (
+        delay: number,
+        shouldCopySelection: (selection: string) => boolean = () => true
+      ) => {
+        if (!autoCopyOnSelectionRef.current) return;
+        if (selectionCopyTimer) clearTimeout(selectionCopyTimer);
+        selectionCopyTimer = setTimeout(() => {
+          selectionCopyTimer = null;
+          const selection = terminal.getSelection();
+          if (!selection || !shouldCopySelection(selection)) return;
+          copySelectionToClipboard();
+        }, delay);
+      };
       const selectionDisposable = terminal.onSelectionChange(() => {
         if (!autoCopyOnSelectionRef.current) return;
         if (!terminal.hasSelection()) return;
-        if (selectionDebounceTimer) clearTimeout(selectionDebounceTimer);
-        selectionDebounceTimer = setTimeout(() => {
-          if (terminal.hasSelection()) copySelectionToClipboard();
-        }, 150);
+        queueSelectionCopy(150);
       });
       cleanups.push(() => {
         selectionDisposable.dispose();
-        if (selectionDebounceTimer) clearTimeout(selectionDebounceTimer);
+        if (selectionCopyTimer) clearTimeout(selectionCopyTimer);
       });
+
+      const terminalElement = (terminal as unknown as { element?: HTMLElement }).element;
+      if (terminalElement) {
+        const terminalDocument = terminalElement.ownerDocument;
+        let forcedSelection: {
+          active: boolean;
+          anchor: BufferCellPosition;
+          startX: number;
+          startY: number;
+        } | null = null;
+
+        const shouldCapturePlainDragSelection = (event: MouseEvent) => {
+          return (
+            autoCopyOnSelectionRef.current &&
+            event.button === 0 &&
+            !event.altKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.shiftKey
+          );
+        };
+
+        const stopMouseModeEvent = (event: MouseEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+        };
+
+        const handleSelectionGestureStart = (event: MouseEvent | TouchEvent) => {
+          if (!(event.target instanceof Node)) return;
+          if (!terminalElement.contains(event.target)) return;
+          selectionGestureStart = terminal.getSelection();
+          if (event instanceof MouseEvent && shouldCapturePlainDragSelection(event)) {
+            const anchor = getBufferCellFromMouseEvent(terminal, terminalElement, event);
+            if (!anchor) return;
+            forcedSelection = {
+              active: false,
+              anchor,
+              startX: event.clientX,
+              startY: event.clientY,
+            };
+          }
+        };
+        const handleForcedSelectionMouseMove = (event: MouseEvent) => {
+          if (!forcedSelection) return;
+
+          if (!forcedSelection.active) {
+            const movedX = Math.abs(event.clientX - forcedSelection.startX);
+            const movedY = Math.abs(event.clientY - forcedSelection.startY);
+            if (Math.max(movedX, movedY) < FORCE_SELECTION_DRAG_THRESHOLD_PX) return;
+
+            forcedSelection.active = true;
+          }
+
+          const focus = getBufferCellFromMouseEvent(terminal, terminalElement, event);
+          if (!focus) return;
+          selectBetweenBufferCells(terminal, forcedSelection.anchor, focus);
+          stopMouseModeEvent(event);
+        };
+        const handleForcedSelectionMouseUp = () => {
+          if (!forcedSelection) return;
+          const wasActive = forcedSelection.active;
+          forcedSelection = null;
+          if (!wasActive) return;
+
+          queueSelectionCopy(0);
+        };
+        const handleSelectionGestureEnd = () => {
+          if (selectionGestureStart === null) return;
+          const startedWithSelection = selectionGestureStart;
+          selectionGestureStart = null;
+          queueSelectionCopy(0, (selection) => selection !== startedWithSelection);
+        };
+        const handleSelectionGestureCancel = () => {
+          selectionGestureStart = null;
+        };
+
+        terminalElement.addEventListener('mousedown', handleSelectionGestureStart, true);
+        terminalElement.addEventListener('touchstart', handleSelectionGestureStart, true);
+        terminalDocument.addEventListener('mousemove', handleForcedSelectionMouseMove, true);
+        terminalDocument.addEventListener('mouseup', handleForcedSelectionMouseUp, true);
+        terminalDocument.addEventListener('mouseup', handleSelectionGestureEnd, true);
+        terminalDocument.addEventListener('touchend', handleSelectionGestureEnd, true);
+        terminalDocument.addEventListener('touchcancel', handleSelectionGestureCancel, true);
+        cleanups.push(() => {
+          forcedSelection = null;
+          terminalElement.removeEventListener('mousedown', handleSelectionGestureStart, true);
+          terminalElement.removeEventListener('touchstart', handleSelectionGestureStart, true);
+          terminalDocument.removeEventListener('mousemove', handleForcedSelectionMouseMove, true);
+          terminalDocument.removeEventListener('mouseup', handleForcedSelectionMouseUp, true);
+          terminalDocument.removeEventListener('mouseup', handleSelectionGestureEnd, true);
+          terminalDocument.removeEventListener('touchend', handleSelectionGestureEnd, true);
+          terminalDocument.removeEventListener('touchcancel', handleSelectionGestureCancel, true);
+        });
+      }
 
       // ── Paste from app menu ────────────────────────────────────────────────
       const offPaste = events.on(appPasteChannel, () => {
