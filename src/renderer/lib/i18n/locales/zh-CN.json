@@ -46,6 +46,7 @@
     "ago": "{{time}}前",
     "somethingWentWrong": "出了点问题",
     "reload": "重新加载",
+    "retry": "重试",
     "errorOccurred": "发生错误",
     "unexpectedError": "发生了意外错误。",
     "description": "描述",
@@ -721,7 +722,17 @@
       "noAgents": "尚未加载子代理",
       "turnContexts": "Turn 上下文",
       "noTurnContexts": "暂无 turn 上下文记录",
-      "turn": "Turn"
+      "turn": "Turn",
+      "openInEditor": "在编辑器中打开",
+      "revealInFileTree": "在文件树中显示",
+      "openFile": "打开",
+      "revealInFolder": "在文件夹中显示",
+      "copyFilePath": "复制文件路径",
+      "filePathCopied": "文件路径已复制",
+      "copyFilePathFailed": "无法将文件路径复制到剪贴板。",
+      "openFileFailed": "打开失败",
+      "revealFileFailed": "显示失败",
+      "fileActions": "文件操作"
     },
     "contextTab": "上下文",
     "context": {
@@ -1142,6 +1153,13 @@
     "editor": "编辑器",
     "options": "选项",
     "selectApp": "选择应用"
+  },
+  "terminal": {
+    "linkMenu": {
+      "openUrl": "打开链接",
+      "copyUrl": "复制链接",
+      "urlCopied": "链接已复制"
+    }
   },
   "integrations": {
     "githubNotConnected": "GitHub 尚未连接。",

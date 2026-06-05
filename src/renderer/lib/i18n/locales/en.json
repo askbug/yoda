@@ -46,6 +46,7 @@
     "ago": "{{time}} ago",
     "somethingWentWrong": "Something went wrong",
     "reload": "Reload",
+    "retry": "Retry",
     "errorOccurred": "An error occurred",
     "unexpectedError": "An unexpected error occurred.",
     "description": "Description",
@@ -721,7 +722,17 @@
       "noAgents": "No subagent types loaded yet",
       "turnContexts": "Turn contexts",
       "noTurnContexts": "No turn context recorded",
-      "turn": "Turn"
+      "turn": "Turn",
+      "openInEditor": "Open in editor",
+      "revealInFileTree": "Reveal in file tree",
+      "openFile": "Open",
+      "revealInFolder": "Reveal in folder",
+      "copyFilePath": "Copy file path",
+      "filePathCopied": "File path copied",
+      "copyFilePathFailed": "The file path could not be copied to the clipboard.",
+      "openFileFailed": "Open failed",
+      "revealFileFailed": "Reveal failed",
+      "fileActions": "File actions"
     },
     "contextTab": "Context",
     "context": {
@@ -1142,6 +1153,13 @@
     "editor": "Editor",
     "options": "Options",
     "selectApp": "Select app"
+  },
+  "terminal": {
+    "linkMenu": {
+      "openUrl": "Open URL",
+      "copyUrl": "Copy URL",
+      "urlCopied": "URL copied"
+    }
   },
   "integrations": {
     "githubNotConnected": "GitHub is not connected.",

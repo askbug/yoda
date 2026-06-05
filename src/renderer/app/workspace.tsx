@@ -1,6 +1,7 @@
 import { LeftSidebar } from '@renderer/features/sidebar/left-sidebar';
 import { CommandShortcutBinder } from '@renderer/lib/commands/command-shortcut-binder';
 import { AppKeyboardShortcuts } from '@renderer/lib/components/app-keyboard-shortcuts';
+import { ErrorBoundary } from '@renderer/lib/components/error-boundary';
 import { MonacoKeyboardBridge } from '@renderer/lib/components/monaco-keyboard-bridge';
 import { TmuxUnavailableNotifier } from '@renderer/lib/components/tmux-unavailable-notifier';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
@@ -24,11 +25,19 @@ export function Workspace() {
       <MonacoKeyboardBridge />
       <TmuxUnavailableNotifier />
       <WorkspaceLayout
-        leftSidebar={<LeftSidebar />}
+        leftSidebar={
+          <ErrorBoundary variant="inline" componentName="LeftSidebar">
+            <LeftSidebar />
+          </ErrorBoundary>
+        }
         mainContent={
           <WrapView {...wrapParams}>
-            <ModalRenderer />
-            <WorkspaceViewContent />
+            <ErrorBoundary variant="inline" componentName="ModalRenderer">
+              <ModalRenderer />
+            </ErrorBoundary>
+            <ErrorBoundary variant="inline" componentName="WorkspaceView">
+              <WorkspaceViewContent />
+            </ErrorBoundary>
           </WrapView>
         }
       />

@@ -4,6 +4,8 @@ import { captureComponentError } from '../../_legacy/errorTracking';
 import { rpc } from '../ipc';
 import { Button } from '../ui/button';
 
+type ErrorBoundaryVariant = 'fullscreen' | 'inline';
+
 type ErrorBoundaryState = {
   hasError: boolean;
   error: Error | null;
@@ -12,9 +14,10 @@ type ErrorBoundaryState = {
 type ErrorBoundaryProps = {
   children?: React.ReactNode;
   componentName?: string;
+  variant?: ErrorBoundaryVariant;
 };
 
-function ErrorFallback({ message, onReload }: { message: string; onReload: () => void }) {
+function FullscreenFallback({ message, onReload }: { message: string; onReload: () => void }) {
   const { t } = useTranslation();
 
   return (
@@ -24,6 +27,33 @@ function ErrorFallback({ message, onReload }: { message: string; onReload: () =>
         <p className="mb-4 break-all text-sm text-muted-foreground">{message}</p>
         <Button variant="default" onClick={onReload}>
           {t('common.reload')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function InlineFallback({
+  message,
+  componentName,
+  onReset,
+}: {
+  message: string;
+  componentName?: string;
+  onReset: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="flex h-full w-full items-center justify-center p-4">
+      <div className="max-w-md rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+        <div className="mb-1 font-medium text-destructive">
+          {t('common.somethingWentWrong')}
+          {componentName ? ` · ${componentName}` : ''}
+        </div>
+        <div className="mb-3 break-all text-muted-foreground">{message}</div>
+        <Button size="sm" variant="outline" onClick={onReset}>
+          {t('common.retry')}
         </Button>
       </div>
     </div>
@@ -42,11 +72,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     try {
-      // Track error with PostHog
       captureComponentError(error, this.props.componentName || 'App', {
         component_stack: info.componentStack,
         error_boundary: true,
-        severity: 'critical',
+        severity: this.props.variant === 'inline' ? 'high' : 'critical',
       });
     } catch {}
   }
@@ -59,9 +88,22 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     });
   };
 
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   render() {
     if (!this.state.hasError) return this.props.children as React.ReactElement;
     const message = this.state.error?.message || 'An unexpected error occurred.';
-    return <ErrorFallback message={message} onReload={this.handleReload} />;
+    if (this.props.variant === 'inline') {
+      return (
+        <InlineFallback
+          message={message}
+          componentName={this.props.componentName}
+          onReset={this.handleReset}
+        />
+      );
+    }
+    return <FullscreenFallback message={message} onReload={this.handleReload} />;
   }
 }
