@@ -4,7 +4,6 @@ import {
   FolderInput,
   Loader2,
   MoreHorizontal,
-  Pin,
   Plus,
   TriangleAlert,
 } from 'lucide-react';
@@ -318,21 +317,6 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
           </span>
         </div>
         <div className="flex items-center gap-0.5">
-          <SidebarItemMiniButton
-            type="button"
-            className={cn(
-              'transition-opacity duration-150 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100',
-              isPinned && 'text-foreground-tertiary'
-            )}
-            aria-label={isPinned ? t('sidebar.unpinProject') : t('sidebar.pinProject')}
-            disabled={!canPin}
-            onClick={(e) => {
-              e.stopPropagation();
-              sidebarStore.toggleProjectPinned(projectId);
-            }}
-          >
-            <Pin className="h-4 w-4" fill={isPinned ? 'currentColor' : 'none'} fillOpacity={0.18} />
-          </SidebarItemMiniButton>
           <ProjectActionsMenu
             {...menuActions}
             open={isMenuOpen}
