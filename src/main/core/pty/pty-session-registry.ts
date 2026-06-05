@@ -1,15 +1,28 @@
 import { ptyDataChannel, ptyExitChannel, ptyInputChannel } from '@shared/events/ptyEvents';
+import {
+  DEFAULT_TERMINAL_SCROLLBACK_LINES,
+  getTerminalRingBufferCapBytes,
+} from '@shared/terminal-settings';
 import { events } from '@main/lib/events';
 import type { Pty } from './pty';
 
 const FLUSH_INTERVAL_MS = 16; // ~60 fps
-const RING_BUFFER_CAP = 64 * 1024; // 64 KB per session
 
 export class PtySessionRegistry {
   private ptyMap: Map<string, Pty> = new Map();
   private ptyInputSubscriptions: Map<string, () => void> = new Map();
   private ringBuffers: Map<string, string> = new Map();
   private activeConsumers: Set<string> = new Set();
+  private ringBufferCapBytes = getTerminalRingBufferCapBytes(DEFAULT_TERMINAL_SCROLLBACK_LINES);
+
+  setScrollbackLines(scrollbackLines: unknown): void {
+    this.ringBufferCapBytes = getTerminalRingBufferCapBytes(scrollbackLines);
+    for (const [sessionId, buffer] of this.ringBuffers.entries()) {
+      if (buffer.length > this.ringBufferCapBytes) {
+        this.ringBuffers.set(sessionId, buffer.slice(-this.ringBufferCapBytes));
+      }
+    }
+  }
 
   register(sessionId: string, pty: Pty, options?: { preserveBufferOnExit?: boolean }): void {
     const preserveBufferOnExit = options?.preserveBufferOnExit ?? false;
@@ -38,7 +51,7 @@ export class PtySessionRegistry {
       }
       // Accumulate into ring buffer for late-connecting renderers
       let rb = (this.ringBuffers.get(sessionId) ?? '') + data;
-      if (rb.length > RING_BUFFER_CAP) rb = rb.slice(-RING_BUFFER_CAP);
+      if (rb.length > this.ringBufferCapBytes) rb = rb.slice(-this.ringBufferCapBytes);
       this.ringBuffers.set(sessionId, rb);
     });
 

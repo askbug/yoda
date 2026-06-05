@@ -17,6 +17,7 @@ import { editorBufferService } from './core/editor/editor-buffer-service';
 import { gitWatcherRegistry } from './core/git/git-watcher-registry';
 import { ensureInternalProject } from './core/projects/operations/ensureInternalProject';
 import { projectManager } from './core/projects/project-manager';
+import { ptySessionRegistry } from './core/pty/pty-session-registry';
 import { prSyncScheduler } from './core/pull-requests/pr-sync-scheduler';
 import { searchService } from './core/search/search-service';
 import { appSettingsService } from './core/settings/settings-service';
@@ -126,6 +127,7 @@ void app.whenReady().then(async () => {
 
   // App settings must be ready before the renderer queries them on first paint.
   await appSettingsService.initialize();
+  ptySessionRegistry.setScrollbackLines((await appSettingsService.get('terminal')).scrollbackLines);
   __bootMark('appSettingsService.initialize done');
 
   // Bootstrap the internal "Drafts" project (hosts no-project agent sessions).

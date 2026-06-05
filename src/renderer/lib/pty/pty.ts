@@ -1,12 +1,14 @@
 import { CanvasAddon } from '@xterm/addon-canvas';
 import { Terminal, type ITerminalOptions } from '@xterm/xterm';
 import { ptyDataChannel } from '@shared/events/ptyEvents';
+import {
+  DEFAULT_TERMINAL_SCROLLBACK_LINES,
+  normalizeTerminalScrollbackLines,
+} from '@shared/terminal-settings';
 import { events, rpc } from '@renderer/lib/ipc';
 import { cssVar } from '@renderer/utils/cssVars';
 import { log } from '@renderer/utils/logger';
 import { ensureXtermHost } from './xterm-host';
-
-const SCROLLBACK_LINES = 100_000;
 
 // ── Theme helpers ─────────────────────────────────────────────────────────────
 
@@ -69,7 +71,8 @@ export class FrontendPty {
 
   constructor(
     readonly sessionId: string,
-    theme?: SessionTheme
+    theme?: SessionTheme,
+    options?: { scrollbackLines?: number }
   ) {
     this.ownedContainer = document.createElement('div');
     Object.assign(this.ownedContainer.style, {
@@ -80,7 +83,9 @@ export class FrontendPty {
     this.terminal = new Terminal({
       cols: 120,
       rows: 32,
-      scrollback: SCROLLBACK_LINES,
+      scrollback: normalizeTerminalScrollbackLines(
+        options?.scrollbackLines ?? DEFAULT_TERMINAL_SCROLLBACK_LINES
+      ),
       convertEol: true,
       fontSize: 13,
       lineHeight: 1.2,
@@ -113,6 +118,10 @@ export class FrontendPty {
 
     ensureXtermHost().appendChild(this.ownedContainer);
     FrontendPty.all.add(this);
+  }
+
+  setScrollbackLines(scrollbackLines: unknown): void {
+    this.terminal.options.scrollback = normalizeTerminalScrollbackLines(scrollbackLines);
   }
 
   /**

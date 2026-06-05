@@ -1,4 +1,7 @@
 import { makeAutoObservable, onBecomeObserved, runInAction } from 'mobx';
+import type { AppSettings } from '@shared/app-settings';
+import { DEFAULT_TERMINAL_SCROLLBACK_LINES } from '@shared/terminal-settings';
+import { rpc } from '@renderer/lib/ipc';
 import { FrontendPty } from '@renderer/lib/pty/pty';
 
 export type PtySessionStatus = 'disconnected' | 'connecting' | 'ready';
@@ -21,10 +24,22 @@ export class PtySession {
   async connect() {
     if (this.pty) return;
     this.pty = new FrontendPty(this.sessionId);
+    const pty = this.pty;
     runInAction(() => {
       this.status = 'connecting';
     });
-    await this.pty.connect();
+    try {
+      const terminalSettings = (await rpc.appSettings.get('terminal')) as AppSettings['terminal'];
+      pty.setScrollbackLines(
+        terminalSettings?.scrollbackLines ?? DEFAULT_TERMINAL_SCROLLBACK_LINES
+      );
+    } catch {}
+    if (this.pty !== pty) return;
+    await pty.connect();
+    if (this.pty !== pty) {
+      pty.dispose();
+      return;
+    }
     runInAction(() => {
       this.status = 'ready';
     });

@@ -1,6 +1,11 @@
 import { Check, ChevronDown } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  MAX_TERMINAL_SCROLLBACK_LINES,
+  MIN_TERMINAL_SCROLLBACK_LINES,
+  normalizeTerminalScrollbackLines,
+} from '@shared/terminal-settings';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
@@ -52,6 +57,9 @@ const TerminalSettingsCard: React.FC = () => {
 
   const fontFamily = terminal?.fontFamily ?? '';
   const autoCopyOnSelection = terminal?.autoCopyOnSelection ?? false;
+  const scrollbackLines = normalizeTerminalScrollbackLines(terminal?.scrollbackLines);
+  const [scrollbackDraft, setScrollbackDraft] = useState<string>(String(scrollbackLines));
+  const skipScrollbackCommitRef = useRef(false);
 
   const popularOptions = useMemo<FontOption[]>(() => {
     return [
@@ -118,6 +126,10 @@ const TerminalSettingsCard: React.FC = () => {
     }
   }, [loadInstalledFonts, pickerOpen]);
 
+  useEffect(() => {
+    setScrollbackDraft(String(scrollbackLines));
+  }, [scrollbackLines]);
+
   const applyFont = useCallback(
     (next: string) => {
       const normalized = next.trim();
@@ -137,6 +149,21 @@ const TerminalSettingsCard: React.FC = () => {
       );
     },
     [update]
+  );
+
+  const applyScrollbackLines = useCallback(
+    (next: string) => {
+      const normalized = normalizeTerminalScrollbackLines(next);
+      setScrollbackDraft(String(normalized));
+      if (normalized === scrollbackLines) return;
+      update({ scrollbackLines: normalized });
+      window.dispatchEvent(
+        new CustomEvent('terminal-scrollback-lines-changed', {
+          detail: { scrollbackLines: normalized },
+        })
+      );
+    },
+    [scrollbackLines, update]
   );
 
   const selectedPreset = findPreset(fontFamily);
@@ -264,6 +291,46 @@ const TerminalSettingsCard: React.FC = () => {
                 </div>
               </PopoverContent>
             </Popover>
+          </div>
+        }
+      />
+      <SettingRow
+        title={t('settings.terminal.scrollbackLines')}
+        description={t('settings.terminal.scrollbackLinesDescription')}
+        control={
+          <div className="flex w-[183px] items-center gap-2">
+            <Input
+              type="number"
+              min={MIN_TERMINAL_SCROLLBACK_LINES}
+              max={MAX_TERMINAL_SCROLLBACK_LINES}
+              step={1000}
+              value={scrollbackDraft}
+              disabled={loading || saving}
+              aria-label={t('settings.terminal.scrollbackLinesAria')}
+              className="h-9 text-right"
+              onChange={(e) => setScrollbackDraft(e.target.value)}
+              onBlur={() => {
+                if (skipScrollbackCommitRef.current) {
+                  skipScrollbackCommitRef.current = false;
+                  return;
+                }
+                applyScrollbackLines(scrollbackDraft);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur();
+                  return;
+                }
+                if (e.key === 'Escape') {
+                  skipScrollbackCommitRef.current = true;
+                  setScrollbackDraft(String(scrollbackLines));
+                  e.currentTarget.blur();
+                }
+              }}
+            />
+            <span className="shrink-0 text-xs text-foreground-passive">
+              {t('settings.terminal.linesUnit')}
+            </span>
           </div>
         }
       />

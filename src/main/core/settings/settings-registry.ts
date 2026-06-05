@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { AppSettings, AppSettingsKey } from '@shared/app-settings';
 import { MAAS_PLATFORMS } from '@shared/maas';
 import type { OpenInAppId } from '@shared/openInApps';
+import { DEFAULT_TERMINAL_SCROLLBACK_LINES } from '@shared/terminal-settings';
 import { getDefaultLocalWorktreeDirectory } from './worktree-defaults';
 
 export const DEFAULT_AGENT_ID = 'claude';
@@ -45,6 +46,7 @@ export const SETTINGS_DEFAULTS = {
   },
   terminal: {
     autoCopyOnSelection: false,
+    scrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   },
   theme: null,
   defaultAgent: DEFAULT_AGENT_ID,

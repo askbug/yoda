@@ -3,6 +3,11 @@ import { AGENT_PROVIDER_IDS, AGENT_PROVIDERS } from '@shared/agent-provider-regi
 import { MAAS_PLATFORM_IDS } from '@shared/maas';
 import { openInAppIdSchema } from '@shared/openInApps';
 import { quickActionSchema } from '@shared/project-settings';
+import {
+  DEFAULT_TERMINAL_SCROLLBACK_LINES,
+  MAX_TERMINAL_SCROLLBACK_LINES,
+  MIN_TERMINAL_SCROLLBACK_LINES,
+} from '@shared/terminal-settings';
 import { DEFAULT_AGENT_ID, DEFAULT_REVIEW_PROMPT } from './settings-registry';
 
 export const projectSettingsSchema = z.object({
@@ -72,6 +77,12 @@ export const maasSettingsSchema = z.object({
 export const terminalSettingsSchema = z.object({
   fontFamily: z.string().optional(),
   autoCopyOnSelection: z.boolean(),
+  scrollbackLines: z
+    .number()
+    .int()
+    .min(MIN_TERMINAL_SCROLLBACK_LINES)
+    .max(MAX_TERMINAL_SCROLLBACK_LINES)
+    .catch(DEFAULT_TERMINAL_SCROLLBACK_LINES),
 });
 
 export const themeSchema = z
