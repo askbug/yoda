@@ -20,9 +20,13 @@ export function getLinkedIssueMap(
     if (!isRegistered(store)) continue;
     if (excludeTaskId && store.data.id === excludeTaskId) continue;
     if (store.data.archivedAt) continue;
-    const url = store.data.linkedIssue?.url;
-    if (!url || map.has(url)) continue;
-    map.set(url, { taskId: store.data.id, taskName: store.data.name });
+    const linkedIssues =
+      store.data.linkedIssues ?? (store.data.linkedIssue ? [store.data.linkedIssue] : []);
+    for (const issue of linkedIssues) {
+      const url = issue.url;
+      if (!url || map.has(url)) continue;
+      map.set(url, { taskId: store.data.id, taskName: store.data.name });
+    }
   }
   return map;
 }

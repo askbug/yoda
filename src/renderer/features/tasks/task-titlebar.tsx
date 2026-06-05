@@ -19,6 +19,7 @@ import { OpenInMenu } from '@renderer/lib/components/titlebar/open-in-menu';
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { rpc } from '@renderer/lib/ipc';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { Separator } from '@renderer/lib/ui/separator';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { Toggle } from '@renderer/lib/ui/toggle';
@@ -78,6 +79,8 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
   const { t } = useTranslation();
   const taskStore = getTaskStore(projectId, taskId)!;
   const taskPayload = getRegisteredTaskData(projectId, taskId)!;
+  const linkedIssues =
+    taskPayload.linkedIssues ?? (taskPayload.linkedIssue ? [taskPayload.linkedIssue] : []);
   const provisionedTask = useProvisionedTask();
   const { taskView } = provisionedTask;
   const showRename = useShowModal('renameTaskModal');
@@ -116,7 +119,7 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
             </span>
           </button>
           <TaskGitDiffStats task={taskStore} />
-          {taskPayload.linkedIssue ? <LinkedIssueBadge issue={taskPayload.linkedIssue} /> : null}
+          <LinkedIssuesBadgeGroup issues={linkedIssues} />
           <button
             className={cn(
               'text-foreground-muted ml-1',
@@ -221,6 +224,60 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
     />
   );
 });
+
+function LinkedIssuesBadgeGroup({ issues }: { issues: Issue[] }) {
+  const { t } = useTranslation();
+  if (issues.length === 0) return null;
+
+  const visibleIssues = issues.slice(0, 2);
+  const hiddenIssues = issues.slice(2);
+
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      {visibleIssues.map((issue) => (
+        <LinkedIssueBadge key={issue.url || issue.identifier} issue={issue} />
+      ))}
+      {hiddenIssues.length > 0 ? (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <button
+                type="button"
+                className="rounded-md border border-border px-1.5 py-0.5 text-xs text-foreground-muted hover:bg-muted/30"
+              >
+                {t('issues.moreIssues', { count: hiddenIssues.length })}
+              </button>
+            }
+          />
+          <PopoverContent align="start" className="w-80 p-2">
+            <div className="px-2 pb-2 text-xs font-medium text-foreground-muted">
+              {t('issues.linkedIssues')}
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {issues.map((issue) => (
+                <button
+                  key={issue.url || issue.identifier}
+                  type="button"
+                  disabled={!issue.url}
+                  className="flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted disabled:cursor-default disabled:opacity-60"
+                  onClick={() => {
+                    if (issue.url) void rpc.app.openExternal(issue.url);
+                  }}
+                >
+                  <ProviderLogo provider={issue.provider} className="h-3.5 w-3.5" />
+                  <span className="shrink-0 font-mono text-xs text-foreground-muted">
+                    {issue.identifier}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{issue.title}</span>
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : null}
+    </div>
+  );
+}
 
 function LinkedIssueBadge({ issue }: { issue: Issue }) {
   return (

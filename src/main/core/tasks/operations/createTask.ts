@@ -22,6 +22,7 @@ import type { ProvisionTaskError } from '../provision-task-error';
 import { resolveTaskBranchName } from '../resolveTaskBranchName';
 import { toStoredBranch } from '../stored-branch';
 import { mapTaskRowToTask } from '../utils/utils';
+import { replaceTaskIssueLinks } from './task-issues';
 
 function mapProvisionError(error: ProvisionTaskError): CreateTaskError {
   switch (error.type) {
@@ -214,7 +215,12 @@ export async function createTask(
     }
   }
 
-  const task = mapTaskRowToTask(taskRow, prs);
+  if (params.linkedIssue) {
+    await replaceTaskIssueLinks(params.id, [params.linkedIssue]);
+  }
+
+  const linkedIssues = params.linkedIssue ? [params.linkedIssue] : undefined;
+  const task = mapTaskRowToTask(taskRow, prs, {}, linkedIssues);
 
   taskEvents._emit('task:created', task);
 

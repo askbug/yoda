@@ -1,8 +1,13 @@
-import { ArrowRight, CircleDot } from 'lucide-react';
+import { ArrowRight, CircleDot, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
+import type { Issue } from '@shared/tasks';
 import { useIssues } from '@renderer/features/integrations/use-issues';
 import { CreateIssueButton } from '@renderer/features/projects/components/issues-view/create-issue-button';
+import {
+  IssueLinkedSessions,
+  IssueSessionLinkPopover,
+} from '@renderer/features/projects/components/issues-view/issue-session-links';
 import {
   asMounted,
   getProjectStore,
@@ -13,10 +18,56 @@ import { IssueIdentifier } from '@renderer/features/tasks/components/issue-selec
 import { rpc } from '@renderer/lib/ipc';
 import { useGithubContext } from '@renderer/lib/providers/github-context-provider';
 import { Button } from '@renderer/lib/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@renderer/lib/ui/dropdown-menu';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 
 const ISSUE_FETCH_LIMIT = 50;
 const RECENT_LIMIT = 3;
+
+function IssueOverviewActions({
+  issue,
+  projectId,
+  onViewAll,
+}: {
+  issue: Issue;
+  projectId: string;
+  onViewAll: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover/issue:opacity-100">
+      <IssueSessionLinkPopover issue={issue} projectId={projectId} iconOnly />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="ghost" size="icon-xs" aria-label={t('common.more')}>
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={() => void rpc.app.openExternal(issue.url)}>
+            <ExternalLink className="size-3.5" />
+            {t('issues.openOnGitHub')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onViewAll}>
+            <ArrowRight className="size-3.5" />
+            {t('projects.viewAll')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
 
 export const IssuesOverviewCard = observer(function IssuesOverviewCard({
   projectId,
@@ -57,18 +108,27 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
         <div className="flex items-center gap-1">
           <CreateIssueButton
             repositoryUrl={repositoryUrl}
+            projectId={projectId}
             disabled={!isInitialized || !authenticated}
+            iconOnly
             onCreated={syncCreatedIssue}
           />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={goToIssues}
-            disabled={!repositoryUrl || !authenticated}
-          >
-            {t('projects.viewAll')}
-            <ArrowRight className="size-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={goToIssues}
+                  disabled={!repositoryUrl || !authenticated}
+                  aria-label={t('projects.viewAll')}
+                >
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              }
+            />
+            <TooltipContent>{t('projects.viewAll')}</TooltipContent>
+          </Tooltip>
         </div>
       </header>
       {!repositoryUrl ? (
@@ -83,21 +143,38 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
         <ul className="space-y-1">
           {recentIssues.map((issue) => (
             <li key={issue.url || issue.identifier}>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-background-hover"
-                onClick={() => void rpc.app.openExternal(issue.url)}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <IssueIdentifier identifier={issue.identifier} />
-                  <span className="truncate font-medium text-foreground">{issue.title}</span>
-                </span>
-                {issue.updatedAt ? (
-                  <span className="shrink-0 text-foreground-muted">
-                    <RelativeTime value={issue.updatedAt} compact />
-                  </span>
-                ) : null}
-              </button>
+              <div className="group/issue rounded-md px-2 py-1.5 transition-colors hover:bg-background-hover">
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left text-xs"
+                    onClick={() => void rpc.app.openExternal(issue.url)}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <IssueIdentifier identifier={issue.identifier} />
+                      <span className="truncate font-medium text-foreground">{issue.title}</span>
+                    </span>
+                    {issue.updatedAt ? (
+                      <span className="mt-1 block text-foreground-muted">
+                        <RelativeTime value={issue.updatedAt} compact />
+                      </span>
+                    ) : null}
+                  </button>
+                  <IssueOverviewActions
+                    issue={issue}
+                    projectId={projectId}
+                    onViewAll={goToIssues}
+                  />
+                </div>
+                <div className="mt-1 flex min-w-0 items-center">
+                  <IssueLinkedSessions
+                    issue={issue}
+                    projectId={projectId}
+                    maxVisible={2}
+                    className="min-w-0 flex-1"
+                  />
+                </div>
+              </div>
             </li>
           ))}
         </ul>

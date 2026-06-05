@@ -141,6 +141,46 @@ export const tasks = sqliteTable(
   })
 );
 
+export const issueRecords = sqliteTable(
+  'issues',
+  {
+    url: text('url').primaryKey(),
+    provider: text('provider').notNull(),
+    identifier: text('identifier').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    branchName: text('branch_name'),
+    status: text('status'),
+    assignees: text('assignees', { mode: 'json' }).$type<string[]>(),
+    project: text('project'),
+    updatedAt: text('updated_at'),
+    fetchedAt: text('fetched_at'),
+  },
+  (table) => ({
+    providerIdx: index('idx_issues_provider').on(table.provider),
+    identifierIdx: index('idx_issues_identifier').on(table.identifier),
+  })
+);
+
+export const taskIssueLinks = sqliteTable(
+  'task_issues',
+  {
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    issueUrl: text('issue_url')
+      .notNull()
+      .references(() => issueRecords.url, { onDelete: 'cascade' }),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.taskId, table.issueUrl] }),
+    issueUrlIdx: index('idx_task_issues_issue_url').on(table.issueUrl),
+  })
+);
+
 export const pullRequestUsers = sqliteTable('pull_request_users', {
   userId: text('user_id').primaryKey(),
   userName: text('user_name').notNull(),
@@ -402,6 +442,22 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
     references: [projects.id],
   }),
   conversations: many(conversations),
+  issueLinks: many(taskIssueLinks),
+}));
+
+export const issueRecordsRelations = relations(issueRecords, ({ many }) => ({
+  taskLinks: many(taskIssueLinks),
+}));
+
+export const taskIssueLinksRelations = relations(taskIssueLinks, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskIssueLinks.taskId],
+    references: [tasks.id],
+  }),
+  issue: one(issueRecords, {
+    fields: [taskIssueLinks.issueUrl],
+    references: [issueRecords.url],
+  }),
 }));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
@@ -425,6 +481,10 @@ export type ProjectRow = typeof projects.$inferSelect;
 export type ProjectSettingsRow = typeof projectSettings.$inferSelect;
 export type ProjectSettingsInsert = typeof projectSettings.$inferInsert;
 export type TaskRow = typeof tasks.$inferSelect;
+export type IssueRecordRow = typeof issueRecords.$inferSelect;
+export type IssueRecordInsert = typeof issueRecords.$inferInsert;
+export type TaskIssueLinkRow = typeof taskIssueLinks.$inferSelect;
+export type TaskIssueLinkInsert = typeof taskIssueLinks.$inferInsert;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type TerminalRow = typeof terminals.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;

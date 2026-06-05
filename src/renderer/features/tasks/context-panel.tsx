@@ -1,9 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  Copy,
+  ExternalLink,
   FileText,
+  FolderOpen,
   Hash,
   Info,
   MessageSquare,
+  MoreHorizontal,
+  PanelRightOpen,
   Pencil,
   Plug,
   Sparkles,
@@ -21,6 +26,7 @@ import type {
   CodexMemoryFile,
   CodexSessionContext,
   CodexTurnContext,
+  ContextSkill,
 } from '@shared/conversations';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import {
@@ -34,7 +40,22 @@ import {
 } from '@renderer/features/tasks/conversations/context-actions';
 import { getRegisteredTaskData } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import { toast } from '@renderer/lib/hooks/use-toast';
 import { rpc } from '@renderer/lib/ipc';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@renderer/lib/ui/context-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@renderer/lib/ui/dropdown-menu';
 import { MicroLabel } from '@renderer/lib/ui/label';
 import { formatBytes } from '@renderer/utils/formatBytes';
 import { cn } from '@renderer/utils/utils';
@@ -54,7 +75,12 @@ export const ContextPanel = observer(function ContextPanel() {
 
   const providerId = activeConversation?.data.providerId;
 
-  const linkedIssueAction = buildLinkedIssueContextAction(taskPayload?.linkedIssue);
+  const linkedIssues =
+    taskPayload?.linkedIssues ?? (taskPayload?.linkedIssue ? [taskPayload.linkedIssue] : []);
+  const linkedIssueActions = linkedIssues.flatMap((issue) => {
+    const action = buildLinkedIssueContextAction(issue);
+    return action ? [action] : [];
+  });
   const draftCommentsAction = buildDraftCommentsContextAction({
     count: draftComments.count,
     formattedComments: draftComments.formattedForAgent,
@@ -92,15 +118,16 @@ export const ContextPanel = observer(function ContextPanel() {
         )}
 
         <Section title={t('tasks.panel.injectedContext')}>
-          {linkedIssueAction || draftCommentsAction || reviewPromptAction ? (
+          {linkedIssueActions.length > 0 || draftCommentsAction || reviewPromptAction ? (
             <>
-              {linkedIssueAction ? (
+              {linkedIssueActions.map((linkedIssueAction) => (
                 <ContextItem
+                  key={linkedIssueAction.id}
                   icon={<Hash className="size-3.5" />}
                   label={linkedIssueAction.label}
                   text={linkedIssueAction.text}
                 />
-              ) : null}
+              ))}
               {draftCommentsAction ? (
                 <ContextItem
                   icon={<MessageSquare className="size-3.5" />}
@@ -175,12 +202,13 @@ function ClaudeContextSections({
         servers={data.mcpServers}
         mcpTools={data.tools.filter((t) => t.startsWith('mcp__'))}
       />
-      <SkillsSection content={data.skillsListing} />
+      <SkillsSection skills={data.skills} content={data.skillsListing} />
       <AgentsSection agents={data.agents} />
       <SessionPromptsSection
         prompts={data.prompts}
         sessionId={sessionId}
         focusTarget={promptFocusTarget}
+        sourcePath={data.transcriptPath}
       />
     </>
   );
@@ -225,46 +253,33 @@ function CodexContextSections({
 
   return (
     <>
-      <CodexRuntimeSection data={data} />
       <CodexSystemPromptSection
         baseInstructions={data.baseInstructions}
         developerMessages={data.developerMessages}
+        sourcePath={data.rolloutPath}
       />
       <MemorySection files={data.memoryFiles} />
       <CodexDynamicToolsSection tools={data.dynamicTools} />
-      <SkillsSection content={data.skillsListing} />
-      <CodexTurnContextsSection turnContexts={data.turnContexts} />
+      <SkillsSection skills={data.skills} content={data.skillsListing} />
+      <CodexTurnContextsSection turnContexts={data.turnContexts} sourcePath={data.rolloutPath} />
       <SessionPromptsSection
         prompts={data.prompts}
         sessionId={conversationId}
         focusTarget={promptFocusTarget}
+        sourcePath={data.rolloutPath}
       />
     </>
-  );
-}
-
-function CodexRuntimeSection({ data }: { data: CodexSessionContext }) {
-  const { t } = useTranslation();
-  return (
-    <Section title={t('tasks.panel.runtimeContext')}>
-      <div className="grid grid-cols-[auto,minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
-        <MetaRow label={t('tasks.panel.provider')} value={data.modelProvider} />
-        <MetaRow label={t('tasks.panel.model')} value={data.model} />
-        <MetaRow label={t('tasks.panel.approvalMode')} value={data.approvalMode} />
-        <MetaRow label={t('tasks.panel.sandboxPolicy')} value={data.sandboxPolicy} />
-        <MetaRow label={t('tasks.panel.memoryMode')} value={data.memoryMode} />
-        <MetaRow label={t('tasks.panel.cliVersion')} value={data.cliVersion} />
-      </div>
-    </Section>
   );
 }
 
 function CodexSystemPromptSection({
   baseInstructions,
   developerMessages,
+  sourcePath,
 }: {
   baseInstructions: string | null;
   developerMessages: ClaudeSessionPrompt[];
+  sourcePath?: string | null;
 }) {
   const { t } = useTranslation();
   return (
@@ -279,6 +294,7 @@ function CodexSystemPromptSection({
           label={t('tasks.panel.baseInstructions')}
           meta={formatBytes(baseInstructions.length)}
           text={baseInstructions}
+          sourcePath={sourcePath ?? undefined}
         />
       ) : null}
       {developerMessages.length > 0 ? (
@@ -289,6 +305,7 @@ function CodexSystemPromptSection({
             label={`${t('tasks.panel.developerMessage')} #${index + 1}`}
             meta={formatBytes(message.text.length)}
             text={message.text}
+            sourcePath={sourcePath ?? undefined}
           />
         ))
       ) : baseInstructions ? null : (
@@ -324,7 +341,13 @@ function CodexDynamicToolsSection({ tools }: { tools: CodexDynamicTool[] }) {
   );
 }
 
-function CodexTurnContextsSection({ turnContexts }: { turnContexts: CodexTurnContext[] }) {
+function CodexTurnContextsSection({
+  turnContexts,
+  sourcePath,
+}: {
+  turnContexts: CodexTurnContext[];
+  sourcePath?: string | null;
+}) {
   const { t } = useTranslation();
   return (
     <Section title={t('tasks.panel.turnContexts')} count={turnContexts.length}>
@@ -337,6 +360,7 @@ function CodexTurnContextsSection({ turnContexts }: { turnContexts: CodexTurnCon
             icon={<Info className="size-3.5" />}
             label={ctx.turnId ?? `${t('tasks.panel.turn')} #${index + 1}`}
             text={formatTurnContext(ctx, t)}
+            sourcePath={sourcePath ?? undefined}
           />
         ))
       )}
@@ -358,6 +382,7 @@ function MemorySection({ files }: { files: Array<ClaudeMemoryFile | CodexMemoryF
             label={memoryFileLabel(f, t)}
             meta={formatBytes(f.bytes)}
             text={f.content}
+            sourcePath={f.path}
           />
         ))
       )}
@@ -493,23 +518,25 @@ function McpServerItem({
   );
 }
 
-function SkillsSection({ content }: { content: string | null }) {
+function SkillsSection({ skills, content }: { skills?: ContextSkill[]; content: string | null }) {
   const { t } = useTranslation();
-  const skills = content ? parseSkillListing(content) : [];
+  const parsedSkills = content ? parseSkillListing(content) : [];
+  const entries = skills && skills.length > 0 ? skills : parsedSkills;
   return (
     <Section
       title={t('tasks.panel.skills')}
-      count={skills.length}
+      count={entries.length}
       icon={<Sparkles className="size-3.5" />}
-      scrollable={skills.length > 0}
+      scrollable={entries.length > 0}
     >
-      {skills.length > 0 ? (
-        skills.map((s) => (
+      {entries.length > 0 ? (
+        entries.map((s) => (
           <ContextItem
             key={s.name}
             icon={<Sparkles className="size-3.5" />}
             label={s.name}
             text={s.description || '(no description)'}
+            sourcePath={skillSourcePath(s)}
           />
         ))
       ) : content ? (
@@ -542,6 +569,12 @@ function parseSkillListing(content: string): { name: string; description: string
   return out;
 }
 
+function skillSourcePath(
+  skill: ContextSkill | { name: string; description: string }
+): string | undefined {
+  return 'path' in skill && typeof skill.path === 'string' ? skill.path : undefined;
+}
+
 function AgentsSection({ agents }: { agents: string[] }) {
   const { t } = useTranslation();
   return (
@@ -564,10 +597,12 @@ function SessionPromptsSection({
   prompts,
   sessionId,
   focusTarget,
+  sourcePath,
 }: {
   prompts: ClaudeSessionPrompt[];
   sessionId: string;
   focusTarget: ContextPromptFocusTarget | null;
+  sourcePath?: string | null;
 }) {
   const { t } = useTranslation();
   const targetIndex = resolvePromptTargetIndex(prompts, sessionId, focusTarget);
@@ -587,6 +622,7 @@ function SessionPromptsSection({
             prompt={p}
             isTarget={i === targetIndex}
             focusRequestId={focusTarget?.requestId}
+            sourcePath={sourcePath ?? undefined}
           />
         ))
       )}
@@ -599,11 +635,13 @@ function PromptItem({
   prompt,
   isTarget,
   focusRequestId,
+  sourcePath,
 }: {
   index: number;
   prompt: ClaudeSessionPrompt;
   isTarget?: boolean;
   focusRequestId?: string;
+  sourcePath?: string;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
   const preview = prompt.text.replace(/\s+/g, ' ').slice(0, 80);
@@ -618,12 +656,12 @@ function PromptItem({
     el.focus({ preventScroll: true });
   }, [focusRequestId, isTarget]);
 
-  return (
+  const item = (
     <details
       ref={ref}
       tabIndex={-1}
       className={cn(
-        'min-w-0 rounded-sm border border-dashed border-border px-2 py-1.5 outline-none',
+        'group/context-item relative min-w-0 rounded-sm border border-dashed border-border px-2 py-1.5 outline-none',
         isTarget && 'border-accent ring-2 ring-accent/30'
       )}
     >
@@ -633,17 +671,16 @@ function PromptItem({
           {preview}
           {prompt.text.length > 80 ? '…' : ''}
         </span>
-        {timestamp ? (
-          <span className="shrink-0 font-mono text-[10px] text-foreground-passive">
-            {timestamp}
-          </span>
-        ) : null}
+        <ContextItemTrailing meta={timestamp ?? undefined} sourcePath={sourcePath} />
       </summary>
       <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground">
         {prompt.text}
       </pre>
     </details>
   );
+
+  if (!sourcePath) return item;
+  return <ContextFileMenu sourcePath={sourcePath}>{item}</ContextFileMenu>;
 }
 
 function resolvePromptTargetIndex(
@@ -678,17 +715,6 @@ function ChipList({ items, mono }: { items: string[]; mono?: boolean }) {
         </span>
       ))}
     </div>
-  );
-}
-
-function MetaRow({ label, value }: { label: string; value: string | null }) {
-  return (
-    <>
-      <span className="text-foreground-passive">{label}</span>
-      <span className="min-w-0 truncate font-mono text-foreground" title={value ?? undefined}>
-        {value ?? '—'}
-      </span>
-    </>
   );
 }
 
@@ -751,28 +777,297 @@ function ContextItem({
   label,
   meta,
   text,
+  sourcePath,
 }: {
   icon: React.ReactNode;
   label: string;
   meta?: string;
   text: string;
+  sourcePath?: string;
 }) {
-  return (
-    <details className="min-w-0 rounded-sm border border-dashed border-border px-2 py-1.5">
+  const item = (
+    <details className="group/context-item relative min-w-0 rounded-sm border border-dashed border-border px-2 py-1.5">
       <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-xs">
         <span className="shrink-0">{icon}</span>
         <span className="min-w-0 flex-1 truncate" title={label}>
           {label}
         </span>
-        {meta ? (
-          <span className="shrink-0 font-mono text-[10px] text-foreground-passive">{meta}</span>
-        ) : null}
+        <ContextItemTrailing meta={meta} sourcePath={sourcePath} />
       </summary>
       <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground-passive">
         {text}
       </pre>
     </details>
   );
+
+  if (!sourcePath) return item;
+  return <ContextFileMenu sourcePath={sourcePath}>{item}</ContextFileMenu>;
+}
+
+function ContextItemTrailing({ meta, sourcePath }: { meta?: string; sourcePath?: string }) {
+  if (!sourcePath) {
+    return meta ? (
+      <span className="shrink-0 font-mono text-[10px] text-foreground-passive">{meta}</span>
+    ) : null;
+  }
+
+  return (
+    <span className="relative flex h-5 min-w-5 shrink-0 items-center justify-end">
+      {meta ? (
+        <span className="font-mono text-[10px] text-foreground-passive transition-opacity group-hover/context-item:opacity-0 group-focus-within/context-item:opacity-0">
+          {meta}
+        </span>
+      ) : null}
+      <span className="absolute right-0 flex opacity-0 transition-opacity group-hover/context-item:opacity-100 group-focus-within/context-item:opacity-100">
+        <ContextFileActionsDropdown sourcePath={sourcePath} />
+      </span>
+    </span>
+  );
+}
+
+function ContextFileActionsDropdown({ sourcePath }: { sourcePath: string }) {
+  const { t } = useTranslation();
+  const provisioned = useProvisionedTask();
+  const relativePath = toWorkspaceRelativePath(sourcePath, provisioned.path);
+  const isRemote = !!provisioned.workspace.sshConnectionId;
+
+  const openInEditor = () => {
+    if (!relativePath) return;
+    provisioned.taskView.tabManager.openFile(relativePath);
+    provisioned.taskView.setFocusedRegion('main');
+  };
+
+  const revealInFileTree = () => {
+    if (!relativePath) return;
+    provisioned.taskView.setSidebarTab('files');
+    provisioned.taskView.setSidebarCollapsed(false);
+    void provisioned.workspace.files.revealFile(
+      relativePath,
+      provisioned.taskView.editorView.expandedPaths
+    );
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className="flex size-5 items-center justify-center rounded-sm text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
+            aria-label={t('tasks.panel.fileActions')}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MoreHorizontal className="size-3.5" />
+          </button>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-48">
+        {relativePath ? (
+          <>
+            <DropdownMenuItem
+              onClick={(event) => {
+                event.stopPropagation();
+                openInEditor();
+              }}
+            >
+              <FileText className="size-4" />
+              {t('tasks.panel.openInEditor')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(event) => {
+                event.stopPropagation();
+                revealInFileTree();
+              }}
+            >
+              <PanelRightOpen className="size-4" />
+              {t('tasks.panel.revealInFileTree')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        <DropdownMenuItem
+          disabled={isRemote}
+          onClick={(event) => {
+            event.stopPropagation();
+            void openContextFile(sourcePath, t);
+          }}
+        >
+          <ExternalLink className="size-4" />
+          {t('tasks.panel.openFile')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={isRemote}
+          onClick={(event) => {
+            event.stopPropagation();
+            void revealContextFile(sourcePath, t);
+          }}
+        >
+          <FolderOpen className="size-4" />
+          {t('tasks.panel.revealInFolder')}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={(event) => {
+            event.stopPropagation();
+            void copyContextFilePath(sourcePath, t);
+          }}
+        >
+          <Copy className="size-4" />
+          {t('tasks.panel.copyFilePath')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ContextFileMenu({
+  sourcePath,
+  children,
+}: {
+  sourcePath: string;
+  children: React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  const provisioned = useProvisionedTask();
+  const relativePath = toWorkspaceRelativePath(sourcePath, provisioned.path);
+  const isRemote = !!provisioned.workspace.sshConnectionId;
+
+  const openInEditor = () => {
+    if (!relativePath) return;
+    provisioned.taskView.tabManager.openFile(relativePath);
+    provisioned.taskView.setFocusedRegion('main');
+  };
+
+  const revealInFileTree = () => {
+    if (!relativePath) return;
+    provisioned.taskView.setSidebarTab('files');
+    provisioned.taskView.setSidebarCollapsed(false);
+    void provisioned.workspace.files.revealFile(
+      relativePath,
+      provisioned.taskView.editorView.expandedPaths
+    );
+  };
+
+  const openFile = () => {
+    void openContextFile(sourcePath, t);
+  };
+
+  const revealFile = () => {
+    void revealContextFile(sourcePath, t);
+  };
+
+  const copyPath = () => {
+    void copyContextFilePath(sourcePath, t);
+  };
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{children}</ContextMenuTrigger>
+      <ContextMenuContent className="w-48">
+        {relativePath ? (
+          <>
+            <ContextMenuItem onClick={openInEditor}>
+              <FileText className="size-4" />
+              {t('tasks.panel.openInEditor')}
+            </ContextMenuItem>
+            <ContextMenuItem onClick={revealInFileTree}>
+              <PanelRightOpen className="size-4" />
+              {t('tasks.panel.revealInFileTree')}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
+        <ContextMenuItem onClick={openFile} disabled={isRemote}>
+          <ExternalLink className="size-4" />
+          {t('tasks.panel.openFile')}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={revealFile} disabled={isRemote}>
+          <FolderOpen className="size-4" />
+          {t('tasks.panel.revealInFolder')}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={copyPath}>
+          <Copy className="size-4" />
+          {t('tasks.panel.copyFilePath')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+function toWorkspaceRelativePath(sourcePath: string, workspaceRoot: string): string | null {
+  const normalizedSource = normalizePathForCompare(sourcePath);
+  const normalizedRoot = normalizePathForCompare(workspaceRoot).replace(/\/+$/, '');
+  if (!normalizedSource || !normalizedRoot) return null;
+  const sourceKey = sourcePathHasDriveLetter(normalizedSource)
+    ? normalizedSource.toLowerCase()
+    : normalizedSource;
+  const rootKey = sourcePathHasDriveLetter(normalizedRoot)
+    ? normalizedRoot.toLowerCase()
+    : normalizedRoot;
+  if (sourceKey === rootKey) return null;
+  if (!sourceKey.startsWith(`${rootKey}/`)) return null;
+  return normalizedSource.slice(normalizedRoot.length + 1);
+}
+
+function normalizePathForCompare(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function sourcePathHasDriveLetter(path: string): boolean {
+  return /^[a-z]:\//i.test(path);
+}
+
+async function openContextFile(path: string, t: (key: string) => string): Promise<void> {
+  try {
+    const res = await rpc.app.openIn({ app: 'finder', path });
+    if (!res?.success) {
+      showContextFileActionFailure(t('tasks.panel.openFileFailed'), res?.error);
+    }
+  } catch (error) {
+    showContextFileActionFailure(t('tasks.panel.openFileFailed'), stringifyError(error));
+  }
+}
+
+async function revealContextFile(path: string, t: (key: string) => string): Promise<void> {
+  try {
+    const res = await rpc.app.openIn({ app: 'finder', path, reveal: true });
+    if (!res?.success) {
+      showContextFileActionFailure(t('tasks.panel.revealFileFailed'), res?.error);
+    }
+  } catch (error) {
+    showContextFileActionFailure(t('tasks.panel.revealFileFailed'), stringifyError(error));
+  }
+}
+
+async function copyContextFilePath(path: string, t: (key: string) => string): Promise<void> {
+  try {
+    const res = await rpc.app.clipboardWriteText(path);
+    if (res?.success) {
+      toast({ title: t('tasks.panel.filePathCopied') });
+      return;
+    }
+  } catch {
+    // handled below
+  }
+  toast({
+    title: t('common.copyFailed'),
+    description: t('tasks.panel.copyFilePathFailed'),
+    variant: 'destructive',
+  });
+}
+
+function showContextFileActionFailure(title: string, description?: string): void {
+  toast({
+    title,
+    description,
+    variant: 'destructive',
+  });
+}
+
+function stringifyError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function Empty({ children }: { children: React.ReactNode }) {

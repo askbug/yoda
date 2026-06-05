@@ -5,7 +5,9 @@ import type {
   GitHubConnectResponse,
   GitHubStatusResponse,
 } from '@shared/github';
+import { parseGitHubRepository } from '@shared/github-repository';
 import { createRPCController } from '@shared/ipc/rpc';
+import type { Issue } from '@shared/tasks';
 import { ACCOUNT_CONFIG } from '@main/core/account/config';
 import { GitHubAuthExecutionContext } from '@main/core/execution-context/github-auth-execution-context';
 import { LocalExecutionContext } from '@main/core/execution-context/local-execution-context';
@@ -15,10 +17,25 @@ import { SshFileSystem } from '@main/core/fs/impl/ssh-fs';
 import type { FileSystemProvider } from '@main/core/fs/types';
 import { cloneRepository, initializeNewProject } from '@main/core/git/impl/git-repo-utils';
 import { githubConnectionService } from '@main/core/github/services/github-connection-service';
+import { issueService, type GitHubIssueDetail } from '@main/core/github/services/issue-service';
 import { repoService } from '@main/core/github/services/repo-service';
 import { sshConnectionManager } from '@main/core/ssh/ssh-connection-manager';
 import { log } from '@main/lib/logger';
 import { telemetryService } from '@main/lib/telemetry';
+
+function githubIssueToIssue(raw: GitHubIssueDetail): Issue {
+  return {
+    provider: 'github',
+    identifier: `#${raw.number}`,
+    title: raw.title,
+    url: raw.url,
+    description: raw.body ?? undefined,
+    status: raw.state,
+    assignees: raw.assignees.map((assignee) => assignee.login).filter(Boolean),
+    updatedAt: raw.updatedAt ?? undefined,
+    fetchedAt: new Date().toISOString(),
+  };
+}
 
 export const githubController = createRPCController({
   getStatus: async (): Promise<GitHubStatusResponse> => {
@@ -221,6 +238,30 @@ export const githubController = createRPCController({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to check repository',
       };
+    }
+  },
+
+  createIssue: async (params: { repositoryUrl: string; title: string; body?: string }) => {
+    const repository = parseGitHubRepository(params.repositoryUrl);
+    if (!repository) {
+      return { success: false, error: 'Invalid GitHub repository URL.' } as const;
+    }
+
+    const title = params.title.trim();
+    if (!title) {
+      return { success: false, error: 'Issue title is required.' } as const;
+    }
+
+    try {
+      const body = params.body?.trim() || undefined;
+      const issue = await issueService.createIssue(repository, { title, body });
+      return { success: true, issue: githubIssueToIssue(issue) } as const;
+    } catch (error) {
+      log.error('Failed to create issue:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create issue',
+      } as const;
     }
   },
 

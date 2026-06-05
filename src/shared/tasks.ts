@@ -33,6 +33,9 @@ export type Task = {
   archivedAt?: string;
   archiveNote?: string;
   lastInteractedAt?: string;
+  /** All issues linked to this session. New code should prefer this over linkedIssue. */
+  linkedIssues?: Issue[];
+  /** @deprecated Use linkedIssues. Preserved as the primary linked issue for compatibility. */
   linkedIssue?: Issue;
   isPinned: boolean;
   needsReview: boolean;

@@ -6,9 +6,12 @@ import { fromStoredBranch } from '../stored-branch';
 export function mapTaskRowToTask(
   row: TaskRow,
   prs: PullRequest[] = [],
-  conversations: Record<string, number> = {}
+  conversations: Record<string, number> = {},
+  linkedIssues?: Issue[]
 ): Task {
   const sourceBranch = row.sourceBranch ? fromStoredBranch(row.sourceBranch) : undefined;
+  const legacyIssue = row.linkedIssue ? (JSON.parse(row.linkedIssue) as Issue) : undefined;
+  const issues = linkedIssues?.length ? linkedIssues : legacyIssue ? [legacyIssue] : [];
   return {
     id: row.id,
     projectId: row.projectId,
@@ -16,7 +19,8 @@ export function mapTaskRowToTask(
     status: row.status as TaskLifecycleStatus,
     sourceBranch,
     taskBranch: row.taskBranch ?? undefined,
-    linkedIssue: row.linkedIssue ? (JSON.parse(row.linkedIssue) as Issue) : undefined,
+    linkedIssues: issues,
+    linkedIssue: issues[0],
     archivedAt: row.archivedAt ?? undefined,
     archiveNote: row.archiveNote ?? undefined,
     lastInteractedAt: row.lastInteractedAt ?? undefined,

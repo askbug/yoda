@@ -10,7 +10,7 @@ import { restoreTask } from './operations/restoreTask';
 import { setTaskNeedsReview } from './operations/setTaskNeedsReview';
 import { setTaskPinned } from './operations/setTaskPinned';
 import { teardownTask } from './operations/teardownTask';
-import { updateLinkedIssue } from './operations/updateLinkedIssue';
+import { updateLinkedIssue, updateLinkedIssues } from './operations/updateLinkedIssue';
 import { updateTaskStatus } from './operations/updateTaskStatus';
 import { provisionTask } from './provisionTask';
 
@@ -26,6 +26,7 @@ export const taskController = createRPCController({
   teardownTask,
   getWorkspaceSettings,
   updateLinkedIssue,
+  updateLinkedIssues,
   updateTaskStatus,
   setTaskPinned,
   setTaskNeedsReview,

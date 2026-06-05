@@ -1,120 +1,31 @@
-import { ExternalLink, Github, Link2, Loader2, RefreshCw, ScanSearch } from 'lucide-react';
+import { ExternalLink, Github, Loader2, RefreshCw, ScanSearch } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
-import type { Issue, Task } from '@shared/tasks';
+import type { Issue } from '@shared/tasks';
 import { useIssues } from '@renderer/features/integrations/use-issues';
 import { CreateIssueButton } from '@renderer/features/projects/components/issues-view/create-issue-button';
+import {
+  IssueLinkedSessions,
+  IssueSessionLinkPopover,
+} from '@renderer/features/projects/components/issues-view/issue-session-links';
 import { getRepositoryStore } from '@renderer/features/projects/stores/project-selectors';
 import {
   IssueIdentifier,
   ProviderLogo,
   StatusDot,
 } from '@renderer/features/tasks/components/issue-selector/issue-selector';
-import { isRegistered, type TaskStore } from '@renderer/features/tasks/stores/task';
-import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { useGithubContext } from '@renderer/lib/providers/github-context-provider';
 import { Badge } from '@renderer/lib/ui/badge';
 import { Button } from '@renderer/lib/ui/button';
-import { Checkbox } from '@renderer/lib/ui/checkbox';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
-import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
 import { SearchInput } from '@renderer/lib/ui/search-input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 
 const ISSUE_FETCH_LIMIT = 50;
-type ReadySessionStore = TaskStore & { data: Task };
-
-function getLinkedIssues(task: Task): Issue[] {
-  return task.linkedIssues ?? (task.linkedIssue ? [task.linkedIssue] : []);
-}
-
-function isIssueLinkedToSession(issue: Issue, session: ReadySessionStore): boolean {
-  return getLinkedIssues(session.data).some((linkedIssue) => linkedIssue.url === issue.url);
-}
-
-const IssueSessionLinkPopover = observer(function IssueSessionLinkPopover({
-  issue,
-  projectId,
-}: {
-  issue: Issue;
-  projectId: string;
-}) {
-  const { t } = useTranslation();
-  const taskManager = getTaskManagerStore(projectId);
-  const sessions = taskManager
-    ? Array.from(taskManager.tasks.values())
-        .filter((store): store is ReadySessionStore => isRegistered(store))
-        .filter((store) => !store.data.archivedAt)
-    : [];
-  const linkedCount = sessions.filter((session) => isIssueLinkedToSession(issue, session)).length;
-
-  return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <Button variant="ghost" size="sm">
-            <Link2 className="size-3.5" />
-            {linkedCount > 0
-              ? t('issues.linkedSessionCount', { count: linkedCount })
-              : t('issues.linkSessions')}
-          </Button>
-        }
-      />
-      <PopoverContent align="end" className="w-72 p-2">
-        <div className="px-2 pb-2 text-xs font-medium text-foreground-muted">
-          {t('issues.linkSessions')}
-        </div>
-        {sessions.length === 0 ? (
-          <p className="px-2 py-3 text-center text-xs text-foreground-passive">
-            {t('issues.noSessionsToLink')}
-          </p>
-        ) : (
-          <div className="max-h-64 overflow-y-auto">
-            {sessions.map((session) => {
-              const checked = isIssueLinkedToSession(issue, session);
-              return (
-                <div
-                  key={session.data.id}
-                  role="button"
-                  tabIndex={0}
-                  className="flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
-                  onClick={() => {
-                    if (checked) {
-                      void session.unlinkIssue(issue.url);
-                    } else {
-                      void session.linkIssue(issue);
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ' ') return;
-                    event.preventDefault();
-                    if (checked) {
-                      void session.unlinkIssue(issue.url);
-                    } else {
-                      void session.linkIssue(issue);
-                    }
-                  }}
-                >
-                  <Checkbox
-                    checked={checked}
-                    aria-hidden
-                    tabIndex={-1}
-                    className="pointer-events-none"
-                  />
-                  <span className="min-w-0 flex-1 truncate">{session.data.name}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-});
 
 const ProjectIssueRow = observer(function ProjectIssueRow({
   issue,
@@ -180,9 +91,12 @@ const ProjectIssueRow = observer(function ProjectIssueRow({
             </span>
           ) : null}
         </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <IssueLinkedSessions issue={issue} projectId={projectId} />
+          <IssueSessionLinkPopover issue={issue} projectId={projectId} />
+        </div>
       </div>
       <div className="pointer-events-none absolute right-3 top-0 flex h-full items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
-        <IssueSessionLinkPopover issue={issue} projectId={projectId} />
         <Button
           variant="outline"
           size="sm"
@@ -285,7 +199,11 @@ export const IssuesPanel = observer(function IssuesPanel() {
             {t('issues.openCount', { count: issues.length })}
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            <CreateIssueButton repositoryUrl={repositoryUrl} onCreated={syncCreatedIssue} />
+            <CreateIssueButton
+              repositoryUrl={repositoryUrl}
+              projectId={projectId}
+              onCreated={syncCreatedIssue}
+            />
             <SearchInput
               placeholder={t('issues.searchByTitleNumber')}
               value={searchTerm}

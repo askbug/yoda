@@ -3,6 +3,7 @@ import { type Task } from '@shared/tasks';
 import { db } from '@main/db/client';
 import { conversations, tasks } from '@main/db/schema';
 import { mapTaskRowToTask } from '../utils/utils';
+import { getIssuesForTasks } from './task-issues';
 
 export async function getTasks(projectId?: string): Promise<Task[]> {
   const rows = projectId
@@ -28,6 +29,7 @@ export async function getTasks(projectId?: string): Promise<Task[]> {
     .groupBy(conversations.taskId, conversations.provider);
 
   const convByTask = new Map<string, Record<string, number>>();
+  const issuesByTask = await getIssuesForTasks(taskIds);
   for (const { taskId, provider, count: c } of convRows) {
     const rec = convByTask.get(taskId) ?? {};
     rec[provider ?? 'unknown'] = c;
@@ -35,8 +37,7 @@ export async function getTasks(projectId?: string): Promise<Task[]> {
   }
 
   return rows.map((row) => ({
-    ...mapTaskRowToTask(row),
+    ...mapTaskRowToTask(row, [], convByTask.get(row.id) ?? {}, issuesByTask.get(row.id)),
     prs: [],
-    conversations: convByTask.get(row.id) ?? {},
   }));
 }

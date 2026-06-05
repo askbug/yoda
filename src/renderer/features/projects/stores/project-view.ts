@@ -2,7 +2,7 @@ import { makeAutoObservable } from 'mobx';
 import type { ProjectViewSnapshot } from '@shared/view-state';
 import type { Snapshottable } from '@renderer/lib/stores/snapshottable';
 
-export type ProjectView = 'overview' | 'tasks' | 'pull-request' | 'settings';
+export type ProjectView = 'overview' | 'tasks' | 'issues' | 'pull-request' | 'settings';
 
 export class ProjectViewStore implements Snapshottable<ProjectViewSnapshot> {
   activeView: ProjectView = 'overview';

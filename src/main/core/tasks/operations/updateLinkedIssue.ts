@@ -5,8 +5,9 @@ import { mapTaskRowToTask } from '@main/core/tasks/utils/utils';
 import { db } from '@main/db/client';
 import { tasks } from '@main/db/schema';
 import { telemetryService } from '@main/lib/telemetry';
+import { replaceTaskIssueLinks } from './task-issues';
 
-export async function updateLinkedIssue(taskId: string, issue?: Issue) {
+export async function updateLinkedIssues(taskId: string, issues: Issue[] = []) {
   const [existingRow] = await db
     .select({ id: tasks.id, projectId: tasks.projectId })
     .from(tasks)
@@ -14,23 +15,21 @@ export async function updateLinkedIssue(taskId: string, issue?: Issue) {
     .limit(1);
   if (!existingRow) return;
 
-  const [updatedRow] = await db
-    .update(tasks)
-    .set({
-      linkedIssue: issue ? JSON.stringify(issue) : null,
-    })
-    .where(eq(tasks.id, taskId))
-    .returning();
+  const [updatedRow] = await replaceTaskIssueLinks(taskId, issues);
 
   if (updatedRow) {
-    taskEvents._emit('task:updated', mapTaskRowToTask(updatedRow));
+    taskEvents._emit('task:updated', mapTaskRowToTask(updatedRow, [], {}, issues));
   }
 
-  if (issue) {
+  for (const issue of issues) {
     telemetryService.capture('issue_linked_to_task', {
       provider: issue.provider,
       project_id: existingRow.projectId,
       task_id: existingRow.id,
     });
   }
+}
+
+export async function updateLinkedIssue(taskId: string, issue?: Issue) {
+  return updateLinkedIssues(taskId, issue ? [issue] : []);
 }

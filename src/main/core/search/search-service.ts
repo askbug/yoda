@@ -166,9 +166,9 @@ class SearchService {
   }
 
   private upsertTask(task: Task): void {
-    const keywords = [task.taskBranch, task.linkedIssue?.identifier, task.linkedIssue?.title]
-      .filter(Boolean)
-      .join(' ');
+    const linkedIssues = task.linkedIssues ?? (task.linkedIssue ? [task.linkedIssue] : []);
+    const issueKeywords = linkedIssues.flatMap((issue) => [issue.identifier, issue.title]);
+    const keywords = [task.taskBranch, ...issueKeywords].filter(Boolean).join(' ');
 
     try {
       sqlite

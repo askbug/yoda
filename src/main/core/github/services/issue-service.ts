@@ -31,6 +31,10 @@ export interface GitHubIssueService {
     limit?: number
   ): Promise<GitHubIssue[]>;
   getIssue(repository: GitHubRepositoryRef, issueNumber: number): Promise<GitHubIssueDetail | null>;
+  createIssue(
+    repository: GitHubRepositoryRef,
+    params: { title: string; body?: string }
+  ): Promise<GitHubIssueDetail>;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +121,21 @@ export class GitHubIssueServiceImpl implements GitHubIssueService {
     } catch {
       return null;
     }
+  }
+
+  async createIssue(
+    repository: GitHubRepositoryRef,
+    params: { title: string; body?: string }
+  ): Promise<GitHubIssueDetail> {
+    const { owner, repo } = repository;
+    const octokit = await this.getOctokit();
+    const { data } = await octokit.rest.issues.create({
+      owner,
+      repo,
+      title: params.title,
+      body: params.body,
+    });
+    return this.mapIssueDetail(data as unknown as RestIssue);
   }
 
   private mapIssue(item: RestIssue): GitHubIssue {

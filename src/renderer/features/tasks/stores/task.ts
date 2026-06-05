@@ -33,6 +33,7 @@ export type UnregisteredTaskData = {
   statusChangedAt: string;
   isPinned: boolean;
   needsReview: boolean;
+  isUserNamed?: boolean;
 };
 
 export class ProvisionedTask {
@@ -328,23 +329,51 @@ export class TaskStore {
     }
   }
 
-  async updateLinkedIssue(issue?: Issue): Promise<void> {
+  async updateLinkedIssues(issues: Issue[]): Promise<void> {
     if (this.state === 'unregistered') return;
     const task = registeredTaskData(this);
     if (!task) return;
+    const previousIssues = task.linkedIssues
+      ? [...task.linkedIssues]
+      : task.linkedIssue
+        ? [task.linkedIssue]
+        : [];
     const previousIssue = task.linkedIssue;
     try {
-      await rpc.tasks.updateLinkedIssue(task.id, issue);
+      await rpc.tasks.updateLinkedIssues(task.id, issues);
       runInAction(() => {
-        task.linkedIssue = issue;
+        task.linkedIssues = issues;
+        task.linkedIssue = issues[0];
       });
     } catch (e) {
       runInAction(() => {
+        task.linkedIssues = previousIssues;
         task.linkedIssue = previousIssue;
       });
       console.error(e);
       throw e;
     }
+  }
+
+  async updateLinkedIssue(issue?: Issue): Promise<void> {
+    await this.updateLinkedIssues(issue ? [issue] : []);
+  }
+
+  async linkIssue(issue: Issue): Promise<void> {
+    if (this.state === 'unregistered') return;
+    const task = registeredTaskData(this);
+    if (!task) return;
+    const current = task.linkedIssues ?? (task.linkedIssue ? [task.linkedIssue] : []);
+    if (current.some((linked) => linked.url === issue.url)) return;
+    await this.updateLinkedIssues([...current, issue]);
+  }
+
+  async unlinkIssue(issueUrl: string): Promise<void> {
+    if (this.state === 'unregistered') return;
+    const task = registeredTaskData(this);
+    if (!task) return;
+    const current = task.linkedIssues ?? (task.linkedIssue ? [task.linkedIssue] : []);
+    await this.updateLinkedIssues(current.filter((issue) => issue.url !== issueUrl));
   }
 }
 

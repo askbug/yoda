@@ -47,7 +47,7 @@ export const TasksOverviewCard = observer(function TasksOverviewCard({
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-medium text-foreground inline-flex items-center gap-2">
             <ListTodo className="size-3.5" />
-            {t('tasks.task')}
+            {t('projects.sessions')}
           </h2>
           <span className="text-xs text-foreground-muted">
             {t('projects.taskCounts', { active: active.length, archived: archived.length })}

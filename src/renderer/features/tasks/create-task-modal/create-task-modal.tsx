@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getPrNumber, isForkPr, type PullRequest } from '@shared/pull-requests';
+import type { Issue } from '@shared/tasks';
 import {
   getProjectManagerStore,
   getRepositoryStore,
@@ -43,11 +44,13 @@ type CreateTaskStrategy = 'from-branch' | 'from-issue' | 'from-pull-request';
 export const CreateTaskModal = observer(function CreateTaskModal({
   projectId,
   strategy = 'from-branch',
+  initialIssue,
   initialPR,
   onClose,
 }: BaseModalProps & {
   projectId?: string;
   strategy?: CreateTaskStrategy;
+  initialIssue?: Issue;
   initialPR?: PullRequest;
 }) {
   const { t } = useTranslation();
@@ -109,7 +112,13 @@ export const CreateTaskModal = observer(function CreateTaskModal({
     currentBranch,
     initialConversation.prompt
   );
-  const fromIssue = useFromIssueMode(selectedProjectId, defaultBranch, isUnborn, currentBranch);
+  const fromIssue = useFromIssueMode(
+    selectedProjectId,
+    defaultBranch,
+    isUnborn,
+    currentBranch,
+    initialIssue
+  );
   const fromPR = useFromPullRequestMode(selectedProjectId, defaultBranch, isUnborn, initialPR);
   const fromPrUnavailable = selectedStrategy === 'from-pull-request' && !repositoryUrl;
 

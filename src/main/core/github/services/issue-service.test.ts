@@ -17,12 +17,14 @@ function makeOctokit(overrides: {
   listForRepo?: ReturnType<typeof vi.fn>;
   issuesAndPullRequests?: ReturnType<typeof vi.fn>;
   issuesGet?: ReturnType<typeof vi.fn>;
+  issuesCreate?: ReturnType<typeof vi.fn>;
 }): Octokit {
   return {
     rest: {
       issues: {
         listForRepo: overrides.listForRepo ?? vi.fn(),
         get: overrides.issuesGet ?? vi.fn(),
+        create: overrides.issuesCreate ?? vi.fn(),
       },
       search: {
         issuesAndPullRequests: overrides.issuesAndPullRequests ?? vi.fn(),
@@ -171,6 +173,32 @@ describe('GitHubIssueServiceImpl', () => {
       mockGetOctokit.mockResolvedValue(makeOctokit({ issuesGet }));
 
       expect(await issueService.getIssue(repository, 99)).toBeNull();
+    });
+  });
+
+  describe('createIssue', () => {
+    it('creates and maps issue detail', async () => {
+      const issuesCreate = vi
+        .fn()
+        .mockResolvedValue({ data: { ...restIssue, number: 7, body: 'Issue body' } });
+      mockGetOctokit.mockResolvedValue(makeOctokit({ issuesCreate }));
+
+      const result = await issueService.createIssue(repository, {
+        title: 'New issue',
+        body: 'Issue body',
+      });
+
+      expect(issuesCreate).toHaveBeenCalledWith({
+        owner: 'owner',
+        repo: 'repo',
+        title: 'New issue',
+        body: 'Issue body',
+      });
+      expect(result).toEqual({
+        ...expectedIssue,
+        number: 7,
+        body: 'Issue body',
+      });
     });
   });
 });

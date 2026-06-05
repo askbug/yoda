@@ -5,6 +5,7 @@ import {
   getRepositoryStore,
 } from '@renderer/features/projects/stores/project-selectors';
 import { useParams } from '@renderer/lib/layout/navigation-provider';
+import { IssuesOverviewCard } from './issues-overview-card';
 import { PullRequestsOverviewCard } from './pull-requests-overview-card';
 import { QuickActionsCard } from './quick-actions-card';
 import { RepoStatusCard } from './repo-status-card';
@@ -28,6 +29,7 @@ export const OverviewPanel = observer(function OverviewPanel() {
         <QuickActionsCard projectId={projectId} />
         <RepoStatusCard projectId={projectId} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <IssuesOverviewCard projectId={projectId} />
           <TasksOverviewCard projectId={projectId} />
           <PullRequestsOverviewCard projectId={projectId} />
         </div>

@@ -14,7 +14,8 @@ export function useFromIssueMode(
   selectedProjectId: string | undefined,
   defaultBranch: Branch | undefined,
   isUnborn: boolean,
-  currentBranchName?: string | null
+  currentBranchName?: string | null,
+  initialIssue?: Issue
 ) {
   const branchSelection = useBranchSelection(
     selectedProjectId,
@@ -22,7 +23,7 @@ export function useFromIssueMode(
     isUnborn,
     currentBranchName
   );
-  const [linkedIssue, setLinkedIssue] = useState<Issue | null>(null);
+  const [linkedIssue, setLinkedIssue] = useState<Issue | null>(initialIssue ?? null);
   const [prevProjectId, setPrevProjectId] = useState(selectedProjectId);
   if (selectedProjectId !== prevProjectId) {
     setPrevProjectId(selectedProjectId);

@@ -1,5 +1,6 @@
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
+import { IssuesPanel } from '@renderer/features/projects/components/issues-view/issues-panel';
 import { OverviewPanel } from '@renderer/features/projects/components/overview-view/overview-panel';
 import { PullRequestView } from '@renderer/features/projects/components/pr-view/pr-view';
 import { SettingsPanel } from '@renderer/features/projects/components/settings-view/settings-panel';
@@ -35,8 +36,11 @@ export const ActiveProject = observer(function ActiveProject() {
           <ToggleGroupItem value="overview" size="sm">
             {t('projects.overview')}
           </ToggleGroupItem>
+          <ToggleGroupItem value="issues" size="sm">
+            {t('issues.issues')}
+          </ToggleGroupItem>
           <ToggleGroupItem value="tasks" size="sm">
-            {t('tasks.task')}
+            {t('projects.sessions')}
           </ToggleGroupItem>
           <ToggleGroupItem value="pull-request" size="sm">
             {t('pullRequests.title')}
@@ -49,6 +53,7 @@ export const ActiveProject = observer(function ActiveProject() {
       <div className="flex-1 min-h-0">
         {activeView === 'overview' && <OverviewPanel />}
         {activeView === 'tasks' && <TaskList />}
+        {activeView === 'issues' && <IssuesPanel />}
         {activeView === 'pull-request' && <PullRequestView />}
         {activeView === 'settings' && <SettingsPanel />}
       </div>
