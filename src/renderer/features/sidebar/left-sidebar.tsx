@@ -115,18 +115,13 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
             </SidebarMenuButton>
           </SidebarMenu>
         </SidebarFooter>
-        <SidebarContent className="flex flex-col">
+        <SidebarContent className="flex flex-col overflow-y-auto">
           <SidebarPinnedTaskList />
-          <SidebarGroup
-            className={cn(
-              'mb-0 flex flex-col',
-              sidebarStore.projectsCollapsed ? 'shrink-0' : 'min-h-0 flex-1'
-            )}
-          >
+          <SidebarGroup className="mb-0 flex flex-col shrink-0">
             <ProjectsGroupLabel />
             {!sidebarStore.projectsCollapsed && (
-              <SidebarGroupContent className="min-h-0 flex-1 flex flex-col">
-                <SidebarMenu className="flex-1 min-h-0 flex flex-col">
+              <SidebarGroupContent>
+                <SidebarMenu>
                   <SidebarVirtualList />
                 </SidebarMenu>
               </SidebarGroupContent>

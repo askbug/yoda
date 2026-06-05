@@ -16,7 +16,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,15 +26,13 @@ import { sidebarStore } from '@renderer/lib/stores/app-state';
 import { SidebarProjectItem } from './project-item';
 import { SidebarTaskItem } from './task-item';
 
-const ROW_HEIGHT = 32;
-
 export const SidebarVirtualList = observer(function SidebarVirtualList() {
   const rows = sidebarStore.sidebarRows;
   const { currentView } = useWorkspaceSlots();
   const { params: taskParams } = useParams('task');
   const { params: projectParams } = useParams('project');
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -49,13 +46,6 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
 
   const dndEnabled = sidebarStore.taskGroupBy === 'project';
   const allDndIds = displayRows.map(rowToDndId);
-
-  const virtualizer = useVirtualizer({
-    count: displayRows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 8,
-  });
 
   // Expand the parent project when navigating to a task (not when `rows` changes —
   // otherwise collapsing while staying on that task would immediately re-expand).
@@ -90,25 +80,19 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
       }
     }
 
-    const activeIndex = displayRows.findIndex((row) => {
-      if (targetTaskId) {
-        return (
-          row.kind === 'task' && row.taskId === targetTaskId && row.projectId === targetProjectId
-        );
-      }
-      return row.kind === 'project' && row.projectId === targetProjectId;
-    });
-
-    if (activeIndex >= 0) {
-      virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
-    }
+    const dndId = targetTaskId
+      ? toTaskDndId(targetProjectId, targetTaskId)
+      : toProjectDndId(targetProjectId);
+    const node = containerRef.current?.querySelector<HTMLElement>(
+      `[data-sidebar-row="${dndId}"]`
+    );
+    node?.scrollIntoView({ block: 'nearest' });
   }, [
     currentView,
     taskParams.projectId,
     taskParams.taskId,
     projectParams.projectId,
     displayRows,
-    virtualizer,
   ]);
 
   function handleDragStart(event: DragStartEvent) {
@@ -165,63 +149,52 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={allDndIds} strategy={verticalListSortingStrategy}>
-        <div ref={scrollRef} className="overflow-y-auto min-h-0 flex-1 px-3 pt-1 pb-3">
-          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-            {virtualizer.getVirtualItems().map((vItem) => {
-              const row = displayRows[vItem.index];
-              if (!row) return null;
-              const dndId = rowToDndId(row);
-              const vStyle: React.CSSProperties = {
-                position: 'absolute',
-                top: vItem.start,
-                left: 0,
-                width: '100%',
-                height: `${vItem.size}px`,
-              };
-              if (row.kind === 'group') {
-                return (
-                  <div key={dndId} style={vStyle}>
-                    <SidebarGroupHeader group={row.group} />
-                  </div>
-                );
-              }
-              if (row.kind === 'project') {
-                if (!dndEnabled) {
-                  return (
-                    <div key={row.projectId} style={vStyle}>
-                      <SidebarProjectItem projectId={row.projectId} />
-                    </div>
-                  );
-                }
-                return (
-                  <div key={row.projectId} style={vStyle}>
-                    <SortableRow dndId={dndId}>
-                      <SidebarProjectItem projectId={row.projectId} />
-                    </SortableRow>
-                  </div>
-                );
-              }
-              const taskNode = (
-                <SidebarTaskItem
-                  projectId={row.projectId}
-                  taskId={row.taskId}
-                  rowVariant={row.showProjectTag ? 'flat' : 'underProject'}
-                />
+        <div ref={containerRef} className="px-3 pt-1 pb-3">
+          {displayRows.map((row) => {
+            const dndId = rowToDndId(row);
+            if (row.kind === 'group') {
+              return (
+                <div key={dndId} data-sidebar-row={dndId}>
+                  <SidebarGroupHeader group={row.group} />
+                </div>
               );
+            }
+            if (row.kind === 'project') {
               if (!dndEnabled) {
                 return (
-                  <div key={`${row.projectId}:${row.taskId}`} style={vStyle}>
-                    {taskNode}
+                  <div key={row.projectId} data-sidebar-row={dndId}>
+                    <SidebarProjectItem projectId={row.projectId} />
                   </div>
                 );
               }
               return (
-                <div key={`${row.projectId}:${row.taskId}`} style={vStyle}>
-                  <SortableRow dndId={dndId}>{taskNode}</SortableRow>
+                <div key={row.projectId} data-sidebar-row={dndId}>
+                  <SortableRow dndId={dndId}>
+                    <SidebarProjectItem projectId={row.projectId} />
+                  </SortableRow>
                 </div>
               );
-            })}
-          </div>
+            }
+            const taskNode = (
+              <SidebarTaskItem
+                projectId={row.projectId}
+                taskId={row.taskId}
+                rowVariant={row.showProjectTag ? 'flat' : 'underProject'}
+              />
+            );
+            if (!dndEnabled) {
+              return (
+                <div key={`${row.projectId}:${row.taskId}`} data-sidebar-row={dndId}>
+                  {taskNode}
+                </div>
+              );
+            }
+            return (
+              <div key={`${row.projectId}:${row.taskId}`} data-sidebar-row={dndId}>
+                <SortableRow dndId={dndId}>{taskNode}</SortableRow>
+              </div>
+            );
+          })}
         </div>
       </SortableContext>
       <DragOverlay>

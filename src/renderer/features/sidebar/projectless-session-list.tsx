@@ -40,8 +40,8 @@ export const SidebarProjectlessSessionList = observer(function SidebarProjectles
         onToggle={() => setCollapsed((c) => !c)}
       />
       {!collapsed && (
-        <SidebarGroupContent className="min-h-0">
-          <SidebarMenu className="max-h-48 overflow-y-auto px-3 pb-3">
+        <SidebarGroupContent>
+          <SidebarMenu className="px-3 pb-3">
             {tasks.map((task) => (
               <SidebarTaskItem
                 key={task.data.id}
