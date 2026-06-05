@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAgentCommandPrefix,
   getAgentCommandSubmitDelayMs,
+  getAgentCommandSubmitInput,
   getAgentCommandSubmitSuffix,
 } from './agent-command-prefix';
 
@@ -42,9 +43,9 @@ describe('applyAgentCommandPrefix', () => {
 });
 
 describe('getAgentCommandSubmitSuffix', () => {
-  it('does not add a suffix for Codex compact commands', () => {
-    expect(getAgentCommandSubmitSuffix('codex', '$release-via-cicd')).toBe('');
-    expect(getAgentCommandSubmitSuffix('codex', '$lovstudio:git-commit-with-context')).toBe('');
+  it('adds a space suffix for Codex compact commands', () => {
+    expect(getAgentCommandSubmitSuffix('codex', '$release-via-cicd')).toBe(' ');
+    expect(getAgentCommandSubmitSuffix('codex', '$lovstudio:git-commit-with-context')).toBe(' ');
   });
 
   it('does not add a suffix when the command already has arguments', () => {
@@ -67,5 +68,15 @@ describe('getAgentCommandSubmitDelayMs', () => {
 
   it('does not delay providers without paste-burst handling', () => {
     expect(getAgentCommandSubmitDelayMs('claude')).toBe(0);
+  });
+});
+
+describe('getAgentCommandSubmitInput', () => {
+  it('uses carriage return for Codex injected command submission', () => {
+    expect(getAgentCommandSubmitInput('codex')).toBe('\r');
+  });
+
+  it('uses carriage return for providers without custom submission input', () => {
+    expect(getAgentCommandSubmitInput('claude')).toBe('\r');
   });
 });

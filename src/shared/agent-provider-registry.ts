@@ -67,6 +67,8 @@ export type AgentProviderDefinition = {
   commandPrefix?: string;
   /** Extra input sent before Enter when submitting compact agent-native commands. */
   commandSubmitSuffix?: string;
+  /** Raw terminal input used to submit injected agent-native commands. */
+  commandSubmitInput?: string;
   /** Delay before submit after prompt injection, used to avoid TUI paste-burst handling. */
   commandSubmitDelayMs?: number;
   planActivateCommand?: string;
@@ -96,6 +98,7 @@ export const AGENT_PROVIDERS: AgentProviderDefinition[] = [
     resumeFlag: 'resume',
     resumeSessionIdArg: true,
     commandPrefix: '$',
+    commandSubmitSuffix: ' ',
     commandSubmitDelayMs: 200,
     icon: 'openai.svg',
     alt: 'Codex',

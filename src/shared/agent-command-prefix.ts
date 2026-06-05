@@ -45,3 +45,7 @@ export function getAgentCommandSubmitSuffix(providerId: AgentProviderId, text: s
 export function getAgentCommandSubmitDelayMs(providerId: AgentProviderId): number {
   return getProvider(providerId)?.commandSubmitDelayMs ?? 0;
 }
+
+export function getAgentCommandSubmitInput(providerId: AgentProviderId): string {
+  return getProvider(providerId)?.commandSubmitInput ?? '\r';
+}

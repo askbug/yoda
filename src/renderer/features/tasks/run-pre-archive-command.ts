@@ -2,6 +2,7 @@ import { reaction } from 'mobx';
 import {
   applyAgentCommandPrefix,
   getAgentCommandSubmitDelayMs,
+  getAgentCommandSubmitInput,
   getAgentCommandSubmitSuffix,
 } from '@shared/agent-command-prefix';
 import type {
@@ -14,7 +15,7 @@ import { buildPromptInjectionPayload } from '@renderer/lib/pty/prompt-injection'
 import { log } from '@renderer/utils/logger';
 
 const COMPLETION_TIMEOUT_MS = 10 * 60_000;
-const SUBMIT_INPUT = '\r';
+const CODEX_COMPLETION_POLL_MS = 2_000;
 const INTERRUPT_INPUT = '\x03';
 
 type RunPreArchiveCommandOptions = {
@@ -53,7 +54,9 @@ export async function runPreArchiveCommand(
   if (!payload) return;
   const submitSuffix = getAgentCommandSubmitSuffix(target.data.providerId, normalizedCommand);
   const submitDelayMs = getAgentCommandSubmitDelayMs(target.data.providerId);
+  const submitInput = getAgentCommandSubmitInput(target.data.providerId);
   const sessionId = target.session.sessionId;
+  const codexBaseline = await getCodexCompletionBaseline(target, provisioned.path);
 
   const interrupt = () => {
     void rpc.pty.sendInput(sessionId, INTERRUPT_INPUT).catch(() => {});
@@ -73,8 +76,11 @@ export async function runPreArchiveCommand(
     }
     await sleep(submitDelayMs, options.signal);
     if (options.signal?.aborted) return;
-    await rpc.pty.sendInput(sessionId, SUBMIT_INPUT);
-    await waitForCompletion(target, options.signal);
+    await rpc.pty.sendInput(sessionId, submitInput);
+    await waitForCompletion(target, {
+      signal: options.signal,
+      codexBaseline,
+    });
   } catch (error) {
     if (options.signal?.aborted) return;
     log.warn('runPreArchiveCommand failed', { projectId, taskId, error: String(error) });
@@ -99,24 +105,66 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-function waitForCompletion(target: ConversationStore, signal?: AbortSignal): Promise<void> {
-  if (target.status !== 'working' || signal?.aborted) return Promise.resolve();
+type CodexCompletionBaseline = {
+  cwd: string;
+  conversationId: string;
+  conversationTitle: string;
+  completedTurnCount: number;
+};
+
+async function getCodexCompletionBaseline(
+  target: ConversationStore,
+  cwd: string | undefined
+): Promise<CodexCompletionBaseline | undefined> {
+  if (target.data.providerId !== 'codex' || !cwd) return undefined;
+  try {
+    const context = await rpc.conversations.getCodexSessionContext(
+      cwd,
+      target.data.id,
+      target.data.title
+    );
+    if (!context) return undefined;
+    return {
+      cwd,
+      conversationId: target.data.id,
+      conversationTitle: target.data.title,
+      completedTurnCount: context.completedTurnCount,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function waitForCompletion(
+  target: ConversationStore,
+  options: { signal?: AbortSignal; codexBaseline?: CodexCompletionBaseline }
+): Promise<void> {
+  if (target.status !== 'working' || options.signal?.aborted) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
     let settled = false;
     let dispose: (() => void) | null = null;
+    let pollTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = () => {
       if (settled) return;
       settled = true;
       dispose?.();
-      signal?.removeEventListener('abort', onAbort);
+      options.signal?.removeEventListener('abort', onAbort);
+      if (pollTimeout) clearTimeout(pollTimeout);
       clearTimeout(timeout);
     };
 
-    const onAbort = () => {
+    const resolveDone = (source: 'status' | 'codex' | 'abort') => {
+      if (source === 'codex' && target.status === 'working') {
+        target.setStatus('completed');
+      }
       cleanup();
       resolve();
+    };
+
+    const onAbort = () => {
+      resolveDone('abort');
     };
 
     const timeout = setTimeout(() => {
@@ -124,16 +172,37 @@ function waitForCompletion(target: ConversationStore, signal?: AbortSignal): Pro
       reject(new Error('Timed out waiting for pre-archive command to finish'));
     }, COMPLETION_TIMEOUT_MS);
 
-    signal?.addEventListener('abort', onAbort, { once: true });
+    options.signal?.addEventListener('abort', onAbort, { once: true });
     dispose = reaction(
       () => target.status !== 'working',
       (done) => {
         if (!done) return;
-        cleanup();
-        resolve();
+        resolveDone('status');
       },
       { fireImmediately: true }
     );
+
+    const pollCodexCompletion = () => {
+      if (!options.codexBaseline || settled) return;
+      void rpc.conversations
+        .getCodexSessionContext(
+          options.codexBaseline.cwd,
+          options.codexBaseline.conversationId,
+          options.codexBaseline.conversationTitle
+        )
+        .then((context) => {
+          if (settled) return;
+          if (context && context.completedTurnCount > options.codexBaseline!.completedTurnCount) {
+            resolveDone('codex');
+            return;
+          }
+          pollTimeout = setTimeout(pollCodexCompletion, CODEX_COMPLETION_POLL_MS);
+        })
+        .catch(() => {
+          if (!settled) pollTimeout = setTimeout(pollCodexCompletion, CODEX_COMPLETION_POLL_MS);
+        });
+    };
+    pollCodexCompletion();
   });
 }
 
