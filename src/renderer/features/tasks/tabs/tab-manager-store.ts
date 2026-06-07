@@ -165,6 +165,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       closeTab: action,
       closeActiveTab: action,
       openLastConversation: action,
+      openPreferredConversation: action,
       setActiveTab: action,
       reorderTabs: action,
       setNextTabActive: action,
@@ -621,6 +622,18 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     return true;
   }
 
+  /**
+   * Open the task's preferred conversation by activity. This intentionally ignores
+   * `lastClosedConversationId`, which is useful for explicit "return to task"
+   * navigation where a stale closed tab should not override the latest session.
+   */
+  openPreferredConversation(): boolean {
+    const conversationId = this._preferredConversationId();
+    if (!conversationId) return false;
+    this.openConversation(conversationId);
+    return true;
+  }
+
   // ---------------------------------------------------------------------------
   // Snapshot
   // ---------------------------------------------------------------------------
@@ -719,6 +732,10 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       return this.lastClosedConversationId;
     }
 
+    return this._preferredConversationId();
+  }
+
+  private _preferredConversationId(): string | undefined {
     let best: ConversationStore | undefined;
     for (const conversation of this.conversations.conversations.values()) {
       if (!best || compareConversationOpenPriority(conversation, best) < 0) {

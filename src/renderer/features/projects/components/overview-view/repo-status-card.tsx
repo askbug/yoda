@@ -1,13 +1,18 @@
 import { ExternalLink, GitBranch, Github } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
+import { useIssues } from '@renderer/features/integrations/use-issues';
+import { usePullRequests } from '@renderer/features/projects/components/pr-view/usePullRequests';
 import {
   asMounted,
   getProjectStore,
   getRepositoryStore,
 } from '@renderer/features/projects/stores/project-selectors';
 import { rpc } from '@renderer/lib/ipc';
+import { useGithubContext } from '@renderer/lib/providers/github-context-provider';
 import { Button } from '@renderer/lib/ui/button';
+
+const GITHUB_SUMMARY_LIMIT = 50;
 
 export const RepoStatusCard = observer(function RepoStatusCard({
   projectId,
@@ -17,6 +22,21 @@ export const RepoStatusCard = observer(function RepoStatusCard({
   const { t } = useTranslation();
   const project = asMounted(getProjectStore(projectId));
   const repo = getRepositoryStore(projectId);
+  const repositoryUrl = repo?.repositoryUrl ?? null;
+  const { authenticated, isInitialized } = useGithubContext();
+
+  const { prs, loading: prsLoading } = usePullRequests(projectId, repositoryUrl ?? undefined, {
+    filters: { status: 'open' },
+    sort: 'newest',
+    enabled: Boolean(repositoryUrl) && isInitialized && authenticated,
+  });
+
+  const { issues, isLoading: issuesLoading } = useIssues('github', {
+    projectId,
+    repositoryUrl: repositoryUrl ?? undefined,
+    initialLimit: GITHUB_SUMMARY_LIMIT,
+    enabled: Boolean(repositoryUrl) && isInitialized && authenticated,
+  });
 
   if (!project) return null;
 
@@ -27,8 +47,17 @@ export const RepoStatusCard = observer(function RepoStatusCard({
     : '—';
   const currentBranch = repo?.currentBranch ?? '—';
   const remote = repo?.configuredRemote;
-  const repositoryUrl = repo?.repositoryUrl ?? null;
   const projectPath = project.data.path;
+  const githubSummary = !repositoryUrl
+    ? null
+    : !isInitialized || prsLoading || (authenticated && issuesLoading)
+      ? t('projects.githubSummaryLoading')
+      : !authenticated
+        ? t('projects.githubSummaryAuthRequired')
+        : t('projects.githubSummary', {
+            pullRequests: prs.length,
+            issues: issues.length,
+          });
 
   return (
     <section className="rounded-lg border border-border bg-background-elevated p-4">
@@ -65,6 +94,12 @@ export const RepoStatusCard = observer(function RepoStatusCard({
               {remote.name}
               {remote.url ? ` · ${remote.url}` : ''}
             </dd>
+          </>
+        )}
+        {githubSummary && (
+          <>
+            <dt className="text-foreground-muted">GitHub</dt>
+            <dd className="truncate">{githubSummary}</dd>
           </>
         )}
       </dl>

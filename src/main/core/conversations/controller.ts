@@ -1,4 +1,5 @@
 import { createRPCController } from '@shared/ipc/rpc';
+import { archiveConversation } from './archiveConversation';
 import { createConversation } from './createConversation';
 import { deleteConversation } from './deleteConversation';
 import { getClaudeSessionContext } from './getClaudeSessionContext';
@@ -14,6 +15,7 @@ import { touchConversation } from './touchConversation';
 export const conversationController = createRPCController({
   getConversations,
   createConversation,
+  archiveConversation,
   deleteConversation,
   renameConversation,
   resumeConversation,

@@ -6,6 +6,7 @@
 - `src/preload/`: Electron preload bridge — exposes typed `invoke`, `eventSend`, `eventOn` to renderer
 - `src/renderer/`: React UI — views, components, hooks, contexts, typed RPC client
 - `src/shared/`: Provider registry, IPC primitives (RPC + events), MCP types, skills types, shared domain types
+- `apps/mobile/`: Expo app that talks to the desktop through the token-protected mobile gateway
 - `docs/`: Separate Next.js + Fumadocs site
 
 ## Boot Sequence
@@ -28,3 +29,4 @@
 - Main process details: `main-process.md`
 - Renderer details: `renderer.md`
 - Shared modules and provider registry: `shared.md`
+- Mobile app and gateway: `mobile.md`

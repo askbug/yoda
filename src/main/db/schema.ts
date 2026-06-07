@@ -7,6 +7,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
+import type { TaskNamingContextSnapshot, TaskNamingStatus } from '@shared/task-naming';
 import type { StoredBranch } from '@main/core/tasks/stored-branch';
 
 export const sshConnections = sqliteTable(
@@ -131,13 +132,43 @@ export const tasks = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
     isPinned: integer('is_pinned').notNull().default(0), // boolean, 0=false, 1=true
     needsReview: integer('needs_review').notNull().default(0), // boolean, 0=false, 1=true — surfaces a review marker in the UI
-    isUserNamed: integer('is_user_named').notNull().default(0), // 1 if user manually renamed; blocks agent auto-sync
+    isUserNamed: integer('is_user_named').notNull().default(0), // 1 if user manually renamed
+    setupStatus: text('setup_status').notNull().default('ready'), // 'ready' | 'pending' | 'naming_failed' | 'branch_failed'
+    setupError: text('setup_error'),
+    setupData: text('setup_data'), // JSON needed to retry pre-provision setup after naming/branch failures
     workspaceProvider: text('workspace_provider'), // 'local' | 'ssh' | null (null = inherit from project settings)
     workspaceId: text('workspace_id'),
     workspaceProviderData: text('workspace_provider_data'), // JSON, BYOI only
   },
   (table) => ({
     projectIdIdx: index('idx_tasks_project_id').on(table.projectId),
+  })
+);
+
+export const taskNamingSnapshots = sqliteTable(
+  'task_naming_snapshots',
+  {
+    taskId: text('task_id')
+      .primaryKey()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    status: text('status').$type<TaskNamingStatus>().notNull(),
+    model: text('model'),
+    contextJson: text('context_json', { mode: 'json' }).$type<TaskNamingContextSnapshot>(),
+    generatedTaskName: text('generated_task_name'),
+    generatedBranchName: text('generated_branch_name'),
+    error: text('error'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_task_naming_snapshots_project_id').on(table.projectId),
   })
 );
 
@@ -318,6 +349,7 @@ export const conversations = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
     lastInteractedAt: text('last_interacted_at'),
     isInitialConversation: integer('is_initial_conversation', { mode: 'boolean' }),
+    archivedAt: text('archived_at'),
   },
   (table) => ({
     taskIdIdx: index('idx_conversations_task_id').on(table.taskId),
@@ -481,6 +513,7 @@ export type ProjectRow = typeof projects.$inferSelect;
 export type ProjectSettingsRow = typeof projectSettings.$inferSelect;
 export type ProjectSettingsInsert = typeof projectSettings.$inferInsert;
 export type TaskRow = typeof tasks.$inferSelect;
+export type TaskNamingSnapshotRow = typeof taskNamingSnapshots.$inferSelect;
 export type IssueRecordRow = typeof issueRecords.$inferSelect;
 export type IssueRecordInsert = typeof issueRecords.$inferInsert;
 export type TaskIssueLinkRow = typeof taskIssueLinks.$inferSelect;

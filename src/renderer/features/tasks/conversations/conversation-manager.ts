@@ -3,22 +3,30 @@ import { type Conversation, type CreateConversationParams } from '@shared/conver
 import {
   agentEventChannel,
   agentSessionExitedChannel,
+  agentSessionStatusChangedChannel,
   isAttentionNotification,
+  type AgentSessionRuntimeStatus,
   type NotificationType,
 } from '@shared/events/agentEvents';
+import {
+  conversationArchivedChannel,
+  conversationRenamedChannel,
+} from '@shared/events/conversationEvents';
 import { makePtySessionId } from '@shared/ptySessionId';
 import { events, rpc } from '@renderer/lib/ipc';
 import { PtySession } from '@renderer/lib/pty/pty-session';
 import { log } from '@renderer/utils/logger';
 import { soundPlayer } from '@renderer/utils/soundPlayer';
 
-export type AgentStatus = 'idle' | 'working' | 'awaiting-input' | 'error' | 'completed';
+export type AgentStatus = AgentSessionRuntimeStatus;
 
 export class ConversationManagerStore {
   private _loaded = false;
   private _loadPromise: Promise<void> | null = null;
   private offAgentEvents: (() => void) | null = null;
   private offSessionExited: (() => void) | null = null;
+  private offConversationRenamed: (() => void) | null = null;
+  private offConversationArchived: (() => void) | null = null;
   conversations = observable.map<string, ConversationStore>();
 
   constructor(
@@ -45,6 +53,8 @@ export class ConversationManagerStore {
     });
     this.offAgentEvents = this.listenToAgentEvents();
     this.offSessionExited = this.listenToSessionExited();
+    this.offConversationRenamed = this.listenToConversationRenamed();
+    this.offConversationArchived = this.listenToConversationArchived();
   }
 
   private listenToAgentEvents(): () => void {
@@ -77,6 +87,29 @@ export class ConversationManagerStore {
       const conversationStore = this.conversations.get(event.conversationId);
       if (!conversationStore) return;
       conversationStore.clearWorking();
+    });
+  }
+
+  private listenToConversationRenamed(): () => void {
+    return events.on(conversationRenamedChannel, (event) => {
+      if (event.projectId !== this.projectId || event.taskId !== this.taskId) return;
+      const conversationStore = this.conversations.get(event.conversationId);
+      if (!conversationStore) return;
+      runInAction(() => {
+        conversationStore.data.title = event.title;
+      });
+    });
+  }
+
+  private listenToConversationArchived(): () => void {
+    return events.on(conversationArchivedChannel, (event) => {
+      if (event.projectId !== this.projectId || event.taskId !== this.taskId) return;
+      const conversationStore = this.conversations.get(event.conversationId);
+      if (!conversationStore) return;
+      runInAction(() => {
+        this.conversations.delete(event.conversationId);
+      });
+      conversationStore.dispose();
     });
   }
 
@@ -196,6 +229,25 @@ export class ConversationManagerStore {
     }
   }
 
+  async archiveConversation(conversationId: string): Promise<void> {
+    const snapshot = this.conversations.get(conversationId);
+    if (!snapshot) return;
+
+    runInAction(() => {
+      this.conversations.delete(conversationId);
+    });
+
+    try {
+      await rpc.conversations.archiveConversation(this.projectId, this.taskId, conversationId);
+      snapshot.dispose();
+    } catch (err) {
+      runInAction(() => {
+        this.conversations.set(conversationId, snapshot);
+      });
+      throw err;
+    }
+  }
+
   async renameConversation(conversationId: string, name: string): Promise<void> {
     const store = this.conversations.get(conversationId);
     if (!store) return;
@@ -258,6 +310,10 @@ export class ConversationManagerStore {
     this.offAgentEvents = null;
     this.offSessionExited?.();
     this.offSessionExited = null;
+    this.offConversationRenamed?.();
+    this.offConversationRenamed = null;
+    this.offConversationArchived?.();
+    this.offConversationArchived = null;
     for (const conversation of this.conversations.values()) {
       conversation.dispose();
     }
@@ -316,10 +372,19 @@ export class ConversationStore {
   }
 
   setStatus(status: AgentStatus) {
+    const changed = this.status !== status;
     this.status = status;
     this.seen = status === 'idle' || status === 'working';
     if (status !== 'awaiting-input') {
       this.lastNotificationType = null;
+    }
+    if (changed) {
+      events.emit(agentSessionStatusChangedChannel, {
+        projectId: this.data.projectId,
+        taskId: this.data.taskId,
+        conversationId: this.data.id,
+        status,
+      });
     }
   }
 

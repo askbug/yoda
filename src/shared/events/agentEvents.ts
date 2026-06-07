@@ -2,6 +2,17 @@ import { defineEvent } from '@shared/ipc/events';
 
 export type AgentEventType = 'notification' | 'stop' | 'error';
 
+export type AgentSessionRuntimeStatus =
+  | 'idle'
+  | 'working'
+  | 'awaiting-input'
+  | 'error'
+  | 'completed';
+
+export function isAgentSessionRunningStatus(status: AgentSessionRuntimeStatus): boolean {
+  return status === 'working' || status === 'awaiting-input';
+}
+
 export type NotificationType =
   | 'permission_prompt'
   | 'idle_prompt'
@@ -55,3 +66,14 @@ export interface AgentSessionExited {
 
 /** Emitted when an agent PTY session exits. Topic = taskId. */
 export const agentSessionExitedChannel = defineEvent<AgentSessionExited>('agent:session-exited');
+
+export interface AgentSessionStatusChanged {
+  projectId: string;
+  taskId: string;
+  conversationId: string;
+  status: AgentSessionRuntimeStatus;
+}
+
+export const agentSessionStatusChangedChannel = defineEvent<AgentSessionStatusChanged>(
+  'agent:session-status-changed'
+);

@@ -32,15 +32,21 @@ describe('TaskSidebarPreferenceStore', () => {
     const store = new TaskSidebarPreferenceStore();
 
     store.hydrate(
-      { sidebarTab: 'files', isSidebarCollapsed: false },
+      {
+        sidebarTab: 'files',
+        isSidebarCollapsed: false,
+        contextPanelOpenSectionIds: ['tools', 'injected-context'],
+      },
       { sidebarTab: 'changes', isSidebarCollapsed: true }
     );
 
     expect(store.sidebarTab).toBe('files');
     expect(store.isSidebarCollapsed).toBe(false);
+    expect(store.contextPanelOpenSectionIds).toEqual(['tools', 'injected-context']);
     expect(mocks.set).toHaveBeenCalledWith(TASK_SIDEBAR_VIEW_STATE_KEY, {
       sidebarTab: 'files',
       isSidebarCollapsed: false,
+      contextPanelOpenSectionIds: ['tools', 'injected-context'],
     });
     expect(mocks.save).not.toHaveBeenCalled();
   });
@@ -55,12 +61,20 @@ describe('TaskSidebarPreferenceStore', () => {
     expect(mocks.save).toHaveBeenCalledWith(TASK_SIDEBAR_VIEW_STATE_KEY, {
       sidebarTab: 'changes',
       isSidebarCollapsed: false,
+      contextPanelOpenSectionIds: ['llm-context', 'session-prompts', 'injected-context'],
     });
   });
 
   it('persists tab and open state changes to the shared key', () => {
     const store = new TaskSidebarPreferenceStore();
-    store.hydrate({ sidebarTab: 'task', isSidebarCollapsed: true }, null);
+    store.hydrate(
+      {
+        sidebarTab: 'task',
+        isSidebarCollapsed: true,
+        contextPanelOpenSectionIds: ['session-prompts'],
+      },
+      null
+    );
     vi.clearAllMocks();
 
     store.setSidebarTab('context');
@@ -69,10 +83,45 @@ describe('TaskSidebarPreferenceStore', () => {
     expect(mocks.save).toHaveBeenNthCalledWith(1, TASK_SIDEBAR_VIEW_STATE_KEY, {
       sidebarTab: 'context',
       isSidebarCollapsed: true,
+      contextPanelOpenSectionIds: ['session-prompts'],
     });
     expect(mocks.save).toHaveBeenNthCalledWith(2, TASK_SIDEBAR_VIEW_STATE_KEY, {
       sidebarTab: 'context',
       isSidebarCollapsed: false,
+      contextPanelOpenSectionIds: ['session-prompts'],
+    });
+  });
+
+  it('persists context panel accordion sections to the shared key', () => {
+    const store = new TaskSidebarPreferenceStore();
+    store.hydrate(
+      {
+        sidebarTab: 'context',
+        isSidebarCollapsed: false,
+        contextPanelOpenSectionIds: ['tools'],
+      },
+      null
+    );
+    vi.clearAllMocks();
+
+    store.setContextPanelOpenSectionIds(['tools', 'tools', 'skills']);
+    store.setContextPanelSectionOpen('session-prompts', true);
+    store.setContextPanelSectionOpen('tools', false);
+
+    expect(mocks.save).toHaveBeenNthCalledWith(1, TASK_SIDEBAR_VIEW_STATE_KEY, {
+      sidebarTab: 'context',
+      isSidebarCollapsed: false,
+      contextPanelOpenSectionIds: ['tools', 'skills'],
+    });
+    expect(mocks.save).toHaveBeenNthCalledWith(2, TASK_SIDEBAR_VIEW_STATE_KEY, {
+      sidebarTab: 'context',
+      isSidebarCollapsed: false,
+      contextPanelOpenSectionIds: ['tools', 'skills', 'session-prompts'],
+    });
+    expect(mocks.save).toHaveBeenNthCalledWith(3, TASK_SIDEBAR_VIEW_STATE_KEY, {
+      sidebarTab: 'context',
+      isSidebarCollapsed: false,
+      contextPanelOpenSectionIds: ['skills', 'session-prompts'],
     });
   });
 });

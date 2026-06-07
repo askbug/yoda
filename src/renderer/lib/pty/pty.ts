@@ -1,4 +1,3 @@
-import { CanvasAddon } from '@xterm/addon-canvas';
 import { Terminal, type ITerminalOptions } from '@xterm/xterm';
 import { ptyDataChannel } from '@shared/events/ptyEvents';
 import {
@@ -68,6 +67,8 @@ export class FrontendPty {
    */
   private pendingWrites: string[] = [];
   private hasFlushed = false;
+  private savedViewportY: number | null = null;
+  private readonly scrollDisposable: { dispose(): void };
 
   constructor(
     readonly sessionId: string,
@@ -104,10 +105,10 @@ export class FrontendPty {
       theme: buildTheme(theme),
     });
 
-    const canvasAddon = new CanvasAddon();
-
-    this.terminal.loadAddon(canvasAddon);
     this.terminal.open(this.ownedContainer);
+    this.scrollDisposable = this.terminal.onScroll((viewportY) => {
+      this.savedViewportY = viewportY;
+    });
 
     const el = (this.terminal as unknown as { element?: HTMLElement }).element;
     if (el) {
@@ -169,6 +170,7 @@ export class FrontendPty {
     this.terminal.write(buffered, () => {
       try {
         this.terminal.scrollToBottom();
+        this.savedViewportY = this.terminal.buffer.active.viewportY;
         this.terminal.refresh(0, this.terminal.rows - 1);
       } catch {}
     });
@@ -189,9 +191,13 @@ export class FrontendPty {
     mountTarget.appendChild(this.ownedContainer);
     // Force a Canvas2D repaint after reparenting in the DOM.
     const t = this.terminal;
+    const savedViewportY = this.savedViewportY;
     requestAnimationFrame(() => {
       try {
         if ((t as unknown as { _isDisposed?: boolean })._isDisposed) return;
+        if (savedViewportY !== null) {
+          t.scrollToLine(savedViewportY);
+        }
         t.refresh(0, t.rows - 1);
       } catch {}
     });
@@ -215,6 +221,7 @@ export class FrontendPty {
     FrontendPty.all.delete(this);
     this.offData?.();
     this.offData = null;
+    this.scrollDisposable.dispose();
     rpc.pty.unsubscribe(this.sessionId).catch(() => {});
     try {
       this.terminal.dispose();

@@ -4,7 +4,11 @@ import { agentSessionExitedChannel } from '@shared/events/agentEvents';
 import { makePtySessionId } from '@shared/ptySessionId';
 import { wireAgentClassifier } from '@main/core/agent-hooks/classifier-wiring';
 import { claudeTrustService } from '@main/core/agent-hooks/claude-trust-service';
-import type { ConversationProvider } from '@main/core/conversations/types';
+import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
+import type {
+  ActiveConversationSession,
+  ConversationProvider,
+} from '@main/core/conversations/types';
 import type { IExecutionContext } from '@main/core/execution-context/types';
 import { SshFileSystem } from '@main/core/fs/impl/ssh-fs';
 import type { Pty } from '@main/core/pty/pty';
@@ -37,6 +41,7 @@ export class SshConversationProvider implements ConversationProvider {
   private readonly proxy: SshClientProxy;
   private readonly connectionId: string;
   private readonly tmuxSessionNames = new Map<string, string>();
+  private readonly sessionInfos = new Map<string, Omit<ActiveConversationSession, 'detachable'>>();
 
   constructor({
     projectId,
@@ -155,6 +160,12 @@ export class SshConversationProvider implements ConversationProvider {
     pty.onExit(({ exitCode }) => {
       ptySessionRegistry.unregister(sessionId);
       this.sessions.delete(sessionId);
+      this.sessionInfos.delete(sessionId);
+      agentSessionRuntimeStore.remove({
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        conversationId: conversation.id,
+      });
       telemetryService.capture('agent_run_finished', {
         provider: conversation.providerId,
         exit_code: typeof exitCode === 'number' ? exitCode : -1,
@@ -173,6 +184,22 @@ export class SshConversationProvider implements ConversationProvider {
 
     ptySessionRegistry.register(sessionId, pty);
     this.sessions.set(sessionId, pty);
+    this.sessionInfos.set(sessionId, {
+      sessionId,
+      conversationId: conversation.id,
+      projectId: conversation.projectId,
+      taskId: conversation.taskId,
+      providerId: conversation.providerId,
+      title: conversation.title,
+    });
+    agentSessionRuntimeStore.setStatus(
+      {
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        conversationId: conversation.id,
+      },
+      initialPrompt?.trim() ? 'working' : 'idle'
+    );
     if (tmuxSessionName) this.tmuxSessionNames.set(sessionId, tmuxSessionName);
     telemetryService.capture('agent_run_started', {
       provider: conversation.providerId,
@@ -205,6 +232,14 @@ export class SshConversationProvider implements ConversationProvider {
     return count;
   }
 
+  getActiveSessions(): ActiveConversationSession[] {
+    return Array.from(this.sessions.keys()).flatMap((sessionId) => {
+      const info = this.sessionInfos.get(sessionId);
+      if (!info) return [];
+      return [{ ...info, detachable: this.tmuxSessionNames.has(sessionId) }];
+    });
+  }
+
   async stopSession(conversationId: string): Promise<void> {
     const sessionId = makePtySessionId(this.projectId, this.taskId, conversationId);
     this.knownSessionIds.delete(sessionId);
@@ -218,6 +253,12 @@ export class SshConversationProvider implements ConversationProvider {
       this.sessions.delete(sessionId);
       ptySessionRegistry.unregister(sessionId);
     }
+    this.sessionInfos.delete(sessionId);
+    agentSessionRuntimeStore.remove({
+      projectId: this.projectId,
+      taskId: this.taskId,
+      conversationId,
+    });
     const tmuxSessionName = this.tmuxSessionNames.get(sessionId);
     this.tmuxSessionNames.delete(sessionId);
     if (tmuxSessionName) {
@@ -235,6 +276,7 @@ export class SshConversationProvider implements ConversationProvider {
     await Promise.all(tmuxSessionNames.map((name) => killTmuxSession(this.ctx, name)));
     this.knownSessionIds.clear();
     this.tmuxSessionNames.clear();
+    this.sessionInfos.clear();
   }
 
   async detachAll(): Promise<void> {
@@ -244,6 +286,10 @@ export class SshConversationProvider implements ConversationProvider {
       } catch {}
       ptySessionRegistry.unregister(sessionId);
     }
+    for (const info of this.sessionInfos.values()) {
+      agentSessionRuntimeStore.remove(info);
+    }
     this.sessions.clear();
+    this.sessionInfos.clear();
   }
 }

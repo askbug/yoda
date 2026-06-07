@@ -11,32 +11,30 @@ import { Checkbox } from '@renderer/lib/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { cn } from '@renderer/utils/utils';
 
-export type ReadySessionStore = TaskStore & { data: Task };
+export type ReadyTaskStore = TaskStore & { data: Task };
 
 export function getLinkedIssues(task: Task): Issue[] {
   return task.linkedIssues ?? (task.linkedIssue ? [task.linkedIssue] : []);
 }
 
-export function isIssueLinkedToSession(issue: Issue, session: ReadySessionStore): boolean {
-  return getLinkedIssues(session.data).some((linkedIssue) => linkedIssue.url === issue.url);
+export function isIssueLinkedToTask(issue: Issue, task: ReadyTaskStore): boolean {
+  return getLinkedIssues(task.data).some((linkedIssue) => linkedIssue.url === issue.url);
 }
 
-export function getReadySessionStores(projectId: string): ReadySessionStore[] {
+export function getReadyTaskStores(projectId: string): ReadyTaskStore[] {
   const taskManager = getTaskManagerStore(projectId);
   if (!taskManager) return [];
 
   return Array.from(taskManager.tasks.values())
-    .filter((store): store is ReadySessionStore => isRegistered(store))
+    .filter((store): store is ReadyTaskStore => isRegistered(store))
     .filter((store) => !store.data.archivedAt);
 }
 
-export function getLinkedSessionStores(projectId: string, issue: Issue): ReadySessionStore[] {
-  return getReadySessionStores(projectId).filter((session) =>
-    isIssueLinkedToSession(issue, session)
-  );
+export function getLinkedTaskStores(projectId: string, issue: Issue): ReadyTaskStore[] {
+  return getReadyTaskStores(projectId).filter((task) => isIssueLinkedToTask(issue, task));
 }
 
-function SessionChip({ projectId, session }: { projectId: string; session: ReadySessionStore }) {
+function TaskChip({ projectId, task }: { projectId: string; task: ReadyTaskStore }) {
   const { navigate } = useNavigate();
 
   return (
@@ -46,16 +44,16 @@ function SessionChip({ projectId, session }: { projectId: string; session: Ready
         <button
           type="button"
           className="max-w-32 justify-start"
-          onClick={() => navigate('task', { projectId, taskId: session.data.id })}
+          onClick={() => navigate('task', { projectId, taskId: task.data.id })}
         />
       }
     >
-      <span className="min-w-0 truncate">{session.data.name}</span>
+      <span className="min-w-0 truncate">{task.data.name}</span>
     </Badge>
   );
 }
 
-export const IssueLinkedSessions = observer(function IssueLinkedSessions({
+export const IssueLinkedTasks = observer(function IssueLinkedTasks({
   issue,
   projectId,
   maxVisible = 3,
@@ -67,22 +65,22 @@ export const IssueLinkedSessions = observer(function IssueLinkedSessions({
   className?: string;
 }) {
   const { t } = useTranslation();
-  const linkedSessions = getLinkedSessionStores(projectId, issue);
-  const visibleSessions = linkedSessions.slice(0, maxVisible);
-  const hiddenCount = Math.max(0, linkedSessions.length - visibleSessions.length);
+  const linkedTasks = getLinkedTaskStores(projectId, issue);
+  const visibleTasks = linkedTasks.slice(0, maxVisible);
+  const hiddenCount = Math.max(0, linkedTasks.length - visibleTasks.length);
 
   return (
     <div className={cn('flex min-w-0 flex-wrap items-center gap-1.5', className)}>
-      <span className="text-xs text-foreground-passive">{t('issues.linkedSessions')}</span>
-      {linkedSessions.length === 0 ? (
-        <span className="text-xs text-foreground-passive">{t('issues.noLinkedSessions')}</span>
+      <span className="text-xs text-foreground-passive">{t('issues.linkedTasks')}</span>
+      {linkedTasks.length === 0 ? (
+        <span className="text-xs text-foreground-passive">{t('issues.noLinkedTasks')}</span>
       ) : (
         <>
-          {visibleSessions.map((session) => (
-            <SessionChip key={session.data.id} projectId={projectId} session={session} />
+          {visibleTasks.map((task) => (
+            <TaskChip key={task.data.id} projectId={projectId} task={task} />
           ))}
           {hiddenCount > 0 ? (
-            <Badge variant="secondary">{t('issues.moreSessions', { count: hiddenCount })}</Badge>
+            <Badge variant="secondary">{t('issues.moreTasks', { count: hiddenCount })}</Badge>
           ) : null}
         </>
       )}
@@ -90,7 +88,7 @@ export const IssueLinkedSessions = observer(function IssueLinkedSessions({
   );
 });
 
-export const IssueSessionLinkPopover = observer(function IssueSessionLinkPopover({
+export const IssueTaskLinkPopover = observer(function IssueTaskLinkPopover({
   issue,
   projectId,
   compact = false,
@@ -102,12 +100,10 @@ export const IssueSessionLinkPopover = observer(function IssueSessionLinkPopover
   iconOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  const sessions = getReadySessionStores(projectId);
-  const linkedCount = sessions.filter((session) => isIssueLinkedToSession(issue, session)).length;
+  const tasks = getReadyTaskStores(projectId);
+  const linkedCount = tasks.filter((task) => isIssueLinkedToTask(issue, task)).length;
   const label =
-    linkedCount > 0
-      ? t('issues.manageLinkedSessions', { count: linkedCount })
-      : t('issues.linkSessions');
+    linkedCount > 0 ? t('issues.manageLinkedTasks', { count: linkedCount }) : t('issues.linkTasks');
 
   return (
     <Popover>
@@ -126,26 +122,24 @@ export const IssueSessionLinkPopover = observer(function IssueSessionLinkPopover
       />
       <PopoverContent align="end" className="w-80 p-2">
         <div className="flex items-center justify-between gap-2 px-2 pb-2">
-          <div className="text-xs font-medium text-foreground-muted">
-            {t('issues.linkSessions')}
-          </div>
+          <div className="text-xs font-medium text-foreground-muted">{t('issues.linkTasks')}</div>
           <div className="text-xs text-foreground-passive">
-            {t('issues.linkedSessionCount', { count: linkedCount })}
+            {t('issues.linkedTaskCount', { count: linkedCount })}
           </div>
         </div>
-        {sessions.length === 0 ? (
+        {tasks.length === 0 ? (
           <p className="px-2 py-3 text-center text-xs text-foreground-passive">
-            {t('issues.noSessionsToLink')}
+            {t('issues.noTasksToLink')}
           </p>
         ) : (
           <div className="max-h-72 overflow-y-auto">
-            {sessions.map((session) => {
-              const checked = isIssueLinkedToSession(issue, session);
-              const issueCount = getLinkedIssues(session.data).length;
+            {tasks.map((task) => {
+              const checked = isIssueLinkedToTask(issue, task);
+              const issueCount = getLinkedIssues(task.data).length;
 
               return (
                 <div
-                  key={session.data.id}
+                  key={task.data.id}
                   role="button"
                   tabIndex={0}
                   className={cn(
@@ -154,18 +148,18 @@ export const IssueSessionLinkPopover = observer(function IssueSessionLinkPopover
                   )}
                   onClick={() => {
                     if (checked) {
-                      void session.unlinkIssue(issue.url);
+                      void task.unlinkIssue(issue.url);
                     } else {
-                      void session.linkIssue(issue);
+                      void task.linkIssue(issue);
                     }
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter' && event.key !== ' ') return;
                     event.preventDefault();
                     if (checked) {
-                      void session.unlinkIssue(issue.url);
+                      void task.unlinkIssue(issue.url);
                     } else {
-                      void session.linkIssue(issue);
+                      void task.linkIssue(issue);
                     }
                   }}
                 >
@@ -175,9 +169,9 @@ export const IssueSessionLinkPopover = observer(function IssueSessionLinkPopover
                     tabIndex={-1}
                     className="pointer-events-none"
                   />
-                  <span className="min-w-0 flex-1 truncate">{session.data.name}</span>
+                  <span className="min-w-0 flex-1 truncate">{task.data.name}</span>
                   <span className="shrink-0 text-xs text-foreground-passive">
-                    {t('issues.sessionIssueCount', { count: issueCount })}
+                    {t('issues.taskIssueCount', { count: issueCount })}
                   </span>
                 </div>
               );

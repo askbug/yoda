@@ -1,10 +1,15 @@
 import { createRPCController } from '@shared/ipc/rpc';
 import { generateTaskName } from './name-generation/generateTaskName';
+import {
+  getTaskNamingContextPreview,
+  getTaskNamingSnapshot,
+} from './name-generation/task-naming-service';
 import { archiveTask } from './operations/archiveTask';
-import { createTask } from './operations/createTask';
+import { createTask, retryTaskSetup } from './operations/createTask';
 import { deleteTask } from './operations/deleteTask';
 import { getTasks } from './operations/getTasks';
 import { getWorkspaceSettings } from './operations/getWorkspaceSettings';
+import { regenerateTaskName } from './operations/regenerateTaskName';
 import { renameTask } from './operations/renameTask';
 import { restoreTask } from './operations/restoreTask';
 import { setTaskNeedsReview } from './operations/setTaskNeedsReview';
@@ -16,9 +21,13 @@ import { provisionTask } from './provisionTask';
 
 export const taskController = createRPCController({
   createTask,
+  retryTaskSetup,
   getTasks,
   deleteTask,
   generateTaskName,
+  regenerateTaskName,
+  getTaskNamingContextPreview,
+  getTaskNamingSnapshot,
   archiveTask,
   restoreTask,
   renameTask,

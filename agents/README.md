@@ -12,6 +12,7 @@ This directory is the system of record for agent-facing repo guidance. Keep topi
 
 - `architecture/`
   - system structure and major code ownership boundaries
+  - `mobile.md` covers the Expo app and desktop mobile gateway boundary
 - `workflows/`
   - task-oriented procedures like testing, worktrees, and remote development
 - `integrations/`

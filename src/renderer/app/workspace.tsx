@@ -3,6 +3,7 @@ import { CommandShortcutBinder } from '@renderer/lib/commands/command-shortcut-b
 import { AppKeyboardShortcuts } from '@renderer/lib/components/app-keyboard-shortcuts';
 import { ErrorBoundary } from '@renderer/lib/components/error-boundary';
 import { MonacoKeyboardBridge } from '@renderer/lib/components/monaco-keyboard-bridge';
+import { QuitAgentSessionsPrompt } from '@renderer/lib/components/quit-agent-sessions-prompt';
 import { TmuxUnavailableNotifier } from '@renderer/lib/components/tmux-unavailable-notifier';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
 import {
@@ -24,6 +25,7 @@ export function Workspace() {
       <CommandShortcutBinder />
       <MonacoKeyboardBridge />
       <TmuxUnavailableNotifier />
+      <QuitAgentSessionsPrompt />
       <WorkspaceLayout
         leftSidebar={
           <ErrorBoundary variant="inline" componentName="LeftSidebar">

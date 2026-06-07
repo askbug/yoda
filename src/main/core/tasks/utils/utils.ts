@@ -1,7 +1,25 @@
 import type { PullRequest } from '@shared/pull-requests';
-import type { Issue, Task, TaskLifecycleStatus } from '@shared/tasks';
+import {
+  createTaskStrategyRequiresBranchName,
+  type CreateTaskParams,
+  type Issue,
+  type Task,
+  type TaskLifecycleStatus,
+} from '@shared/tasks';
 import type { TaskRow } from '@main/db/schema';
 import { fromStoredBranch } from '../stored-branch';
+
+function setupRequiresBranchName(setupData: string | null): boolean {
+  if (!setupData) return false;
+  try {
+    const parsed = JSON.parse(setupData) as { params?: Pick<CreateTaskParams, 'strategy'> };
+    return parsed.params?.strategy
+      ? createTaskStrategyRequiresBranchName(parsed.params.strategy)
+      : false;
+  } catch {
+    return false;
+  }
+}
 
 export function mapTaskRowToTask(
   row: TaskRow,
@@ -32,6 +50,9 @@ export function mapTaskRowToTask(
     isPinned: row.isPinned === 1,
     needsReview: row.needsReview === 1,
     isUserNamed: row.isUserNamed === 1,
+    setupStatus: (row.setupStatus as Task['setupStatus']) ?? 'ready',
+    setupError: row.setupError ?? undefined,
+    setupRequiresBranchName: setupRequiresBranchName(row.setupData),
     workspaceProvider: (row.workspaceProvider as 'byoi') ?? undefined,
     workspaceId: row.workspaceId ?? undefined,
     workspaceProviderData: row.workspaceProviderData ?? undefined,

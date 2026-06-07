@@ -5,10 +5,7 @@ import {
   getAgentCommandSubmitInput,
   getAgentCommandSubmitSuffix,
 } from '@shared/agent-command-prefix';
-import type {
-  ConversationManagerStore,
-  ConversationStore,
-} from '@renderer/features/tasks/conversations/conversation-manager';
+import type { ConversationStore } from '@renderer/features/tasks/conversations/conversation-manager';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { rpc } from '@renderer/lib/ipc';
 import { buildPromptInjectionPayload } from '@renderer/lib/pty/prompt-injection';
@@ -24,15 +21,16 @@ type RunPreArchiveCommandOptions = {
 };
 
 /**
- * If `command` is non-empty, send it to the task's most-recently-used
- * conversation and resolve only after the agent has finished (status flips
- * away from `working`). No-op when command is empty / there is no live
+ * If `command` is non-empty, send it to the explicit conversation and resolve
+ * only after the agent has finished (status flips away from `working`). No-op
+ * when command is empty / the conversation cannot be found / there is no live
  * conversation. Errors are swallowed-and-logged so archiving can proceed even
  * if the pre-archive step fails.
  */
 export async function runPreArchiveCommand(
   projectId: string,
   taskId: string,
+  conversationId: string,
   command: string,
   options: RunPreArchiveCommandOptions = {}
 ): Promise<void> {
@@ -44,7 +42,8 @@ export async function runPreArchiveCommand(
   const provisioned = asProvisioned(task);
   if (!provisioned) return;
 
-  const target = pickTargetConversation(provisioned.conversations);
+  await provisioned.conversations.ensureConversation(conversationId);
+  const target = provisioned.conversations.conversations.get(conversationId);
   if (!target) return;
 
   const normalizedCommand = applyAgentCommandPrefix(target.data.providerId, trimmed);
@@ -89,7 +88,12 @@ export async function runPreArchiveCommand(
     });
   } catch (error) {
     if (options.signal?.aborted) return;
-    log.warn('runPreArchiveCommand failed', { projectId, taskId, error: String(error) });
+    log.warn('runPreArchiveCommand failed', {
+      projectId,
+      taskId,
+      conversationId,
+      error: String(error),
+    });
   } finally {
     options.signal?.removeEventListener('abort', interrupt);
   }
@@ -220,17 +224,4 @@ function waitForCompletion(
     };
     pollCodexCompletion();
   });
-}
-
-function pickTargetConversation(manager: ConversationManagerStore): ConversationStore | undefined {
-  let bestStore: ConversationStore | undefined;
-  let bestLast = -Infinity;
-  for (const store of manager.conversations.values()) {
-    const last = store.data.lastInteractedAt ? Date.parse(store.data.lastInteractedAt) : 0;
-    if (last > bestLast) {
-      bestLast = last;
-      bestStore = store;
-    }
-  }
-  return bestStore;
 }

@@ -8,7 +8,7 @@ import {
 import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
 import { db } from '@main/db/client';
 import { conversations, projects } from '@main/db/schema';
-import { resolveAgentResumeSessionId } from './codex-session-id';
+import { resolveAgentResumeSession } from './codex-session-id';
 import { buildAgentCommand, buildAgentSubcommand } from './impl/agent-command';
 import { mapConversationRowToConversation } from './utils';
 
@@ -37,17 +37,18 @@ export async function getConversationSessionInfo(
 
   const conversation = mapConversationRowToConversation(row.conversation, true);
   const workingDirectory = cwd?.trim() || row.projectPath;
-  const sessionId = resolveAgentResumeSessionId(conversation, workingDirectory);
+  const session = resolveAgentResumeSession(conversation, workingDirectory);
 
   return {
-    sessionId,
+    sessionId: session.sessionId,
+    sessionTitle: session.sessionTitle,
     resumeCommand: await buildResumeCommand({
       providerId: conversation.providerId,
-      sessionId,
+      sessionId: session.sessionId,
       cwd: workingDirectory,
       includeUnarchive:
         conversation.providerId === 'codex' &&
-        readCodexThreadArchiveStatus(resolveCodexStatePath(), sessionId) === true,
+        readCodexThreadArchiveStatus(resolveCodexStatePath(), session.sessionId) === true,
     }),
   };
 }

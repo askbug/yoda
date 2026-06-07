@@ -1,11 +1,19 @@
-import { FolderOpen, Settings2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { FolderOpen, RefreshCw, RotateCcw, Save, Settings2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { AgentModelCandidateInferenceResult } from '@shared/agent-model-candidates';
 import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
+import type { ProviderCustomConfig } from '@shared/app-settings';
 import CustomCommandModal from '@renderer/features/settings/components/CustomCommandModal';
+import { useProviderSettings } from '@renderer/features/settings/use-provider-settings';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
+import { Input } from '@renderer/lib/ui/input';
+import { Label } from '@renderer/lib/ui/label';
+import { Textarea } from '@renderer/lib/ui/textarea';
+import { log } from '@renderer/utils/logger';
 import { expandHome, resolveAgentPaths } from './agent-paths';
 import { AgentSection } from './AgentSection';
 
@@ -29,6 +37,8 @@ export const AgentTabSettings: React.FC<{ agentId: AgentProviderId }> = observer
             {t('agents.settings.editExec')}
           </Button>
         </AgentSection>
+
+        <AgentNamingSettings agentId={agentId} agentName={provider.name} />
 
         <AgentSection
           title={t('agents.settings.configTitle')}
@@ -57,6 +67,180 @@ export const AgentTabSettings: React.FC<{ agentId: AgentProviderId }> = observer
     );
   }
 );
+
+const AgentNamingSettings: React.FC<{ agentId: AgentProviderId; agentName: string }> = ({
+  agentId,
+  agentName,
+}) => {
+  const { t } = useTranslation();
+  const { value, defaults, isLoading, isSaving, update } = useProviderSettings(agentId);
+  const [candidateRefreshToken, setCandidateRefreshToken] = useState(0);
+  const [model, setModel] = useState('');
+  const [command, setCommand] = useState('');
+  const [saving, setSaving] = useState(false);
+  const modelCandidateQuery = useQuery<AgentModelCandidateInferenceResult>({
+    queryKey: ['providerSettings', agentId, 'namingModelCandidates', candidateRefreshToken],
+    queryFn: () =>
+      rpc.providerSettings.inferNamingModelCandidates(agentId, {
+        forceRefresh: candidateRefreshToken > 0,
+      }) as Promise<AgentModelCandidateInferenceResult>,
+    staleTime: 60_000,
+  });
+
+  const applied = useMemo(
+    () => ({
+      model: value?.namingModel ?? '',
+      command: value?.namingCommand ?? '',
+    }),
+    [value?.namingCommand, value?.namingModel]
+  );
+  const defaultValues = useMemo(
+    () => ({
+      model: defaults?.namingModel ?? '',
+      command: defaults?.namingCommand ?? '',
+    }),
+    [defaults?.namingCommand, defaults?.namingModel]
+  );
+
+  useEffect(() => {
+    if (isLoading) return;
+    setModel(applied.model);
+    setCommand(applied.command);
+  }, [applied, isLoading]);
+
+  const resetToDefaults = useCallback(() => {
+    setModel(defaultValues.model);
+    setCommand(defaultValues.command);
+  }, [defaultValues]);
+
+  const modelCandidates = modelCandidateQuery.data?.candidates ?? [];
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      const next: ProviderCustomConfig = {
+        ...(value ?? {}),
+        namingModel: model.trim(),
+        namingCommand: command.trim(),
+      };
+      await new Promise<void>((resolve, reject) =>
+        update(next, { onSuccess: resolve, onError: reject })
+      );
+    } catch (error) {
+      log.error('Failed to save agent naming settings:', error);
+    } finally {
+      setSaving(false);
+    }
+  }, [command, model, update, value]);
+
+  const disabled = isLoading || isSaving || saving;
+  const hasChanges = model !== applied.model || command !== applied.command;
+  const hasDefault = defaultValues.model.length > 0 || defaultValues.command.length > 0;
+
+  return (
+    <AgentSection
+      title={t('agents.settings.namingTitle')}
+      description={t('agents.settings.namingDescription', { name: agentName })}
+    >
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${agentId}-naming-model`} className="text-xs font-medium">
+            {t('agents.settings.namingModel')}
+          </Label>
+          <Input
+            id={`${agentId}-naming-model`}
+            value={model}
+            disabled={disabled}
+            onChange={(event) => setModel(event.target.value)}
+            placeholder={t('agents.settings.namingModelPlaceholder')}
+            className="h-8 font-mono text-xs"
+          />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-0.5 text-xs text-muted-foreground">
+              {t('agents.settings.namingCandidates')}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              title={t('agents.settings.namingRefreshCandidates')}
+              onClick={() => setCandidateRefreshToken((current) => current + 1)}
+              disabled={disabled || modelCandidateQuery.isFetching}
+              className="h-6 w-6 p-0"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+            {modelCandidateQuery.isFetching ? (
+              <span className="text-xs text-muted-foreground">
+                {t('agents.settings.namingCandidatesLoading')}
+              </span>
+            ) : modelCandidates.length > 0 ? (
+              <>
+                {modelCandidates.map((candidate) => (
+                  <Button
+                    key={candidate}
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    title={candidate}
+                    onClick={() => setModel(candidate)}
+                    disabled={disabled}
+                    className="max-w-full font-mono"
+                  >
+                    <span className="max-w-44 truncate">{candidate}</span>
+                  </Button>
+                ))}
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {t('agents.settings.namingCandidatesEmpty')}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${agentId}-naming-command`} className="text-xs font-medium">
+            {t('agents.settings.namingCommand')}
+          </Label>
+          <Textarea
+            id={`${agentId}-naming-command`}
+            value={command}
+            disabled={disabled}
+            onChange={(event) => setCommand(event.target.value)}
+            placeholder={t('agents.settings.namingCommandPlaceholder')}
+            className="min-h-20 resize-y font-mono text-xs"
+          />
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t('agents.settings.namingCommandHint')}
+          </p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={resetToDefaults}
+            disabled={disabled || !hasDefault}
+            className="gap-1.5"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {t('settings.customCommand.resetToDefaults')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void handleSave()}
+            disabled={disabled || !hasChanges}
+            className="gap-1.5"
+          >
+            <Save className="h-3.5 w-3.5" />
+            {saving ? t('settings.customCommand.saving') : t('common.save')}
+          </Button>
+        </div>
+      </div>
+    </AgentSection>
+  );
+};
 
 const ConfigPathRow: React.FC<{ path: string }> = ({ path }) => {
   const { t } = useTranslation();

@@ -1,4 +1,3 @@
-import { useObserver } from 'mobx-react-lite';
 import { Fragment, useCallback, type ComponentType, type ReactNode } from 'react';
 import {
   views,
@@ -6,6 +5,7 @@ import {
   type ViewId,
   type WrapParams,
 } from '@renderer/app/view-registry';
+import { useMobxValue } from '@renderer/lib/hooks/use-mobx-value';
 import { appState } from '@renderer/lib/stores/app-state';
 
 /**
@@ -50,7 +50,7 @@ export function useNavigate(): { navigate: NavigateFnTyped } {
 }
 
 export function useWorkspaceSlots(): SlotsContextValue {
-  return useObserver(() => {
+  return useMobxValue(() => {
     const viewId = appState.navigation.currentViewId;
     const def = (views as unknown as Record<string, ViewDefinition<Record<string, unknown>>>)[
       viewId
@@ -67,7 +67,7 @@ export function useWorkspaceSlots(): SlotsContextValue {
 }
 
 export function useWorkspaceWrapParams(): WrapParamsContextValue {
-  return useObserver(() => ({
+  return useMobxValue(() => ({
     wrapParams: (appState.navigation.viewParamsStore[appState.navigation.currentViewId] ??
       {}) as Record<string, unknown>,
   }));
@@ -88,7 +88,7 @@ export function useParams<TId extends ViewId>(
     // viewId is a stable string literal
     [viewId]
   );
-  return useObserver(() => ({
+  return useMobxValue(() => ({
     params: (appState.navigation.viewParamsStore[viewId] ?? {}) as WrapParams<TId>,
     setParams,
   }));

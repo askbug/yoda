@@ -1,6 +1,6 @@
 import { makeAutoObservable, observable, runInAction } from 'mobx';
 import type { Conversation } from '@shared/conversations';
-import type { Issue, Task, TaskLifecycleStatus } from '@shared/tasks';
+import type { Issue, Task, TaskLifecycleStatus, TaskSetupStatus } from '@shared/tasks';
 import type { TaskSidebarViewSnapshot, TaskViewSnapshot } from '@shared/view-state';
 import type { ProjectSettingsStore } from '@renderer/features/projects/stores/project-settings-store';
 import type { RepositoryStore } from '@renderer/features/projects/stores/repository-store';
@@ -18,6 +18,8 @@ import { log } from '@renderer/utils/logger';
 export type UnregisteredTaskPhase = 'creating' | 'create-error';
 
 export type UnprovisionedTaskPhase =
+  | 'naming'
+  | 'naming-error'
   | 'provision'
   | 'provision-error'
   | 'teardown'
@@ -34,6 +36,9 @@ export type UnregisteredTaskData = {
   isPinned: boolean;
   needsReview: boolean;
   isUserNamed?: boolean;
+  setupStatus?: TaskSetupStatus;
+  setupError?: string;
+  setupRequiresBranchName?: boolean;
 };
 
 export class ProvisionedTask {
@@ -157,7 +162,10 @@ export class TaskStore {
     return (
       this.state === 'unregistered' ||
       (this.state === 'unprovisioned' &&
-        (this.phase === 'provision' || this.phase === 'provision-error'))
+        (this.phase === 'naming' ||
+          this.phase === 'naming-error' ||
+          this.phase === 'provision' ||
+          this.phase === 'provision-error'))
     );
   }
 

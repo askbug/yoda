@@ -49,7 +49,7 @@ export async function getClaudeSessionContext(
     }
   }
 
-  const [memoryFiles, skillsListing, scannedAgents] = await Promise.all([
+  const [memoryFiles, skills, scannedAgents] = await Promise.all([
     loadMemoryFiles(cwd),
     scanClaudeSkills(cwd),
     scanClaudeAgents(cwd),
@@ -61,9 +61,18 @@ export async function getClaudeSessionContext(
     tools: [...tools].sort(),
     agents: scannedAgents,
     mcpServers: [...mcpServers.entries()].map(([name, instructions]) => ({ name, instructions })),
-    skillsListing,
+    skills,
+    skillsListing: formatSkillListing(skills),
     prompts,
   };
+}
+
+function formatSkillListing(skills: Array<{ name: string; description: string }>): string {
+  return skills
+    .map((skill) =>
+      skill.description ? `- ${skill.name}: ${skill.description}` : `- ${skill.name}`
+    )
+    .join('\n');
 }
 
 function safeParse(line: string): Record<string, unknown> | null {

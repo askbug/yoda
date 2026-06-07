@@ -1,4 +1,4 @@
-import { ExternalLink, FileText, Hammer, Layers, Settings2, Wrench } from 'lucide-react';
+import { Cpu, ExternalLink, FileText, Hammer, Layers, Settings2, Wrench } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,10 +15,11 @@ import { cn } from '@renderer/utils/utils';
 import { AgentTabHooks } from './AgentTabHooks';
 import { AgentTabMaaS } from './AgentTabMaaS';
 import { AgentTabMemory } from './AgentTabMemory';
+import { AgentTabModels } from './AgentTabModels';
 import { AgentTabSettings } from './AgentTabSettings';
 import { AgentTabSkills } from './AgentTabSkills';
 
-type TabId = 'maas' | 'memory' | 'hooks' | 'skills' | 'settings';
+type TabId = 'maas' | 'models' | 'memory' | 'hooks' | 'skills' | 'settings';
 
 const TABS: Array<{
   id: TabId;
@@ -26,6 +27,7 @@ const TABS: Array<{
   labelKey: string;
 }> = [
   { id: 'maas', icon: Layers, labelKey: 'agents.tabs.maas' },
+  { id: 'models', icon: Cpu, labelKey: 'agents.tabs.models' },
   { id: 'memory', icon: FileText, labelKey: 'agents.tabs.memory' },
   { id: 'hooks', icon: Hammer, labelKey: 'agents.tabs.hooks' },
   { id: 'skills', icon: Wrench, labelKey: 'agents.tabs.skills' },
@@ -73,6 +75,7 @@ export const AgentDetailPanel: React.FC<{ agentId: AgentProviderId }> = observer
         </div>
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'maas' && <AgentTabMaaS agentId={agentId} />}
+          {activeTab === 'models' && <AgentTabModels agentId={agentId} />}
           {activeTab === 'memory' && <AgentTabMemory agentId={agentId} />}
           {activeTab === 'hooks' && <AgentTabHooks agentId={agentId} />}
           {activeTab === 'skills' && <AgentTabSkills agentId={agentId} />}

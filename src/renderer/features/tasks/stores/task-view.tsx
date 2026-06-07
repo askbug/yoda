@@ -1,4 +1,4 @@
-import { computed, makeAutoObservable, reaction } from 'mobx';
+import { computed, makeAutoObservable, reaction, runInAction } from 'mobx';
 import type { TaskSidebarViewSnapshot, TaskViewSnapshot } from '@shared/view-state';
 import type { ConversationManagerStore } from '@renderer/features/tasks/conversations/conversation-manager';
 import { DiffTabLifecycleStore } from '@renderer/features/tasks/diff-view/stores/diff-tab-lifecycle-store';
@@ -145,6 +145,10 @@ export class TaskViewStore {
     return taskSidebarPreferenceStore.isSidebarCollapsed;
   }
 
+  get contextPanelOpenSectionIds(): string[] {
+    return [...taskSidebarPreferenceStore.contextPanelOpenSectionIds];
+  }
+
   get activeRenderer(): RendererKind {
     const desc = this.tabManager.activeDescriptor;
     if (desc?.kind === 'diff') return 'diff';
@@ -191,11 +195,21 @@ export class TaskViewStore {
     taskSidebarPreferenceStore.setSidebarCollapsed(collapsed);
   }
 
+  setContextPanelOpenSectionIds(sectionIds: string[]): void {
+    taskSidebarPreferenceStore.setContextPanelOpenSectionIds(sectionIds);
+  }
+
+  setContextPanelSectionOpen(sectionId: string, open: boolean): void {
+    taskSidebarPreferenceStore.setContextPanelSectionOpen(sectionId, open);
+  }
+
   setFocusedRegion(region: 'main' | 'bottom'): void {
     if (this.focusedRegion !== region) {
       focusTracker.transition({ focusedRegion: region }, 'region_switch');
     }
-    this.focusedRegion = region;
+    runInAction(() => {
+      this.focusedRegion = region;
+    });
   }
 
   setTerminalDrawerOpen(open: boolean): void {

@@ -27,6 +27,7 @@ import {
 } from './terminal-file-links';
 import { registerTerminalImeDiagnostics } from './terminal-ime-diagnostics';
 import { registerTerminalImeNativePunctuation } from './terminal-ime-native-punctuation';
+import { isTerminalLinkActivation } from './terminal-link-activation';
 import type { TerminalLinkTarget } from './terminal-link-target';
 import { getTerminalWebLinkAtCell, registerTerminalWebLinkProvider } from './terminal-web-links';
 
@@ -707,9 +708,29 @@ export function usePty(
           event.stopImmediatePropagation();
         };
 
+        const openLinkTarget = (target: TerminalLinkTarget) => {
+          if (target.kind === 'file') {
+            fileLinksRef.current?.onOpen(target.target);
+            return;
+          }
+
+          rpc.app.openExternal(target.url).catch((error) => {
+            log.warn('Failed to open URL from terminal', { url: target.url, error });
+          });
+        };
+
         const handleSelectionGestureStart = (event: MouseEvent | TouchEvent) => {
           if (!(event.target instanceof Node)) return;
           if (!terminalElement.contains(event.target)) return;
+          if (event instanceof MouseEvent && isTerminalLinkActivation(event)) {
+            const linkTarget = getLinkTargetAtEvent(event);
+            if (linkTarget) {
+              terminal.clearSelection();
+              stopMouseModeEvent(event);
+              openLinkTarget(linkTarget);
+              return;
+            }
+          }
           selectionGestureStart = terminal.getSelection();
           if (event instanceof MouseEvent && shouldCapturePlainDragSelection(event)) {
             const anchor = getBufferCellFromMouseEvent(terminal, terminalElement, event);

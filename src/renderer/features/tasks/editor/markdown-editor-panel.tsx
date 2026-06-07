@@ -52,7 +52,7 @@ const MarkdownSourceEditor = observer(function MarkdownSourceEditor({
 }: MarkdownSourceEditorProps) {
   const { taskView } = useProvisionedTask();
   const { editorView } = taskView;
-  const { effectiveTheme } = useTheme();
+  const { effectiveTheme, themeFingerprint } = useTheme();
 
   const leaseBox = useMonacoLease(codeEditorPool);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -64,7 +64,7 @@ const MarkdownSourceEditor = observer(function MarkdownSourceEditor({
     const m = codeEditorPool.getMonaco();
     if (m) defineMonacoThemes(m as Parameters<typeof defineMonacoThemes>[0]);
     codeEditorPool.setTheme(getMonacoTheme(effectiveTheme));
-  }, [effectiveTheme]);
+  }, [effectiveTheme, themeFingerprint]);
 
   // Editor setup — fires when the lease arrives
   useEffect(

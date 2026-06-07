@@ -2,16 +2,20 @@ import { Loader2, Plus, RefreshCw, Search } from 'lucide-react';
 import React from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { rpc } from '@renderer/lib/ipc';
+import { useParams } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
+import { cn } from '@renderer/utils/utils';
 import SkillCard from './SkillCard';
 import SkillDetailModal from './SkillDetailModal';
 import { useSkills } from './useSkills';
 
 const SkillsView: React.FC = () => {
   const { t } = useTranslation();
+  const { params: skillsParams, setParams: setSkillsParams } = useParams('skills');
   const {
+    catalog,
     isLoading,
     isRefreshing,
     searchQuery,
@@ -23,14 +27,71 @@ const SkillsView: React.FC = () => {
     refresh,
     install,
     uninstall,
+    setDisabled,
     openDetail,
     closeDetail,
+    isDetailLoading,
   } = useSkills();
   const showCreateSkillModal = useShowModal('createSkillModal');
+  const focusedSkillId =
+    typeof skillsParams.focusSkillId === 'string' ? skillsParams.focusSkillId : undefined;
+  const skillCardRefs = React.useRef(new Map<string, HTMLDivElement>());
+  const [highlightedSkillId, setHighlightedSkillId] = React.useState<string | null>(null);
+
+  const setSkillCardRef = React.useCallback(
+    (skillId: string) => (node: HTMLDivElement | null) => {
+      if (node) {
+        skillCardRefs.current.set(skillId, node);
+      } else {
+        skillCardRefs.current.delete(skillId);
+      }
+    },
+    []
+  );
 
   const handleOpenTerminal = (skillPath: string) => {
     void rpc.app.openIn({ app: 'terminal', path: skillPath });
   };
+
+  React.useEffect(() => {
+    if (!focusedSkillId || isLoading) return;
+
+    const isVisible =
+      installedSkills.some((skill) => skill.id === focusedSkillId) ||
+      recommendedSkills.some((skill) => skill.id === focusedSkillId);
+    const existsInCatalog = catalog?.skills.some((skill) => skill.id === focusedSkillId) ?? false;
+
+    if (!isVisible && existsInCatalog && searchQuery) {
+      setSearchQuery('');
+      return;
+    }
+
+    const node = skillCardRefs.current.get(focusedSkillId);
+    if (!node) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      setHighlightedSkillId(focusedSkillId);
+      setSkillsParams(() => ({}));
+    });
+    const timeout = window.setTimeout(() => {
+      setHighlightedSkillId((current) => (current === focusedSkillId ? null : current));
+    }, 2400);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [
+    catalog?.skills,
+    focusedSkillId,
+    installedSkills,
+    isLoading,
+    recommendedSkills,
+    searchQuery,
+    setSearchQuery,
+    setSkillsParams,
+  ]);
 
   if (isLoading) {
     return (
@@ -50,7 +111,7 @@ const SkillsView: React.FC = () => {
         </div>
 
         {/* Toolbar */}
-        <div className="mb-6 flex items-center gap-2">
+        <div className="sticky top-0 z-20 -mx-8 mb-6 flex items-center gap-2 border-b border-border/60 bg-background/95 px-8 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -118,7 +179,17 @@ const SkillsView: React.FC = () => {
             </h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {installedSkills.map((skill) => (
-                <SkillCard key={skill.id} skill={skill} onSelect={openDetail} onInstall={install} />
+                <div
+                  key={skill.id}
+                  ref={setSkillCardRef(skill.id)}
+                  className={cn(
+                    'scroll-mt-20 rounded-lg transition-shadow duration-300',
+                    highlightedSkillId === skill.id &&
+                      'ring-2 ring-amber-400 ring-offset-2 ring-offset-background'
+                  )}
+                >
+                  <SkillCard skill={skill} onSelect={openDetail} onInstall={install} />
+                </div>
               ))}
             </div>
           </div>
@@ -131,7 +202,17 @@ const SkillsView: React.FC = () => {
             </h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {recommendedSkills.map((skill) => (
-                <SkillCard key={skill.id} skill={skill} onSelect={openDetail} onInstall={install} />
+                <div
+                  key={skill.id}
+                  ref={setSkillCardRef(skill.id)}
+                  className={cn(
+                    'scroll-mt-20 rounded-lg transition-shadow duration-300',
+                    highlightedSkillId === skill.id &&
+                      'ring-2 ring-amber-400 ring-offset-2 ring-offset-background'
+                  )}
+                >
+                  <SkillCard skill={skill} onSelect={openDetail} onInstall={install} />
+                </div>
               ))}
             </div>
           </div>
@@ -152,7 +233,9 @@ const SkillsView: React.FC = () => {
         onClose={closeDetail}
         onInstall={install}
         onUninstall={uninstall}
+        onSetDisabled={setDisabled}
         onOpenTerminal={handleOpenTerminal}
+        isLoadingDetail={isDetailLoading}
       />
     </div>
   );

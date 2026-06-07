@@ -112,15 +112,19 @@ export function PullRequestSectionHeader({
         </button>
         <div className="flex items-center gap-1.5">
           <Tooltip>
-            <TooltipTrigger>
-              <SplitButton
-                variant="outline"
-                size="xs"
-                actions={prActions}
-                disabled={hasOpenPr || !onCreatePr || !onCreateDraftPr}
-                icon={<Plus className="size-3" />}
-              />
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <div className="h-full">
+                  <SplitButton
+                    variant="outline"
+                    size="xs"
+                    actions={prActions}
+                    disabled={hasOpenPr || !onCreatePr || !onCreateDraftPr}
+                    icon={<Plus className="size-3" />}
+                  />
+                </div>
+              }
+            />
             <TooltipContent>
               {hasOpenPr ? t('pullRequests.alreadyOpen') : t('pullRequests.createPullRequest')}
             </TooltipContent>

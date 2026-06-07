@@ -1,5 +1,7 @@
+import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { useQuery } from '@tanstack/react-query';
 import {
+  ChevronRight,
   Copy,
   ExternalLink,
   FileText,
@@ -11,12 +13,13 @@ import {
   PanelRightOpen,
   Pencil,
   Plug,
+  Search,
   Sparkles,
   Users,
   Wrench,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
   ClaudeMemoryFile,
@@ -57,18 +60,36 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
+import { Input } from '@renderer/lib/ui/input';
 import { MicroLabel } from '@renderer/lib/ui/label';
+import { MarkdownRenderer } from '@renderer/lib/ui/markdown-renderer';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { formatBytes } from '@renderer/utils/formatBytes';
 import { cn } from '@renderer/utils/utils';
 
 const CONTEXT_REFRESH_MS = 3_000;
+const CONTEXT_PANEL_SECTION_IDS = {
+  llmContext: 'llm-context',
+  systemPrompt: 'system-prompt',
+  memoryFiles: 'memory-files',
+  tools: 'tools',
+  mcpServers: 'mcp-servers',
+  skills: 'skills',
+  agentsAvailable: 'agents-available',
+  sessionPrompts: 'session-prompts',
+  injectedContext: 'injected-context',
+} as const;
+
+type ContextPanelSectionId =
+  (typeof CONTEXT_PANEL_SECTION_IDS)[keyof typeof CONTEXT_PANEL_SECTION_IDS];
 
 export const ContextPanel = observer(function ContextPanel() {
   const { t } = useTranslation();
   const provisioned = useProvisionedTask();
   const { projectId, taskId } = useTaskViewContext();
   const taskPayload = getRegisteredTaskData(projectId, taskId);
-  const { tabManager } = provisioned.taskView;
+  const { taskView } = provisioned;
+  const { tabManager } = taskView;
   const activeConversation = tabManager.activeConversation;
   const draftComments = provisioned.draftComments;
   const { value: reviewPrompt } = useAppSettingsKey('reviewPrompt');
@@ -88,15 +109,25 @@ export const ContextPanel = observer(function ContextPanel() {
   });
   const reviewPromptAction = buildReviewPromptContextAction(reviewPrompt ?? undefined);
 
+  useEffect(() => {
+    if (!promptFocusTarget) return;
+    taskView.setContextPanelSectionOpen(CONTEXT_PANEL_SECTION_IDS.sessionPrompts, true);
+  }, [promptFocusTarget, taskView]);
+
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto">
-      <div className="shrink-0 pl-4 pr-2 pt-2 pb-1">
-        <MicroLabel>{t('tasks.panel.context')}</MicroLabel>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-background">
+      <div className="flex h-7 shrink-0 items-center border-b border-border/70 px-3">
+        <MicroLabel className="text-foreground-passive">{t('tasks.panel.context')}</MicroLabel>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-3 px-3 pb-4">
+      <AccordionPrimitive.Root
+        type="multiple"
+        value={taskView.contextPanelOpenSectionIds}
+        onValueChange={(sectionIds) => taskView.setContextPanelOpenSectionIds(sectionIds)}
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
         {!activeConversation ? (
-          <Section title={t('tasks.panel.llmContext')}>
+          <Section id={CONTEXT_PANEL_SECTION_IDS.llmContext} title={t('tasks.panel.llmContext')}>
             <Empty>{t('tasks.panel.noActiveConversation')}</Empty>
           </Section>
         ) : providerId === 'claude' ? (
@@ -110,15 +141,19 @@ export const ContextPanel = observer(function ContextPanel() {
             cwd={provisioned.path}
             conversationId={activeConversation.data.id}
             conversationTitle={activeConversation.data.title}
+            conversationCreatedAt={activeConversation.data.createdAt ?? null}
             promptFocusTarget={promptFocusTarget}
           />
         ) : (
-          <Section title={t('tasks.panel.llmContext')}>
+          <Section id={CONTEXT_PANEL_SECTION_IDS.llmContext} title={t('tasks.panel.llmContext')}>
             <Empty>{t('tasks.panel.contextUnsupported')}</Empty>
           </Section>
         )}
 
-        <Section title={t('tasks.panel.injectedContext')}>
+        <Section
+          id={CONTEXT_PANEL_SECTION_IDS.injectedContext}
+          title={t('tasks.panel.injectedContext')}
+        >
           {linkedIssueActions.length > 0 || draftCommentsAction || reviewPromptAction ? (
             <>
               {linkedIssueActions.map((linkedIssueAction) => (
@@ -148,7 +183,7 @@ export const ContextPanel = observer(function ContextPanel() {
             <Empty>{t('tasks.panel.noInjectedContext')}</Empty>
           )}
         </Section>
-      </div>
+      </AccordionPrimitive.Root>
     </div>
   );
 });
@@ -174,7 +209,7 @@ function ClaudeContextSections({
 
   if (!data && isPending) {
     return (
-      <Section title={t('tasks.panel.llmContext')}>
+      <Section id={CONTEXT_PANEL_SECTION_IDS.llmContext} title={t('tasks.panel.llmContext')}>
         <Empty>{t('common.loading')}</Empty>
       </Section>
     );
@@ -182,7 +217,7 @@ function ClaudeContextSections({
 
   if (!data) {
     return (
-      <Section title={t('tasks.panel.llmContext')}>
+      <Section id={CONTEXT_PANEL_SECTION_IDS.llmContext} title={t('tasks.panel.llmContext')}>
         <Empty>{t('tasks.panel.noTranscript')}</Empty>
       </Section>
     );
@@ -190,12 +225,11 @@ function ClaudeContextSections({
 
   return (
     <>
-      <Section title={t('tasks.panel.systemPrompt')}>
-        <div className="flex items-start gap-1.5 text-xs text-foreground-passive">
-          <Info className="size-3.5 shrink-0 mt-0.5" />
-          <span>{t('tasks.panel.systemPromptHint')}</span>
-        </div>
-      </Section>
+      <Section
+        id={CONTEXT_PANEL_SECTION_IDS.systemPrompt}
+        title={t('tasks.panel.systemPrompt')}
+        hint={t('tasks.panel.systemPromptHint')}
+      />
 
       <MemorySection files={data.memoryFiles} />
       <ToolsSection tools={data.tools.filter((t) => !t.startsWith('mcp__'))} />
@@ -219,17 +253,31 @@ function CodexContextSections({
   cwd,
   conversationId,
   conversationTitle,
+  conversationCreatedAt,
   promptFocusTarget,
 }: {
   cwd: string;
   conversationId: string;
   conversationTitle: string;
+  conversationCreatedAt: string | null;
   promptFocusTarget: ContextPromptFocusTarget | null;
 }) {
   const { t } = useTranslation();
   const { data, isPending } = useQuery<CodexSessionContext | null>({
-    queryKey: ['codexSessionContext', cwd, conversationId, conversationTitle],
-    queryFn: () => rpc.conversations.getCodexSessionContext(cwd, conversationId, conversationTitle),
+    queryKey: [
+      'codexSessionContext',
+      cwd,
+      conversationId,
+      conversationTitle,
+      conversationCreatedAt,
+    ],
+    queryFn: () =>
+      rpc.conversations.getCodexSessionContext(
+        cwd,
+        conversationId,
+        conversationTitle,
+        conversationCreatedAt
+      ),
     refetchInterval: CONTEXT_REFRESH_MS,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: false,
@@ -238,7 +286,7 @@ function CodexContextSections({
 
   if (!data && isPending) {
     return (
-      <Section title={t('tasks.panel.llmContext')}>
+      <Section id={CONTEXT_PANEL_SECTION_IDS.llmContext} title={t('tasks.panel.llmContext')}>
         <Empty>{t('common.loading')}</Empty>
       </Section>
     );
@@ -246,11 +294,14 @@ function CodexContextSections({
 
   if (!data) {
     return (
-      <Section title={t('tasks.panel.llmContext')}>
+      <Section id={CONTEXT_PANEL_SECTION_IDS.llmContext} title={t('tasks.panel.llmContext')}>
         <Empty>{t('tasks.panel.noTranscript')}</Empty>
       </Section>
     );
   }
+
+  const codexTools = data.dynamicTools.filter((tool) => !isCodexMcpTool(tool));
+  const codexMcpTools = data.dynamicTools.filter(isCodexMcpTool);
 
   return (
     <>
@@ -260,17 +311,22 @@ function CodexContextSections({
         sourcePath={data.rolloutPath}
       />
       <MemorySection files={data.memoryFiles} />
-      <CodexDynamicToolsSection tools={data.dynamicTools} />
+      <CodexDynamicToolsSection tools={codexTools} />
+      <CodexMcpSection tools={codexMcpTools} />
       <SkillsSection skills={data.skills} content={data.skillsListing} />
-      <CodexTurnContextsSection turnContexts={data.turnContexts} sourcePath={data.rolloutPath} />
       <SessionPromptsSection
         prompts={data.prompts}
+        turnContexts={data.turnContexts}
         sessionId={conversationId}
         focusTarget={promptFocusTarget}
         sourcePath={data.rolloutPath}
       />
     </>
   );
+}
+
+function isCodexMcpTool(tool: CodexDynamicTool): boolean {
+  return !!tool.namespace?.trim();
 }
 
 function CodexSystemPromptSection({
@@ -284,11 +340,12 @@ function CodexSystemPromptSection({
 }) {
   const { t } = useTranslation();
   return (
-    <Section title={t('tasks.panel.systemPrompt')} count={developerMessages.length}>
-      <div className="flex items-start gap-1.5 text-xs text-foreground-passive">
-        <Info className="size-3.5 shrink-0 mt-0.5" />
-        <span>{t('tasks.panel.codexSystemPromptHint')}</span>
-      </div>
+    <Section
+      id={CONTEXT_PANEL_SECTION_IDS.systemPrompt}
+      title={t('tasks.panel.systemPrompt')}
+      count={developerMessages.length}
+      hint={t('tasks.panel.codexSystemPromptHint')}
+    >
       {baseInstructions ? (
         <ContextItem
           icon={<Info className="size-3.5" />}
@@ -320,6 +377,7 @@ function CodexDynamicToolsSection({ tools }: { tools: CodexDynamicTool[] }) {
   const { t } = useTranslation();
   return (
     <Section
+      id={CONTEXT_PANEL_SECTION_IDS.tools}
       title={t('tasks.panel.tools')}
       count={tools.length}
       icon={<Wrench className="size-3.5" />}
@@ -335,6 +393,7 @@ function CodexDynamicToolsSection({ tools }: { tools: CodexDynamicTool[] }) {
             label={tool.namespace ? `${tool.namespace}:${tool.name}` : tool.name}
             meta={tool.deferLoading ? t('tasks.panel.deferred') : undefined}
             text={formatCodexTool(tool)}
+            renderMode="plain"
           />
         ))
       )}
@@ -342,37 +401,82 @@ function CodexDynamicToolsSection({ tools }: { tools: CodexDynamicTool[] }) {
   );
 }
 
-function CodexTurnContextsSection({
-  turnContexts,
-  sourcePath,
-}: {
-  turnContexts: CodexTurnContext[];
-  sourcePath?: string | null;
-}) {
+function CodexMcpSection({ tools }: { tools: CodexDynamicTool[] }) {
   const { t } = useTranslation();
+  const serverItems = useMemo(() => {
+    const items = new Map<string, CodexDynamicTool[]>();
+    for (const tool of tools) {
+      const serverName = tool.namespace?.trim();
+      if (!serverName) continue;
+      const serverTools = items.get(serverName);
+      if (serverTools) serverTools.push(tool);
+      else items.set(serverName, [tool]);
+    }
+    return [...items.entries()]
+      .map(([name, serverTools]) => ({
+        name,
+        tools: [...serverTools].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tools]);
+
   return (
-    <Section title={t('tasks.panel.turnContexts')} count={turnContexts.length}>
-      {turnContexts.length === 0 ? (
-        <Empty>{t('tasks.panel.noTurnContexts')}</Empty>
+    <Section
+      id={CONTEXT_PANEL_SECTION_IDS.mcpServers}
+      title={t('tasks.panel.mcpServers')}
+      count={serverItems.length}
+      icon={<Plug className="size-3.5" />}
+      scrollable={serverItems.length > 0}
+    >
+      {serverItems.length === 0 ? (
+        <Empty>{t('tasks.panel.noMcpServers')}</Empty>
       ) : (
-        turnContexts.map((ctx, index) => (
-          <ContextItem
-            key={ctx.turnId ?? `${index}`}
-            icon={<Info className="size-3.5" />}
-            label={ctx.turnId ?? `${t('tasks.panel.turn')} #${index + 1}`}
-            text={formatTurnContext(ctx, t)}
-            sourcePath={sourcePath ?? undefined}
-          />
+        serverItems.map((server) => (
+          <CodexMcpServerItem key={server.name} name={server.name} tools={server.tools} />
         ))
       )}
     </Section>
+  );
+}
+
+function CodexMcpServerItem({ name, tools }: { name: string; tools: CodexDynamicTool[] }) {
+  const { t } = useTranslation();
+  return (
+    <details className="min-w-0 rounded-sm border border-dashed border-border/80 bg-background-1/40 px-1.5 py-1">
+      <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-[11px]">
+        <Plug className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 truncate" title={name}>
+          {name}
+        </span>
+        <span className="shrink-0 font-mono text-[10px] text-foreground-passive">
+          {tools.length}
+        </span>
+      </summary>
+      <div className="mt-1.5 flex min-w-0 flex-col gap-1.5">
+        {tools.map((tool) => (
+          <ContextItem
+            key={`${name}:${tool.name}`}
+            icon={<Wrench className="size-3.5" />}
+            label={tool.name}
+            meta={tool.deferLoading ? t('tasks.panel.deferred') : undefined}
+            text={formatCodexTool(tool)}
+            renderMode="plain"
+          />
+        ))}
+      </div>
+    </details>
   );
 }
 
 function MemorySection({ files }: { files: Array<ClaudeMemoryFile | CodexMemoryFile> }) {
   const { t } = useTranslation();
   return (
-    <Section title={t('tasks.panel.memoryFiles')} scrollable={files.length > 0}>
+    <Section
+      id={CONTEXT_PANEL_SECTION_IDS.memoryFiles}
+      title={t('tasks.panel.memoryFiles')}
+      count={files.length}
+      scrollable={files.length > 0}
+    >
       {files.length === 0 ? (
         <Empty>{t('tasks.panel.noMemoryFiles')}</Empty>
       ) : (
@@ -421,6 +525,7 @@ function ToolsSection({ tools }: { tools: string[] }) {
   const { t } = useTranslation();
   return (
     <Section
+      id={CONTEXT_PANEL_SECTION_IDS.tools}
       title={t('tasks.panel.tools')}
       count={tools.length}
       icon={<Wrench className="size-3.5" />}
@@ -464,6 +569,7 @@ function McpSection({
 
   return (
     <Section
+      id={CONTEXT_PANEL_SECTION_IDS.mcpServers}
       title={t('tasks.panel.mcpServers')}
       count={serverItems.length}
       icon={<Plug className="size-3.5" />}
@@ -497,8 +603,8 @@ function McpServerItem({
   tools: string[];
 }) {
   return (
-    <details className="min-w-0 rounded-sm border border-dashed border-border px-2 py-1.5">
-      <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-xs">
+    <details className="min-w-0 rounded-sm border border-dashed border-border/80 bg-background-1/40 px-1.5 py-1">
+      <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-[11px]">
         <Plug className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate" title={name}>
           {name}
@@ -510,9 +616,7 @@ function McpServerItem({
       <div className="mt-1.5 flex flex-col gap-1.5">
         {tools.length > 0 ? <ChipList items={tools} mono /> : null}
         {instructions ? (
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-foreground-passive">
-            {instructions}
-          </pre>
+          <MarkdownContextContent content={instructions} className="mt-1.5 max-h-56" />
         ) : null}
       </div>
     </details>
@@ -521,25 +625,39 @@ function McpServerItem({
 
 function SkillsSection({ skills, content }: { skills?: ContextSkill[]; content: string | null }) {
   const { t } = useTranslation();
-  const parsedSkills = content ? parseSkillListing(content) : [];
-  const entries = skills && skills.length > 0 ? skills : parsedSkills;
+  const [query, setQuery] = useState('');
+  const parsedSkills = useMemo(() => (content ? parseSkillListing(content) : []), [content]);
+  const entries = useMemo(
+    () => (skills && skills.length > 0 ? skills : parsedSkills),
+    [parsedSkills, skills]
+  );
+  const skillTree = useMemo(() => buildSkillTree(entries), [entries]);
+  const filteredSkillTree = useMemo(() => filterSkillTree(skillTree, query), [query, skillTree]);
   return (
     <Section
+      id={CONTEXT_PANEL_SECTION_IDS.skills}
       title={t('tasks.panel.skills')}
       count={entries.length}
       icon={<Sparkles className="size-3.5" />}
       scrollable={entries.length > 0}
     >
       {entries.length > 0 ? (
-        entries.map((s) => (
-          <ContextItem
-            key={s.name}
-            icon={<Sparkles className="size-3.5" />}
-            label={s.name}
-            text={s.description || '(no description)'}
-            sourcePath={skillSourcePath(s)}
-          />
-        ))
+        <>
+          <div className="relative flex w-full min-w-0 items-center">
+            <Search className="pointer-events-none absolute left-2 size-3.5 shrink-0 text-foreground-passive" />
+            <Input
+              className="h-6 bg-background-1 pl-7 text-xs focus-visible:ring-1 focus-visible:ring-inset"
+              placeholder={t('common.search')}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+          {filteredSkillTree.length > 0 ? (
+            <SkillTreeList items={filteredSkillTree} isSearching={query.trim().length > 0} />
+          ) : (
+            <Empty>{t('tasks.panel.noMatchingSkills')}</Empty>
+          )}
+        </>
       ) : content ? (
         <ContextItem
           icon={<Sparkles className="size-3.5" />}
@@ -552,6 +670,226 @@ function SkillsSection({ skills, content }: { skills?: ContextSkill[]; content: 
       )}
     </Section>
   );
+}
+
+type SkillEntry = ContextSkill | { name: string; description: string };
+
+type SkillTreeLeaf = {
+  kind: 'leaf';
+  id: string;
+  skill: SkillEntry;
+  label: string;
+  fullName: string;
+  segments: string[];
+  searchableText: string;
+};
+
+type SkillTreeNode = {
+  kind: 'node';
+  id: string;
+  label: string;
+  children: SkillTreeItem[];
+  leafCount: number;
+};
+
+type SkillTreeItem = SkillTreeLeaf | SkillTreeNode;
+
+type MutableSkillTreeNode = {
+  label: string;
+  children: Map<string, MutableSkillTreeNode>;
+  leaves: SkillTreeLeaf[];
+};
+
+function SkillTreeList({ items, isSearching }: { items: SkillTreeItem[]; isSearching: boolean }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {items.map((item) => (
+        <SkillTreeItemView key={item.id} item={item} depth={0} isSearching={isSearching} />
+      ))}
+    </div>
+  );
+}
+
+function SkillTreeItemView({
+  item,
+  depth,
+  isSearching,
+}: {
+  item: SkillTreeItem;
+  depth: number;
+  isSearching: boolean;
+}) {
+  if (item.kind === 'leaf') {
+    return <SkillContextItem skill={item.skill} label={depth === 0 ? item.fullName : item.label} />;
+  }
+
+  if (item.leafCount <= 1) {
+    const leaf = getOnlySkillLeaf(item);
+    if (!leaf) return null;
+    const label = depth === 0 ? leaf.fullName : leaf.segments.slice(depth).join(':');
+    return <SkillContextItem skill={leaf.skill} label={label || leaf.fullName} />;
+  }
+
+  return (
+    <details className="group/skill-tree min-w-0" open={isSearching ? true : undefined}>
+      <summary className="flex h-6 min-w-0 cursor-pointer select-none items-center gap-1.5 rounded-sm px-1 text-[11px] hover:bg-background-1 [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3 shrink-0 text-foreground-passive transition-transform group-open/skill-tree:rotate-90" />
+        <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={item.label}>
+          {item.label}
+        </span>
+        <span className="shrink-0 font-mono text-[10px] text-foreground-passive">
+          {item.leafCount}
+        </span>
+      </summary>
+      <div className="ml-2.5 mt-1 flex min-w-0 flex-col gap-1.5 border-l border-border/70 pl-1.5">
+        {item.children.map((child) => (
+          <SkillTreeItemView
+            key={child.id}
+            item={child}
+            depth={depth + 1}
+            isSearching={isSearching}
+          />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function SkillContextItem({ skill, label }: { skill: SkillEntry; label: string }) {
+  return (
+    <ContextItem
+      icon={<Sparkles className="size-3.5" />}
+      label={label}
+      text={skill.description || '(no description)'}
+      sourcePath={skillSourcePath(skill)}
+    />
+  );
+}
+
+function buildSkillTree(entries: SkillEntry[]): SkillTreeItem[] {
+  const root: MutableSkillTreeNode = {
+    label: '',
+    children: new Map(),
+    leaves: [],
+  };
+
+  for (const skill of entries) {
+    const segments = skillNameSegments(skill.name);
+    const leafLabel = segments.at(-1) ?? skill.name;
+    const leaf: SkillTreeLeaf = {
+      kind: 'leaf',
+      id: `skill:${skill.name}`,
+      skill,
+      label: leafLabel,
+      fullName: skill.name,
+      segments,
+      searchableText: skillSearchText(skill),
+    };
+    let cursor = root;
+    for (const segment of segments.slice(0, -1)) {
+      const child = cursor.children.get(segment);
+      if (child) {
+        cursor = child;
+        continue;
+      }
+      const next: MutableSkillTreeNode = {
+        label: segment,
+        children: new Map(),
+        leaves: [],
+      };
+      cursor.children.set(segment, next);
+      cursor = next;
+    }
+    cursor.leaves.push(leaf);
+  }
+
+  return mutableSkillNodeChildren(root, []);
+}
+
+function mutableSkillNodeChildren(node: MutableSkillTreeNode, path: string[]): SkillTreeItem[] {
+  const children: SkillTreeItem[] = [];
+  for (const [label, child] of node.children) {
+    const childPath = [...path, label];
+    const childChildren = mutableSkillNodeChildren(child, childPath);
+    children.push({
+      kind: 'node',
+      id: `skill-node:${childPath.join(':')}`,
+      label,
+      children: childChildren,
+      leafCount: countSkillLeaves(childChildren),
+    });
+  }
+  children.push(...node.leaves);
+  return children.sort(compareSkillTreeItems);
+}
+
+function filterSkillTree(items: SkillTreeItem[], query: string): SkillTreeItem[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return items;
+  return items.flatMap((item) => {
+    const filtered = filterSkillTreeItem(item, normalizedQuery, false);
+    return filtered ? [filtered] : [];
+  });
+}
+
+function filterSkillTreeItem(
+  item: SkillTreeItem,
+  query: string,
+  ancestorMatched: boolean
+): SkillTreeItem | null {
+  if (item.kind === 'leaf') {
+    return ancestorMatched || item.searchableText.includes(query) ? item : null;
+  }
+
+  const selfMatched = item.label.toLowerCase().includes(query);
+  const children = item.children.flatMap((child) => {
+    const filtered = filterSkillTreeItem(child, query, ancestorMatched || selfMatched);
+    return filtered ? [filtered] : [];
+  });
+  if (children.length === 0) return null;
+  return {
+    ...item,
+    children,
+    leafCount: countSkillLeaves(children),
+  };
+}
+
+function countSkillLeaves(items: SkillTreeItem[]): number {
+  return items.reduce((count, item) => count + (item.kind === 'leaf' ? 1 : item.leafCount), 0);
+}
+
+function getOnlySkillLeaf(item: SkillTreeItem): SkillTreeLeaf | null {
+  if (item.kind === 'leaf') return item;
+  for (const child of item.children) {
+    const leaf = getOnlySkillLeaf(child);
+    if (leaf) return leaf;
+  }
+  return null;
+}
+
+function compareSkillTreeItems(a: SkillTreeItem, b: SkillTreeItem): number {
+  return skillTreeSortLabel(a).localeCompare(skillTreeSortLabel(b));
+}
+
+function skillTreeSortLabel(item: SkillTreeItem): string {
+  return item.kind === 'leaf' ? item.fullName : item.label;
+}
+
+function skillNameSegments(name: string): string[] {
+  const structuralSegments = name.split(/[:/\\]+/).filter(Boolean);
+  if (structuralSegments.length > 1) return structuralSegments;
+
+  const dashIndex = name.indexOf('-');
+  if (dashIndex > 0 && dashIndex < name.length - 1) {
+    return [name.slice(0, dashIndex), name.slice(dashIndex + 1)];
+  }
+
+  return [name];
+}
+
+function skillSearchText(skill: SkillEntry): string {
+  const sourcePath = skillSourcePath(skill) ?? '';
+  return `${skill.name}\n${skill.description}\n${sourcePath}`.toLowerCase();
 }
 
 function parseSkillListing(content: string): { name: string; description: string }[] {
@@ -580,6 +918,7 @@ function AgentsSection({ agents }: { agents: string[] }) {
   const { t } = useTranslation();
   return (
     <Section
+      id={CONTEXT_PANEL_SECTION_IDS.agentsAvailable}
       title={t('tasks.panel.agentsAvailable')}
       count={agents.length}
       icon={<Users className="size-3.5" />}
@@ -596,36 +935,57 @@ function AgentsSection({ agents }: { agents: string[] }) {
 
 function SessionPromptsSection({
   prompts,
+  turnContexts,
   sessionId,
   focusTarget,
   sourcePath,
 }: {
   prompts: ClaudeSessionPrompt[];
+  turnContexts?: CodexTurnContext[];
   sessionId: string;
   focusTarget: ContextPromptFocusTarget | null;
   sourcePath?: string | null;
 }) {
   const { t } = useTranslation();
   const targetIndex = resolvePromptTargetIndex(prompts, sessionId, focusTarget);
+  const rowCount = Math.max(prompts.length, turnContexts?.length ?? 0);
   return (
     <Section
+      id={CONTEXT_PANEL_SECTION_IDS.sessionPrompts}
       title={t('tasks.panel.sessionPrompts')}
-      count={prompts.length}
-      scrollable={prompts.length > 0}
+      count={rowCount}
+      scrollable={rowCount > 0}
     >
-      {prompts.length === 0 ? (
+      {rowCount === 0 ? (
         <Empty>{t('tasks.panel.noPrompts')}</Empty>
       ) : (
-        prompts.map((p, i) => (
-          <PromptItem
-            key={p.id}
-            index={i + 1}
-            prompt={p}
-            isTarget={i === targetIndex}
-            focusRequestId={focusTarget?.requestId}
-            sourcePath={sourcePath ?? undefined}
-          />
-        ))
+        Array.from({ length: rowCount }, (_, i) => {
+          const prompt = prompts[i];
+          const turnContext = turnContexts?.[i] ?? null;
+          if (prompt) {
+            return (
+              <PromptItem
+                key={prompt.id}
+                index={i + 1}
+                prompt={prompt}
+                isTarget={i === targetIndex}
+                focusRequestId={focusTarget?.requestId}
+                sourcePath={sourcePath ?? undefined}
+              />
+            );
+          }
+          if (!turnContext) return null;
+          return (
+            <ContextItem
+              key={turnContext.turnId ?? `turn-context-${i}`}
+              icon={<Info className="size-3.5" />}
+              label={turnContext.turnId ?? `${t('tasks.panel.turn')} #${i + 1}`}
+              text={formatTurnContext(turnContext, t)}
+              sourcePath={sourcePath ?? undefined}
+              renderMode="plain"
+            />
+          );
+        })
       )}
     </Section>
   );
@@ -663,11 +1023,11 @@ function PromptItem({
       ref={ref}
       tabIndex={-1}
       className={cn(
-        'group/context-item relative min-w-0 rounded-sm border border-dashed border-border px-2 py-1.5 outline-none',
+        'group/context-item relative min-w-0 rounded-sm border border-dashed border-border/80 bg-background-1/40 px-1.5 py-1 outline-none',
         isTarget && 'border-accent ring-2 ring-accent/30'
       )}
     >
-      <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-xs">
+      <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-[11px]">
         <span className="shrink-0 font-mono text-[10px] text-foreground-passive">#{index}</span>
         <span className="min-w-0 flex-1 truncate" title={displayText}>
           {preview}
@@ -675,9 +1035,7 @@ function PromptItem({
         </span>
         <ContextItemTrailing meta={timestamp ?? undefined} sourcePath={sourcePath} />
       </summary>
-      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground">
-        {displayText}
-      </pre>
+      <MarkdownContextContent content={displayText} className="mt-1.5 max-h-56 text-foreground" />
     </details>
   );
 
@@ -708,7 +1066,7 @@ function ChipList({ items, mono }: { items: string[]; mono?: boolean }) {
         <span
           key={item}
           className={cn(
-            'inline-block max-w-full truncate rounded-sm border border-border bg-muted/30 px-1.5 py-0.5 text-[10px]',
+            'inline-block max-w-full truncate rounded-sm border border-border/80 bg-muted/30 px-1.5 py-0.5 text-[10px] leading-4',
             mono && 'font-mono'
           )}
           title={item}
@@ -739,38 +1097,90 @@ function formatTurnContext(ctx: CodexTurnContext, t: (key: string) => string): s
 }
 
 function Section({
+  id,
   title,
   count,
   icon,
+  hint,
   children,
   scrollable,
 }: {
+  id: ContextPanelSectionId;
   title: string;
   count?: number;
   icon?: React.ReactNode;
-  children: React.ReactNode;
+  hint?: string;
+  children?: React.ReactNode;
   scrollable?: boolean;
 }) {
+  const hasContent = children !== undefined && children !== null && children !== false;
+
   return (
-    <section className="flex min-w-0 flex-col gap-1.5 overflow-hidden rounded-md border border-border p-2">
-      <header className="flex items-center justify-between">
-        <MicroLabel className="flex items-center gap-1 text-foreground-passive">
-          {icon}
-          {title}
-        </MicroLabel>
-        {typeof count === 'number' ? (
-          <span className="font-mono text-[10px] text-foreground-passive">{count}</span>
-        ) : null}
-      </header>
-      <div
-        className={cn(
-          'flex min-w-0 flex-col gap-1.5',
-          scrollable && 'max-h-60 overflow-y-auto pr-0.5'
+    <AccordionPrimitive.Item value={id} className="min-w-0 border-b border-border/70">
+      <AccordionPrimitive.Header className="m-0 flex h-8 min-w-0 items-center hover:bg-background-2">
+        {hasContent ? (
+          <AccordionPrimitive.Trigger className="group flex h-full min-w-0 flex-1 items-center gap-1.5 px-2.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border">
+            <ChevronRight className="size-3 shrink-0 text-foreground-passive transition-transform group-data-[state=open]:rotate-90" />
+            <SectionTitle icon={icon} title={title} />
+          </AccordionPrimitive.Trigger>
+        ) : (
+          <div className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-2.5 text-left text-xs">
+            <span className="size-3 shrink-0" />
+            <SectionTitle icon={icon} title={title} />
+          </div>
         )}
+        <div className="flex h-full shrink-0 items-center gap-1 pr-2">
+          {typeof count === 'number' ? (
+            <span className="shrink-0 font-mono text-[10px] text-foreground-passive">{count}</span>
+          ) : null}
+          {hint ? <SectionHint hint={hint} /> : null}
+        </div>
+      </AccordionPrimitive.Header>
+      {hasContent ? (
+        <AccordionPrimitive.Content className="overflow-hidden">
+          <div
+            className={cn(
+              'flex min-w-0 flex-col gap-1.5 px-2.5 pb-2',
+              scrollable && 'max-h-60 overflow-y-auto pr-1'
+            )}
+          >
+            {children}
+          </div>
+        </AccordionPrimitive.Content>
+      ) : null}
+    </AccordionPrimitive.Item>
+  );
+}
+
+function SectionTitle({ icon, title }: { icon?: React.ReactNode; title: string }) {
+  return (
+    <>
+      {icon ? <span className="shrink-0 text-foreground-passive">{icon}</span> : null}
+      <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={title}>
+        {title}
+      </span>
+    </>
+  );
+}
+
+function SectionHint({ hint }: { hint: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            className="flex size-5 items-center justify-center rounded-sm text-foreground-passive transition-colors hover:bg-background-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
+            aria-label={hint}
+          />
+        }
       >
-        {children}
-      </div>
-    </section>
+        <Info className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-64 text-left leading-relaxed">
+        {hint}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -780,30 +1190,49 @@ function ContextItem({
   meta,
   text,
   sourcePath,
+  renderMode = 'markdown',
 }: {
   icon: React.ReactNode;
   label: string;
   meta?: string;
   text: string;
   sourcePath?: string;
+  renderMode?: 'markdown' | 'plain';
 }) {
   const item = (
-    <details className="group/context-item relative min-w-0 rounded-sm border border-dashed border-border px-2 py-1.5">
-      <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-xs">
+    <details className="group/context-item relative min-w-0 rounded-sm border border-dashed border-border/80 bg-background-1/40 px-1.5 py-1">
+      <summary className="flex min-w-0 cursor-pointer select-none items-center gap-1.5 text-[11px]">
         <span className="shrink-0">{icon}</span>
         <span className="min-w-0 flex-1 truncate" title={label}>
           {label}
         </span>
         <ContextItemTrailing meta={meta} sourcePath={sourcePath} />
       </summary>
-      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground-passive">
-        {text}
-      </pre>
+      {renderMode === 'markdown' ? (
+        <MarkdownContextContent content={text} className="mt-1.5 max-h-56" />
+      ) : (
+        <pre className="mt-1.5 max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-foreground-passive">
+          {text}
+        </pre>
+      )}
     </details>
   );
 
   if (!sourcePath) return item;
   return <ContextFileMenu sourcePath={sourcePath}>{item}</ContextFileMenu>;
+}
+
+function MarkdownContextContent({ content, className }: { content: string; className?: string }) {
+  return (
+    <MarkdownRenderer
+      content={content}
+      variant="compact"
+      className={cn(
+        'overflow-auto break-words text-[11px] leading-relaxed text-foreground-passive [&>*:last-child]:mb-0 [&_pre]:max-w-full',
+        className
+      )}
+    />
+  );
 }
 
 function ContextItemTrailing({ meta, sourcePath }: { meta?: string; sourcePath?: string }) {

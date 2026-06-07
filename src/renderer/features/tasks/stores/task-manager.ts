@@ -7,12 +7,13 @@ import {
   taskRenamedChannel,
   taskStatusUpdatedChannel,
 } from '@shared/events/taskEvents';
-import type {
-  CreateTaskError,
-  CreateTaskParams,
-  CreateTaskWarning,
-  Task,
-  TaskLifecycleStatus,
+import {
+  createTaskStrategyRequiresBranchName,
+  type CreateTaskError,
+  type CreateTaskParams,
+  type CreateTaskWarning,
+  type Task,
+  type TaskLifecycleStatus,
 } from '@shared/tasks';
 import type { TaskSidebarViewSnapshot, TaskViewSnapshot } from '@shared/view-state';
 import { getProjectManagerStore } from '@renderer/features/projects/stores/project-selectors';
@@ -31,6 +32,33 @@ import {
   isUnregistered,
   type TaskStore,
 } from './task';
+
+function phaseForSetupStatus(task: Task): 'naming' | 'naming-error' | 'provision' {
+  switch (task.setupStatus) {
+    case 'ready':
+      return 'provision';
+    case 'pending':
+      return 'naming';
+    case 'branch_failed':
+    case 'naming_failed':
+      return 'naming-error';
+  }
+}
+
+function setupErrorMessage(task: Task): string | undefined {
+  if (task.setupError) return task.setupError;
+  switch (task.setupStatus) {
+    case 'pending':
+    case 'ready':
+      return undefined;
+    case 'branch_failed':
+      return 'Branch setup failed.';
+    case 'naming_failed':
+      return task.setupRequiresBranchName
+        ? 'Task name or branch name generation failed.'
+        : 'Task name generation failed.';
+  }
+}
 
 export async function markInitialConversationWorkingAfterProvision(
   task: TaskStore | undefined,
@@ -115,7 +143,21 @@ function formatCreateTaskWarning(warning: CreateTaskWarning): string {
           : warning.error.type;
       return `Failed to publish branch "${warning.branch}" to "${warning.remote}": ${detail}`;
     }
+    case 'task-naming-failed':
+      return warning.blocksProvision
+        ? `Task name generation failed: ${warning.message}`
+        : `Task name generation failed; using the initial title: ${warning.message}`;
+    case 'branch-setup-failed':
+      return `Could not prepare branch "${warning.branch}": ${warning.message}`;
   }
+}
+
+function handleCreateTaskWarning(warning: CreateTaskWarning): void {
+  if (warning.type === 'branch-publish-failed') {
+    toast.error(formatCreateTaskWarning(warning));
+    return;
+  }
+  log.warn('Task setup completed with warning', warning);
 }
 
 export class TaskManagerStore {
@@ -159,10 +201,10 @@ export class TaskManagerStore {
     events.on(taskRenamedChannel, ({ taskId, projectId: evtProjectId, name, isUserNamed }) => {
       if (evtProjectId !== this.projectId) return;
       const store = this.tasks.get(taskId);
-      if (!store || !isRegistered(store)) return;
+      if (!store) return;
       runInAction(() => {
-        (store.data as Task).name = name;
-        (store.data as Task).isUserNamed = isUserNamed;
+        store.data.name = name;
+        store.data.isUserNamed = isUserNamed;
       });
     });
 
@@ -259,6 +301,7 @@ export class TaskManagerStore {
   }
 
   async createTask(params: CreateTaskParams) {
+    const setupRequiresBranchName = createTaskStrategyRequiresBranchName(params.strategy);
     runInAction(() => {
       this.tasks.set(
         params.id,
@@ -271,6 +314,8 @@ export class TaskManagerStore {
           statusChangedAt: new Date().toISOString(),
           isPinned: false,
           needsReview: false,
+          setupStatus: 'pending',
+          setupRequiresBranchName,
         })
       );
     });
@@ -305,21 +350,36 @@ export class TaskManagerStore {
     runInAction(() => {
       const current = this.tasks.get(params.id);
       if (current && isUnregistered(current)) {
-        current.transitionToUnprovisioned(result.data.task, 'provision');
+        const receivedRenameWhileCreating =
+          current.data.name !== params.name || current.data.isUserNamed !== undefined;
+        const task = receivedRenameWhileCreating
+          ? {
+              ...result.data.task,
+              name: current.data.name,
+              isUserNamed: current.data.isUserNamed ?? result.data.task.isUserNamed,
+            }
+          : result.data.task;
+        const phase = phaseForSetupStatus(task);
+        current.transitionToUnprovisioned(task, phase);
+        if (phase === 'naming-error') {
+          current.errorMessage = setupErrorMessage(task);
+        }
       }
     });
 
     this._settingsStore.pageData.invalidate();
 
     if (result.data.warning) {
-      toast.error(formatCreateTaskWarning(result.data.warning));
+      handleCreateTaskWarning(result.data.warning);
     }
 
-    await this.provisionTask(params.id);
-    await markInitialConversationWorkingAfterProvision(
-      this.tasks.get(params.id),
-      params.initialConversation
-    );
+    if (result.data.task.setupStatus === 'ready') {
+      await this.provisionTask(params.id);
+      await markInitialConversationWorkingAfterProvision(
+        this.tasks.get(params.id),
+        params.initialConversation
+      );
+    }
   }
 
   async provisionTask(taskId: string): Promise<void> {
@@ -384,6 +444,88 @@ export class TaskManagerStore {
 
     this._provisionPromises.set(taskId, promise);
     return promise;
+  }
+
+  async retryTaskSetup(taskId: string, manualBranchName?: string): Promise<void> {
+    const task = this.tasks.get(taskId);
+    if (!task || !isUnprovisioned(task)) return;
+    runInAction(() => {
+      task.phase = 'naming';
+      task.errorMessage = undefined;
+      task.provisionProgressMessage = manualBranchName
+        ? 'Preparing branch...'
+        : task.data.setupRequiresBranchName
+          ? 'Generating task name and branch...'
+          : 'Generating task name...';
+    });
+
+    const result = await rpc.tasks.retryTaskSetup(this.projectId, taskId, manualBranchName);
+    if (!result.success) {
+      const message = formatCreateTaskError(result.error);
+      runInAction(() => {
+        const current = this.tasks.get(taskId);
+        if (current && isUnprovisioned(current)) {
+          current.phase = 'naming-error';
+          current.errorMessage = message;
+        }
+      });
+      throw new Error(message);
+    }
+
+    runInAction(() => {
+      const current = this.tasks.get(taskId);
+      if (current && isUnprovisioned(current)) {
+        current.data = result.data.task;
+        if (result.data.task.setupStatus === 'ready') {
+          current.phase = 'provision';
+          current.errorMessage = undefined;
+        } else if (result.data.task.setupStatus === 'pending') {
+          current.phase = 'naming';
+          current.errorMessage = undefined;
+        } else {
+          current.phase = 'naming-error';
+          current.errorMessage = setupErrorMessage(result.data.task);
+        }
+      }
+    });
+
+    if (result.data.warning) {
+      handleCreateTaskWarning(result.data.warning);
+    }
+
+    if (result.data.task.setupStatus === 'ready') {
+      await this.provisionTask(taskId);
+    }
+  }
+
+  async regenerateTaskName(taskId: string): Promise<void> {
+    const task = this.tasks.get(taskId);
+    if (!task || !isRegistered(task)) return;
+    const startedAt = Date.now();
+    console.log('[DEBUG][task-manager] regenerateTaskName rpc start:', {
+      projectId: this.projectId,
+      taskId,
+      currentName: task.data.name,
+    });
+    const result = await rpc.tasks.regenerateTaskName(this.projectId, taskId);
+    console.log('[DEBUG][task-manager] regenerateTaskName rpc result:', {
+      projectId: this.projectId,
+      taskId,
+      success: result.success,
+      durationMs: Date.now() - startedAt,
+      nextName: result.success ? result.data.name : undefined,
+      error: result.success ? undefined : result.error.type,
+    });
+    if (!result.success) {
+      throw new Error(formatCreateTaskError(result.error));
+    }
+    runInAction(() => {
+      const current = this.tasks.get(taskId);
+      if (current && isRegistered(current)) {
+        current.data.name = result.data.name;
+        current.data.isUserNamed = result.data.isUserNamed;
+      }
+    });
   }
 
   async teardownTask(taskId: string): Promise<void> {
@@ -453,7 +595,6 @@ export class TaskManagerStore {
         }
       });
       await rpc.tasks.archiveTask(this.projectId, taskId, nextNote);
-      void this.teardownTask(taskId).catch(() => {});
     } catch (e) {
       runInAction(() => {
         const task = this.tasks.get(taskId);

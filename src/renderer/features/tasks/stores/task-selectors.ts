@@ -64,6 +64,8 @@ export type TaskViewKind =
   | 'project-error' // project failed to open
   | 'creating'
   | 'create-error'
+  | 'naming'
+  | 'naming-error'
   | 'provisioning'
   | 'provision-error'
   | 'teardown'
@@ -102,6 +104,8 @@ export function taskViewKind(store: TaskStore | undefined, projectId: string): T
     return 'create-error';
   }
   if (isUnprovisioned(store)) {
+    if (store.phase === 'naming') return 'naming';
+    if (store.phase === 'naming-error') return 'naming-error';
     if (store.phase === 'provision') return 'provisioning';
     if (store.phase === 'provision-error') return 'provision-error';
     if (store.phase === 'teardown') return 'teardown';
@@ -129,6 +133,9 @@ export function taskErrorMessage(store: TaskStore | undefined): string | undefin
     return store.errorMessage ?? 'Failed to create task';
   }
   if (isUnprovisioned(store)) {
+    if (store.phase === 'naming-error') {
+      return store.errorMessage ?? store.data.setupError ?? 'Failed to generate task names';
+    }
     if (store.phase === 'provision-error') {
       return store.errorMessage ?? 'Failed to set up workspace';
     }

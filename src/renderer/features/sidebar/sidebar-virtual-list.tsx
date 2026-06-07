@@ -83,17 +83,9 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
     const dndId = targetTaskId
       ? toTaskDndId(targetProjectId, targetTaskId)
       : toProjectDndId(targetProjectId);
-    const node = containerRef.current?.querySelector<HTMLElement>(
-      `[data-sidebar-row="${dndId}"]`
-    );
+    const node = containerRef.current?.querySelector<HTMLElement>(`[data-sidebar-row="${dndId}"]`);
     node?.scrollIntoView({ block: 'nearest' });
-  }, [
-    currentView,
-    taskParams.projectId,
-    taskParams.taskId,
-    projectParams.projectId,
-    displayRows,
-  ]);
+  }, [currentView, taskParams.projectId, taskParams.taskId, projectParams.projectId, displayRows]);
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(String(event.active.id));

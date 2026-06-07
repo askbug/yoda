@@ -5,7 +5,13 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '@renderer/utils/utils';
 
-const Select = SelectPrimitive.Root;
+function Select<Value, Multiple extends boolean | undefined = false>(
+  props: SelectPrimitive.Root.Props<Value, Multiple>
+) {
+  const normalizedProps =
+    'value' in props && props.value === undefined ? { ...props, value: null } : props;
+  return <SelectPrimitive.Root {...normalizedProps} />;
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

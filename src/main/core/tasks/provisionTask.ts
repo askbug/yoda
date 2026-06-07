@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { mapConversationRowToConversation } from '@main/core/conversations/utils';
 import { projectManager } from '@main/core/projects/project-manager';
 import { formatProvisionTaskError } from '@main/core/tasks/provision-task-error';
@@ -13,6 +13,9 @@ import { mapTaskRowToTask } from './utils/utils';
 export async function provisionTask(taskId: string) {
   const [row] = await db.select().from(tasks).where(eq(tasks.id, taskId));
   if (!row) throw new Error(`Task not found: ${taskId}`);
+  if (row.setupStatus !== 'ready') {
+    throw new Error(row.setupError || `Task setup is not ready: ${row.setupStatus}`);
+  }
 
   const task = mapTaskRowToTask(row);
   const project = projectManager.getProject(task.projectId);
@@ -38,7 +41,7 @@ export async function provisionTask(taskId: string) {
     db
       .select()
       .from(conversations)
-      .where(eq(conversations.taskId, taskId))
+      .where(and(eq(conversations.taskId, taskId), isNull(conversations.archivedAt)))
       .then((rows) => rows.map((r) => mapConversationRowToConversation(r, true))),
   ]);
 

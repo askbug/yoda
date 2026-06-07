@@ -1,4 +1,4 @@
-export type SidebarTab = 'task' | 'conversations' | 'changes' | 'files' | 'context';
+export type SidebarTab = 'task' | 'conversations' | 'changes' | 'files' | 'context' | 'rename';
 
 export type FileRendererData =
   | { kind: 'text' }

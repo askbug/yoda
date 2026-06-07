@@ -71,6 +71,12 @@ export type AgentProviderDefinition = {
   commandSubmitInput?: string;
   /** Delay before submit after prompt injection, used to avoid TUI paste-burst handling. */
   commandSubmitDelayMs?: number;
+  /**
+   * Non-interactive command template used for automated task renaming.
+   * The prompt is written to stdin unless the template contains `{prompt}`.
+   * `{model}` is replaced with the configured or inferred naming model.
+   */
+  namingCommand?: string;
   planActivateCommand?: string;
   autoStartCommand?: string;
   icon?: string;
@@ -100,6 +106,8 @@ export const AGENT_PROVIDERS: AgentProviderDefinition[] = [
     commandPrefix: '$',
     commandSubmitSuffix: ' ',
     commandSubmitDelayMs: 200,
+    namingCommand:
+      'codex exec --ephemeral --sandbox read-only --model {model} --color never --json -',
     icon: 'openai.svg',
     alt: 'Codex',
     terminalOnly: true,
@@ -121,6 +129,8 @@ export const AGENT_PROVIDERS: AgentProviderDefinition[] = [
     sessionIdFlag: '--session-id',
     commandPrefix: '/',
     planActivateCommand: '/plan',
+    namingCommand:
+      'claude --print --model {model} --output-format text --no-session-persistence --permission-mode plan',
     icon: 'claude.png',
     alt: 'Claude Code',
     terminalOnly: true,

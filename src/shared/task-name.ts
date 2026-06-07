@@ -55,6 +55,30 @@ export const taskNameFromPrompt = (prompt: string): string => {
   return normalizeTaskDisplayName(firstLine.replace(/\s+/g, ' '));
 };
 
+/**
+ * Display-name dedup: keep the (possibly CJK) display name intact and only
+ * append a numeric suffix when an exact display-name collision exists.
+ * Use this when task.name should preserve the user's original wording —
+ * git-safe slugging is handled separately when deriving the branch name.
+ */
+export const ensureUniqueTaskDisplayName = (
+  baseName: string,
+  existingNames: Iterable<string>,
+  maxAttempts = 6
+): string => {
+  const normalized = normalizeTaskDisplayName(baseName);
+  if (!normalized) return normalized;
+  const existing = new Set(
+    Array.from(existingNames, (name) => normalizeTaskDisplayName(name)).filter(Boolean)
+  );
+  if (!existing.has(normalized)) return normalized;
+  for (let i = 2; i < 2 + maxAttempts; i++) {
+    const candidate = normalizeTaskDisplayName(`${baseName}-${i}`);
+    if (candidate && !existing.has(candidate)) return candidate;
+  }
+  return normalizeTaskDisplayName(`${baseName}-${Date.now().toString(36)}`);
+};
+
 export const ensureUniqueTaskSlug = (
   baseName: string,
   existingNames: Iterable<string>,

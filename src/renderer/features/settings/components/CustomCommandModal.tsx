@@ -57,13 +57,7 @@ const CustomCommandModal: React.FC<CustomCommandModalProps> = ({ isOpen, onClose
   const provider = useMemo(() => AGENT_PROVIDERS.find((p) => p.id === providerId), [providerId]);
   const registryDefaults = useMemo(() => getDefaultFromProvider(provider), [provider]);
 
-  const {
-    value: storedConfig,
-    isOverridden,
-    isLoading,
-    update,
-    reset,
-  } = useProviderSettings(providerId);
+  const { value: storedConfig, isOverridden, isLoading, update } = useProviderSettings(providerId);
 
   const [form, setForm] = useState<FormState>(registryDefaults);
   const [saving, setSaving] = useState(false);
@@ -115,40 +109,26 @@ const CustomCommandModal: React.FC<CustomCommandModalProps> = ({ isOpen, onClose
         }
       }
 
-      const isAtDefaults =
-        form.cli === registryDefaults.cli &&
-        form.resumeFlag === registryDefaults.resumeFlag &&
-        form.defaultArgs === registryDefaults.defaultArgs &&
-        form.extraArgs === '' &&
-        form.autoApproveFlag === registryDefaults.autoApproveFlag &&
-        form.initialPromptFlag === registryDefaults.initialPromptFlag &&
-        form.envEntries.every((e) => !e.key.trim());
-
-      if (isAtDefaults) {
-        await new Promise<void>((resolve, reject) =>
-          reset(undefined, { onSuccess: resolve, onError: reject })
-        );
-      } else {
-        const config: ProviderCustomConfig = {
-          cli: form.cli,
-          resumeFlag: form.resumeFlag,
-          defaultArgs: form.defaultArgs.trim() ? form.defaultArgs.trim().split(/\s+/) : undefined,
-          extraArgs: form.extraArgs.trim() || undefined,
-          autoApproveFlag: form.autoApproveFlag,
-          initialPromptFlag: form.initialPromptFlag,
-          env: Object.keys(envRecord).length > 0 ? envRecord : undefined,
-        };
-        await new Promise<void>((resolve, reject) =>
-          update(config, { onSuccess: resolve, onError: reject })
-        );
-      }
+      const config: ProviderCustomConfig = {
+        ...(storedConfig ?? {}),
+        cli: form.cli,
+        resumeFlag: form.resumeFlag,
+        defaultArgs: form.defaultArgs.trim() ? form.defaultArgs.trim().split(/\s+/) : undefined,
+        extraArgs: form.extraArgs.trim() || undefined,
+        autoApproveFlag: form.autoApproveFlag,
+        initialPromptFlag: form.initialPromptFlag,
+        env: Object.keys(envRecord).length > 0 ? envRecord : undefined,
+      };
+      await new Promise<void>((resolve, reject) =>
+        update(config, { onSuccess: resolve, onError: reject })
+      );
       onClose();
     } catch (error) {
       log.error('Failed to save provider custom config:', error);
     } finally {
       setSaving(false);
     }
-  }, [form, registryDefaults, reset, update, onClose]);
+  }, [form, storedConfig, update, onClose]);
 
   const previewCommand = useMemo(() => {
     const parts: string[] = [];

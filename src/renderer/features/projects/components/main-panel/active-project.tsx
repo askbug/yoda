@@ -1,8 +1,7 @@
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
-import { IssuesPanel } from '@renderer/features/projects/components/issues-view/issues-panel';
 import { OverviewPanel } from '@renderer/features/projects/components/overview-view/overview-panel';
-import { PullRequestView } from '@renderer/features/projects/components/pr-view/pr-view';
+import { ProjectSessionsPanel } from '@renderer/features/projects/components/sessions-view/project-sessions-panel';
 import { SettingsPanel } from '@renderer/features/projects/components/settings-view/settings-panel';
 import { TaskList } from '@renderer/features/projects/components/task-view/task-list';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
@@ -36,14 +35,11 @@ export const ActiveProject = observer(function ActiveProject() {
           <ToggleGroupItem value="overview" size="sm">
             {t('projects.overview')}
           </ToggleGroupItem>
-          <ToggleGroupItem value="issues" size="sm">
-            {t('issues.issues')}
-          </ToggleGroupItem>
           <ToggleGroupItem value="tasks" size="sm">
             {t('projects.sessions')}
           </ToggleGroupItem>
-          <ToggleGroupItem value="pull-request" size="sm">
-            {t('pullRequests.title')}
+          <ToggleGroupItem value="sessions" size="sm">
+            {t('tasks.conversations.sessions')}
           </ToggleGroupItem>
           <ToggleGroupItem value="settings" size="sm">
             {t('common.settings')}
@@ -53,8 +49,7 @@ export const ActiveProject = observer(function ActiveProject() {
       <div className="flex-1 min-h-0">
         {activeView === 'overview' && <OverviewPanel />}
         {activeView === 'tasks' && <TaskList />}
-        {activeView === 'issues' && <IssuesPanel />}
-        {activeView === 'pull-request' && <PullRequestView />}
+        {activeView === 'sessions' && <ProjectSessionsPanel />}
         {activeView === 'settings' && <SettingsPanel />}
       </div>
     </div>

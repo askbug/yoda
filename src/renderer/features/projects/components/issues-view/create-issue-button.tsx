@@ -3,7 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Issue } from '@shared/tasks';
-import { getReadySessionStores } from '@renderer/features/projects/components/issues-view/issue-session-links';
+import { getReadyTaskStores } from '@renderer/features/projects/components/issues-view/issue-task-links';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
 import { Checkbox } from '@renderer/lib/ui/checkbox';
@@ -31,16 +31,16 @@ export const CreateIssueButton = observer(function CreateIssueButton({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const sessions = projectId ? getReadySessionStores(projectId) : [];
+  const tasks = projectId ? getReadyTaskStores(projectId) : [];
 
-  const toggleSession = (sessionId: string) => {
-    setSelectedSessionIds((current) =>
-      current.includes(sessionId)
-        ? current.filter((selectedId) => selectedId !== sessionId)
-        : [...current, sessionId]
+  const toggleTask = (taskId: string) => {
+    setSelectedTaskIds((current) =>
+      current.includes(taskId)
+        ? current.filter((selectedId) => selectedId !== taskId)
+        : [...current, taskId]
     );
   };
 
@@ -69,14 +69,12 @@ export const CreateIssueButton = observer(function CreateIssueButton({
         return;
       }
 
-      const selectedSessions = sessions.filter((session) =>
-        selectedSessionIds.includes(session.data.id)
-      );
-      await Promise.all(selectedSessions.map((session) => session.linkIssue(result.issue)));
+      const selectedTasks = tasks.filter((task) => selectedTaskIds.includes(task.data.id));
+      await Promise.all(selectedTasks.map((task) => task.linkIssue(result.issue)));
 
       setTitle('');
       setBody('');
-      setSelectedSessionIds([]);
+      setSelectedTaskIds([]);
       setOpen(false);
       await onCreated?.(result.issue);
     } catch (createError) {
@@ -133,34 +131,34 @@ export const CreateIssueButton = observer(function CreateIssueButton({
                 <span className="text-xs font-medium text-foreground-muted">
                   {t('issues.linkOnCreate')}
                 </span>
-                {selectedSessionIds.length > 0 ? (
+                {selectedTaskIds.length > 0 ? (
                   <span className="text-xs text-foreground-passive">
-                    {t('issues.selectedSessionCount', { count: selectedSessionIds.length })}
+                    {t('issues.selectedTaskCount', { count: selectedTaskIds.length })}
                   </span>
                 ) : null}
               </div>
-              {sessions.length === 0 ? (
+              {tasks.length === 0 ? (
                 <p className="py-2 text-center text-xs text-foreground-passive">
-                  {t('issues.noSessionsToLink')}
+                  {t('issues.noTasksToLink')}
                 </p>
               ) : (
                 <div className="max-h-36 overflow-y-auto">
-                  {sessions.map((session) => {
-                    const checked = selectedSessionIds.includes(session.data.id);
+                  {tasks.map((task) => {
+                    const checked = selectedTaskIds.includes(task.data.id);
                     return (
                       <div
-                        key={session.data.id}
+                        key={task.data.id}
                         role="button"
                         tabIndex={0}
                         className={cn(
                           'flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted',
                           checked && 'bg-muted/60'
                         )}
-                        onClick={() => toggleSession(session.data.id)}
+                        onClick={() => toggleTask(task.data.id)}
                         onKeyDown={(event) => {
                           if (event.key !== 'Enter' && event.key !== ' ') return;
                           event.preventDefault();
-                          toggleSession(session.data.id);
+                          toggleTask(task.data.id);
                         }}
                       >
                         <Checkbox
@@ -169,7 +167,7 @@ export const CreateIssueButton = observer(function CreateIssueButton({
                           tabIndex={-1}
                           className="pointer-events-none"
                         />
-                        <span className="min-w-0 flex-1 truncate">{session.data.name}</span>
+                        <span className="min-w-0 flex-1 truncate">{task.data.name}</span>
                       </div>
                     );
                   })}

@@ -5,6 +5,36 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.3.9 — 2026-06-07
+
+### Added
+
+- Add the Expo mobile app workspace and a token-protected desktop mobile gateway
+  for viewing project/task state and creating new requests from mobile.
+- Add project sessions views and issue/task linking improvements across project
+  overview and issue surfaces.
+- Add model candidate discovery, agent model settings, and skill usage/validation
+  details in the desktop UI.
+- Add task/session naming helpers, rename flows, archive support, and richer
+  conversation runtime state.
+
+### Changed
+
+- Refresh home, task, sidebar, skills, settings, theme, and context-panel UI
+  flows for denser task navigation and clearer session state.
+- Expand agent-facing docs for mobile development and update workspace/package
+  scripts for mobile commands.
+- Improve PTY link handling, terminal sizing, custom themes, and provider/model
+  configuration plumbing.
+
+### Fixed
+
+- Harden task archiving, quit-session prompts, Codex session restoration, and
+  session-title generation.
+- Fix issue list synchronization, sidebar persistence, task title display, and
+  renderer error isolation.
+- Improve i18n coverage and terminology consistency.
+
 ## 0.3.8 — 2026-06-04
 
 ### Added

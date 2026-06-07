@@ -2,6 +2,7 @@ import type { Dirent } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import type { ContextSkill } from '@shared/conversations';
 import { log } from '@main/lib/logger';
 
 /**
@@ -20,9 +21,9 @@ import { log } from '@main/lib/logger';
  *
  * Plugin entries are filtered to versions registered in installed_plugins.json.
  */
-export async function scanClaudeSkills(cwd: string): Promise<string> {
+export async function scanClaudeSkills(cwd: string): Promise<ContextSkill[]> {
   const home = homedir();
-  const entries = new Map<string, string>();
+  const entries = new Map<string, ContextSkill>();
 
   await Promise.all([
     scanCommandsTree(join(home, '.claude', 'commands'), '', entries),
@@ -32,16 +33,13 @@ export async function scanClaudeSkills(cwd: string): Promise<string> {
     scanPlugins(home, entries),
   ]);
 
-  return [...entries.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, desc]) => (desc ? `- ${name}: ${desc}` : `- ${name}`))
-    .join('\n');
+  return [...entries.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function scanCommandsTree(
   root: string,
   prefix: string,
-  out: Map<string, string>
+  out: Map<string, ContextSkill>
 ): Promise<void> {
   let dirents: Dirent[];
   try {
@@ -62,7 +60,7 @@ async function scanCommandsTree(
       const name = prefix ? `${prefix}:${stem}` : stem;
       const desc = await readFrontmatterDescription(fullPath);
       if (desc === null) return;
-      if (!out.has(name)) out.set(name, desc);
+      if (!out.has(name)) out.set(name, { name, description: desc, path: fullPath });
     })
   );
 }
@@ -70,7 +68,7 @@ async function scanCommandsTree(
 async function scanSkillsTree(
   root: string,
   prefix: string,
-  out: Map<string, string>
+  out: Map<string, ContextSkill>
 ): Promise<void> {
   let dirents: Dirent[];
   try {
@@ -86,14 +84,16 @@ async function scanSkillsTree(
       const skillFile = join(fullPath, 'SKILL.md');
       const desc = await readFrontmatterDescription(skillFile);
       if (desc !== null) {
-        if (!out.has(nextPrefix)) out.set(nextPrefix, desc);
+        if (!out.has(nextPrefix)) {
+          out.set(nextPrefix, { name: nextPrefix, description: desc, path: skillFile });
+        }
       }
       await scanSkillsTree(fullPath, nextPrefix, out);
     })
   );
 }
 
-async function scanPlugins(home: string, out: Map<string, string>): Promise<void> {
+async function scanPlugins(home: string, out: Map<string, ContextSkill>): Promise<void> {
   const manifestPath = join(home, '.claude', 'plugins', 'installed_plugins.json');
   let manifestRaw: string;
   try {

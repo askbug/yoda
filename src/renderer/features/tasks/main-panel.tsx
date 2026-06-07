@@ -4,6 +4,7 @@ import { Activity, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePanelRef } from 'react-resizable-panels';
 import {
+  getTaskManagerStore,
   getTaskStore,
   taskErrorMessage,
   taskViewKind,
@@ -11,6 +12,8 @@ import {
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { useTabShortcuts } from '@renderer/lib/hooks/useTabShortcuts';
 import { panelDragStore } from '@renderer/lib/layout/panel-drag-store';
+import { Button } from '@renderer/lib/ui/button';
+import { Input } from '@renderer/lib/ui/input';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@renderer/lib/ui/resizable';
 import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 import { ConversationsPanel } from './conversations/conversations-panel';
@@ -29,13 +32,27 @@ export const TaskMainPanel = observer(function TaskMainPanel() {
   const taskStore = getTaskStore(projectId, taskId);
   const kind = taskViewKind(taskStore, projectId);
 
-  if (kind === 'creating') {
+  if (kind === 'creating' || kind === 'naming') {
+    const setupRequiresBranchName = taskStore?.data.setupRequiresBranchName === true;
+    const progressMessage =
+      kind === 'naming'
+        ? (taskStore?.provisionProgressMessage ??
+          t(
+            setupRequiresBranchName
+              ? 'tasks.generatingTaskNameAndBranch'
+              : 'tasks.generatingTaskName'
+          ))
+        : t('tasks.creatingTask');
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
         <Loader2 className="h-5 w-5 animate-spin text-foreground-muted" />
-        <p className="text-xs font-mono text-foreground-muted">{t('tasks.creatingTask')}</p>
+        <p className="text-xs font-mono text-foreground-muted">{progressMessage}</p>
       </div>
     );
+  }
+
+  if (kind === 'naming-error') {
+    return <TaskSetupRecovery projectId={projectId} taskId={taskId} />;
   }
 
   if (kind === 'create-error') {
@@ -102,6 +119,64 @@ export const TaskMainPanel = observer(function TaskMainPanel() {
   }
 
   return <ReadyTaskMainPanel />;
+});
+
+const TaskSetupRecovery = observer(function TaskSetupRecovery({
+  projectId,
+  taskId,
+}: {
+  projectId: string;
+  taskId: string;
+}) {
+  const { t } = useTranslation();
+  const [manualBranchName, setManualBranchName] = useState('');
+  const [isRetrying, setIsRetrying] = useState(false);
+  const taskStore = getTaskStore(projectId, taskId);
+  const taskManager = getTaskManagerStore(projectId);
+  const errorMessage = taskErrorMessage(taskStore);
+  const setupRequiresBranchName = taskStore?.data.setupRequiresBranchName === true;
+  const setupStatus = taskStore?.data.setupStatus;
+  const showManualBranchInput = setupRequiresBranchName;
+  const title =
+    setupStatus === 'branch_failed' ? t('tasks.branchSetupFailed') : t('tasks.namingFailed');
+
+  const retry = (branch?: string) => {
+    if (!taskManager || isRetrying) return;
+    setIsRetrying(true);
+    void taskManager.retryTaskSetup(taskId, branch).finally(() => setIsRetrying(false));
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center p-8">
+      <div className="flex w-full max-w-sm flex-col items-center gap-3 text-center">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="text-xs text-foreground-muted">{errorMessage}</p>
+        {showManualBranchInput ? (
+          <div className="flex w-full items-center gap-2">
+            <Input
+              value={manualBranchName}
+              onChange={(e) => setManualBranchName(e.target.value)}
+              placeholder={t('tasks.manualBranchPlaceholder')}
+              disabled={isRetrying}
+              className="h-8"
+            />
+            <Button
+              size="sm"
+              disabled={isRetrying || !manualBranchName.trim()}
+              onClick={() => retry(manualBranchName.trim())}
+            >
+              {t('tasks.useBranch')}
+            </Button>
+          </div>
+        ) : null}
+        <Button size="sm" variant="outline" disabled={isRetrying} onClick={() => retry()}>
+          {isRetrying
+            ? t('common.loading')
+            : t(showManualBranchInput ? 'tasks.retryTaskSetup' : 'tasks.retryNaming')}
+        </Button>
+      </div>
+    </div>
+  );
 });
 
 const SIDEBAR_COLLAPSED_SIZE = '0px';

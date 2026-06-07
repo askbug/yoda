@@ -120,6 +120,7 @@ function makeTask(
     isPinned: false,
     needsReview: false,
     isUserNamed: false,
+    setupStatus: 'ready',
     prs: [],
     conversations: {},
   };

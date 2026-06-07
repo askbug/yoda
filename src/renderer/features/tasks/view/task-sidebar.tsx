@@ -5,6 +5,7 @@ import { ContextPanel } from '../context-panel';
 import { SidebarConversationsList } from '../conversations/sidebar-conversations-list';
 import { ChangesPanel } from '../diff-view/changes-panel/changes-panel';
 import { EditorFileTree } from '../editor/editor-file-tree';
+import { RenamePanel } from '../rename-panel';
 import { TaskPanel } from '../task-panel';
 
 export const TaskSidebar = observer(function TaskSidebar() {
@@ -27,6 +28,9 @@ export const TaskSidebar = observer(function TaskSidebar() {
         </Activity>
         <Activity mode={activeTab === 'context' ? 'visible' : 'hidden'}>
           <ContextPanel />
+        </Activity>
+        <Activity mode={activeTab === 'rename' ? 'visible' : 'hidden'}>
+          <RenamePanel active={activeTab === 'rename'} />
         </Activity>
       </div>
     </Activity>

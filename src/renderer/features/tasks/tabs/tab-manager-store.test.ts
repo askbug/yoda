@@ -44,6 +44,24 @@ describe('TabManagerStore conversation recovery', () => {
     expect(store.openLastConversation()).toBe(true);
     expect(store.activeConversationId).toBe('conversation-2');
   });
+
+  it('opens the preferred conversation without reusing a stale closed tab', () => {
+    const store = new TabManagerStore(
+      makeConversationManager([
+        makeConversation('conversation-1', '2026-05-01T00:00:00.000Z', true),
+        makeConversation('conversation-2', '2026-05-02T00:00:00.000Z', false),
+      ]),
+      'workspace-1'
+    );
+
+    store.openConversation('conversation-1');
+    const tabId = store.resolvedActiveTabId;
+    if (!tabId) throw new Error('Expected an active tab');
+    store.closeTab(tabId);
+
+    expect(store.openPreferredConversation()).toBe(true);
+    expect(store.activeConversationId).toBe('conversation-2');
+  });
 });
 
 function makeConversation(id: string, lastInteractedAt: string, isInitialConversation: boolean) {

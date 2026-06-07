@@ -8,6 +8,7 @@ export type Conversation = {
   title: string;
   createdAt?: string;
   updatedAt?: string;
+  archivedAt?: string | null;
   lastInteractedAt: string | null;
   resume?: boolean;
   autoApprove?: boolean;
@@ -16,6 +17,7 @@ export type Conversation = {
 
 export type ConversationSessionInfo = {
   sessionId: string;
+  sessionTitle?: string;
   resumeCommand?: string;
 };
 
@@ -63,12 +65,19 @@ export type ClaudeMcpServer = {
   instructions: string;
 };
 
+export type ContextSkill = {
+  name: string;
+  description: string;
+  path: string;
+};
+
 export type ClaudeSessionContext = {
   transcriptPath: string;
   memoryFiles: ClaudeMemoryFile[];
   tools: string[];
   agents: string[];
   mcpServers: ClaudeMcpServer[];
+  skills: ContextSkill[];
   skillsListing: string | null;
   prompts: ClaudeSessionPrompt[];
 };
@@ -104,9 +113,11 @@ export type CodexSessionContext = {
   developerMessages: ClaudeSessionPrompt[];
   memoryFiles: CodexMemoryFile[];
   dynamicTools: CodexDynamicTool[];
+  skills: ContextSkill[];
   skillsListing: string | null;
   prompts: ClaudeSessionPrompt[];
   turnContexts: CodexTurnContext[];
+  completedTurnCount: number;
 };
 
 export type CreateConversationParams = {

@@ -26,10 +26,14 @@ function cssColorToHex(cssColor: string): string {
  * omitted.
  */
 function readMonacoVarsForTheme(cssClass: 'ylight' | 'ydark'): MonacoColors {
-  const el = document.createElement('div');
-  el.className = cssClass;
-  el.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
-  document.body.appendChild(el);
+  const root = document.documentElement;
+  const useRoot = root.classList.contains(cssClass);
+  const el = useRoot ? root : document.createElement('div');
+  if (!useRoot) {
+    el.className = cssClass;
+    el.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
+    document.body.appendChild(el);
+  }
   const style = getComputedStyle(el);
 
   const get = (v: string) => style.getPropertyValue(v).trim();
@@ -59,7 +63,7 @@ function readMonacoVarsForTheme(cssClass: 'ylight' | 'ydark'): MonacoColors {
     }
   }
 
-  el.remove();
+  if (!useRoot) el.remove();
   return colors;
 }
 

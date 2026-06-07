@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { type Task } from '@shared/tasks';
 import { db } from '@main/db/client';
 import { conversations, tasks } from '@main/db/schema';
@@ -25,7 +25,7 @@ export async function getTasks(projectId?: string): Promise<Task[]> {
       count: count(),
     })
     .from(conversations)
-    .where(inArray(conversations.taskId, taskIds))
+    .where(and(inArray(conversations.taskId, taskIds), isNull(conversations.archivedAt)))
     .groupBy(conversations.taskId, conversations.provider);
 
   const convByTask = new Map<string, Record<string, number>>();

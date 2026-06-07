@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Conversation } from '@shared/conversations';
+import { agentSessionStatusChangedChannel } from '@shared/events/agentEvents';
+import {
+  conversationArchivedChannel,
+  conversationRenamedChannel,
+} from '@shared/events/conversationEvents';
 import { ConversationManagerStore } from './conversation-manager';
 
 const mocks = vi.hoisted(() => ({
+  eventEmitMock: vi.fn(),
   eventOnMock: vi.fn(),
   ptyConnectMock: vi.fn(),
   ptyDisposeMock: vi.fn(),
   ptyResizeMock: vi.fn(),
+  archiveConversationMock: vi.fn(),
   getConversationsForTaskMock: vi.fn(),
+  listeners: new Map<string, (data: unknown) => void>(),
   resumeConversationMock: vi.fn(),
   soundPlayMock: vi.fn(),
   touchConversationMock: vi.fn(),
@@ -15,10 +23,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@renderer/lib/ipc', () => ({
   events: {
+    emit: mocks.eventEmitMock,
     on: mocks.eventOnMock,
   },
   rpc: {
     conversations: {
+      archiveConversation: mocks.archiveConversationMock,
       getConversationsForTask: mocks.getConversationsForTaskMock,
       resumeConversation: mocks.resumeConversationMock,
       touchConversation: mocks.touchConversationMock,
@@ -60,8 +70,13 @@ const conversation: Conversation = {
 describe('ConversationManagerStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.eventOnMock.mockReturnValue(vi.fn());
+    mocks.listeners.clear();
+    mocks.eventOnMock.mockImplementation((event: { name: string }, cb: (data: unknown) => void) => {
+      mocks.listeners.set(event.name, cb);
+      return vi.fn();
+    });
     mocks.resumeConversationMock.mockResolvedValue(undefined);
+    mocks.archiveConversationMock.mockResolvedValue(undefined);
     mocks.touchConversationMock.mockResolvedValue(undefined);
     mocks.getConversationsForTaskMock.mockResolvedValue([]);
   });
@@ -92,6 +107,12 @@ describe('ConversationManagerStore', () => {
 
     item?.setWorking({ force: true });
     expect(item?.status).toBe('working');
+    expect(mocks.eventEmitMock).toHaveBeenLastCalledWith(agentSessionStatusChangedChannel, {
+      projectId: 'project-1',
+      taskId: 'task-1',
+      conversationId: 'conversation-1',
+      status: 'working',
+    });
   });
 
   it('passes current terminal size when resuming and reapplies it after spawn', async () => {
@@ -122,5 +143,47 @@ describe('ConversationManagerStore', () => {
 
     expect(mocks.getConversationsForTaskMock).toHaveBeenCalledWith('project-1', 'task-1');
     expect(store.conversations.get('conversation-2')?.data).toEqual(externalConversation);
+  });
+
+  it('applies conversation rename events from session title sync', () => {
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+    const listener = mocks.listeners.get(conversationRenamedChannel.name);
+
+    listener?.({
+      conversationId: 'conversation-1',
+      projectId: 'project-1',
+      taskId: 'task-1',
+      title: 'Synced Codex title',
+    });
+
+    expect(store.conversations.get('conversation-1')?.data.title).toBe('Synced Codex title');
+  });
+
+  it('archives conversations optimistically and disposes the session on success', async () => {
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+
+    await store.archiveConversation('conversation-1');
+
+    expect(mocks.archiveConversationMock).toHaveBeenCalledWith(
+      'project-1',
+      'task-1',
+      'conversation-1'
+    );
+    expect(store.conversations.has('conversation-1')).toBe(false);
+    expect(mocks.ptyDisposeMock).toHaveBeenCalled();
+  });
+
+  it('removes conversations when an archive event arrives', () => {
+    const store = new ConversationManagerStore('project-1', 'task-1', [conversation]);
+    const listener = mocks.listeners.get(conversationArchivedChannel.name);
+
+    listener?.({
+      conversationId: 'conversation-1',
+      projectId: 'project-1',
+      taskId: 'task-1',
+    });
+
+    expect(store.conversations.has('conversation-1')).toBe(false);
+    expect(mocks.ptyDisposeMock).toHaveBeenCalled();
   });
 });

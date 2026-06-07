@@ -5,9 +5,12 @@ import { makePtySessionId } from '@shared/ptySessionId';
 import { err, ok, type Result } from '@shared/result';
 import type { Task, TaskBootstrapStatus } from '@shared/tasks';
 import type { Terminal } from '@shared/terminals';
+import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
+import type { ActiveConversationSession } from '@main/core/conversations/types';
 import type { IExecutionContext } from '@main/core/execution-context/types';
 import { killTmuxSession, makeTmuxSessionName } from '@main/core/pty/tmux-session-name';
 import { getTaskSessionLeafIds } from '@main/core/tasks/session-targets';
+import { taskEvents } from '@main/core/tasks/task-events';
 import { provisionBYOITask } from '@main/core/workspaces/byoi/provision-byoi-task';
 import { localWorkspaceId, sshWorkspaceId } from '@main/core/workspaces/workspace-id';
 import { workspaceRegistry, type TeardownMode } from '@main/core/workspaces/workspace-registry';
@@ -27,11 +30,16 @@ import {
 } from './provision-task-error';
 import { provisionLocalTask } from './task-builder';
 
-type StoredTask = ProvisionResult & { projectId: string; ctx: IExecutionContext };
+type StoredTask = ProvisionResult & {
+  projectId: string;
+  taskName: string;
+  ctx: IExecutionContext;
+};
 
 export type ActiveAgentSessionSummary = {
   running: number;
   keepable: number;
+  nonKeepableSessions: ActiveConversationSession[];
 };
 
 export type TaskManagerHooks = {
@@ -160,6 +168,13 @@ class TaskManager {
 
   readonly hooks: Hookable<TaskManagerHooks> = this._hooks;
 
+  constructor() {
+    taskEvents.on('task:updated', (task) => {
+      const stored = this._lifecycle.get(task.id);
+      if (stored) stored.taskName = task.name;
+    });
+  }
+
   async provisionTask(
     provider: ProjectProvider,
     task: Task,
@@ -179,6 +194,7 @@ class TaskManager {
         const stored: StoredTask = {
           ...result,
           projectId: provider.projectId,
+          taskName: task.name,
           ctx: provider.ctx,
         };
 
@@ -275,13 +291,19 @@ class TaskManager {
   getActiveAgentSessionSummary(): ActiveAgentSessionSummary {
     let running = 0;
     let keepable = 0;
+    const nonKeepableSessions: ActiveConversationSession[] = [];
 
     for (const stored of this._lifecycle.values()) {
-      running += stored.taskProvider.conversations.getActiveSessionCount();
-      keepable += stored.taskProvider.conversations.getDetachableSessionCount();
+      const runningSessions = stored.taskProvider.conversations
+        .getActiveSessions()
+        .map((session) => ({ ...session, taskTitle: stored.taskName }))
+        .filter((session) => agentSessionRuntimeStore.isRunning(session));
+      running += runningSessions.length;
+      keepable += runningSessions.filter((session) => session.detachable).length;
+      nonKeepableSessions.push(...runningSessions.filter((session) => !session.detachable));
     }
 
-    return { running, keepable };
+    return { running, keepable, nonKeepableSessions };
   }
 
   getBootstrapStatus(taskId: string): TaskBootstrapStatus {

@@ -79,6 +79,7 @@ export type TelemetryEventProperties = {
   task_deleted: EmptyProps;
 
   conversation_created: { provider: AgentProviderId; is_first_in_task: boolean };
+  conversation_archived: EmptyProps;
   conversation_deleted: EmptyProps;
   agent_run_started: { provider: AgentProviderId };
   agent_run_finished: { provider: AgentProviderId; exit_code: number };
@@ -120,6 +121,8 @@ export type TelemetryEventProperties = {
 
   skill_installed: { source?: string };
   skill_uninstalled: EmptyProps;
+  skill_disabled: EmptyProps;
+  skill_enabled: EmptyProps;
   skill_created: EmptyProps;
 
   setting_changed: { setting: SettingName };

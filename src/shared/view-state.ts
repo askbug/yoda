@@ -76,6 +76,7 @@ export type TaskViewSnapshot = {
 export type TaskSidebarViewSnapshot = {
   sidebarTab?: string;
   isSidebarCollapsed?: boolean;
+  contextPanelOpenSectionIds?: string[];
 };
 
 export type ProjectViewSnapshot = {

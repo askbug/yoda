@@ -20,6 +20,14 @@ optional_env:
   - YODA_DISABLE_NATIVE_DB
   - YODA_DISABLE_CLONE_CACHE
   - YODA_DISABLE_PTY
+  - YODA_MOBILE_GATEWAY_DISABLED
+  - YODA_MOBILE_GATEWAY_ENABLED
+  - YODA_MOBILE_GATEWAY
+  - YODA_MOBILE_GATEWAY_HOST
+  - YODA_MOBILE_GATEWAY_PORT
+  - YODA_MOBILE_GATEWAY_TOKEN
+  - YODA_MOBILE_INSTALL_URL
+  - YODA_MOBILE_EXPO_URL
   - CODEX_SANDBOX_MODE
   - CODEX_APPROVAL_POLICY
 ---
@@ -39,6 +47,7 @@ Start here. Load only the linked `agents/` docs that are relevant to the task.
 
 - Main-process changes: `agents/architecture/main-process.md`
 - Renderer/UI changes: `agents/architecture/renderer.md`
+- Mobile app or gateway changes: `agents/architecture/mobile.md`
 - Shared types or provider metadata: `agents/architecture/shared.md`
 - Worktree behavior or `.yoda.json`: `agents/workflows/worktrees.md`
 - SSH or remote project work: `agents/workflows/remote-development.md`

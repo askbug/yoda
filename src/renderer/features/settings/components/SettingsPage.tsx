@@ -21,6 +21,7 @@ import {
   AutoTrustWorktreesRow,
   EnableTmuxRow,
   PreArchiveCommandRow,
+  TaskNamingSettingsRow,
 } from './TaskSettingsRows';
 import TelemetryCard from './TelemetryCard';
 import TerminalSettingsCard from './TerminalSettingsCard';
@@ -90,6 +91,10 @@ export function SettingsPage({
         {
           id: 'auto-generate-task-names',
           component: <AutoGenerateTaskNamesRow />,
+        },
+        {
+          id: 'task-naming-settings',
+          component: <TaskNamingSettingsRow />,
         },
         {
           id: 'auto-trust-worktrees',

@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   resolveAvailableTmuxSessionName: vi.fn(),
   resolveAgentResumeSessionId: vi.fn(),
   resolveLocalPtySpawn: vi.fn(),
+  removeRuntimeStatus: vi.fn(),
+  setRuntimeStatus: vi.fn(),
   spawnLocalPty: vi.fn(),
   startTitle: vi.fn(),
   stopTitle: vi.fn(),
@@ -49,6 +51,13 @@ vi.mock('@main/core/agent-hooks/claude-trust-service', () => ({
 vi.mock('@main/core/agent-hooks/hook-config', () => ({
   HookConfigWriter: class {
     writeForProvider = mocks.prepareHookConfig;
+  },
+}));
+
+vi.mock('@main/core/conversations/agent-session-runtime', () => ({
+  agentSessionRuntimeStore: {
+    remove: mocks.removeRuntimeStatus,
+    setStatus: mocks.setRuntimeStatus,
   },
 }));
 
@@ -291,6 +300,28 @@ describe('LocalConversationProvider', () => {
     expect(spawned[1].options.args).toEqual(['resume', '--cd', '/workspace', 'codex-thread-1']);
   });
 
+  it('injects Codex notify as a runtime config override when hooks are active', async () => {
+    mocks.getHookPort.mockReturnValue(45123);
+    mocks.getProviderConfig.mockResolvedValue({
+      cli: 'codex',
+      resumeFlag: 'resume',
+      resumeSessionIdArg: true,
+      initialPromptFlag: '',
+    });
+    const codexConversation: Conversation = {
+      ...conversation,
+      providerId: 'codex',
+    };
+    const provider = createProvider();
+
+    await provider.startSession(codexConversation, { cols: 80, rows: 24 }, false, 'Fix this');
+
+    expect(spawned[0].options.args[0]).toBe('-c');
+    expect(spawned[0].options.args[1]).toContain('notify=["bash","-c"');
+    expect(spawned[0].options.args[1]).toContain('YODA_HOOK_PORT');
+    expect(spawned[0].options.args.slice(2)).toEqual(['Fix this']);
+  });
+
   it('passes an available tmux session name to the PTY spawn resolver', async () => {
     mocks.resolveAvailableTmuxSessionName.mockResolvedValue('tmux-session');
     const provider = createProvider();
@@ -324,10 +355,60 @@ describe('LocalConversationProvider', () => {
 
     expect(provider.getActiveSessionCount()).toBe(1);
     expect(provider.getDetachableSessionCount()).toBe(1);
+    expect(provider.getActiveSessions()).toEqual([
+      {
+        sessionId,
+        conversationId: conversation.id,
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        providerId: conversation.providerId,
+        title: conversation.title,
+        detachable: true,
+      },
+    ]);
 
     spawned[0].pty.emitExit({ exitCode: 0 });
 
     expect(provider.getActiveSessionCount()).toBe(0);
     expect(provider.getDetachableSessionCount()).toBe(0);
+    expect(provider.getActiveSessions()).toEqual([]);
+  });
+
+  it('tracks runtime status separately from PTY presence', async () => {
+    const provider = createProvider();
+
+    await provider.startSession(conversation, { cols: 80, rows: 24 }, false, 'Fix this');
+
+    expect(mocks.setRuntimeStatus).toHaveBeenCalledWith(
+      {
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        conversationId: conversation.id,
+      },
+      'working'
+    );
+
+    spawned[0].pty.emitExit({ exitCode: 0 });
+
+    expect(mocks.removeRuntimeStatus).toHaveBeenCalledWith({
+      projectId: conversation.projectId,
+      taskId: conversation.taskId,
+      conversationId: conversation.id,
+    });
+  });
+
+  it('marks sessions without an initial prompt as idle until the renderer reports work', async () => {
+    const provider = createProvider();
+
+    await provider.startSession(conversation, { cols: 80, rows: 24 }, true);
+
+    expect(mocks.setRuntimeStatus).toHaveBeenCalledWith(
+      {
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        conversationId: conversation.id,
+      },
+      'idle'
+    );
   });
 });

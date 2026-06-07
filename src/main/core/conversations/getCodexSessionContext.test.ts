@@ -81,6 +81,7 @@ describe('getCodexSessionContext', () => {
         effort: 'xhigh',
       })
     );
+    expect(context?.completedTurnCount).toBe(1);
     expect(context?.dynamicTools).toEqual([
       {
         name: 'tool_one',
@@ -107,6 +108,63 @@ describe('getCodexSessionContext', () => {
 
     expect(context?.threadId).toBe('thread-1');
   });
+
+  it('can resolve a Codex thread by created_at when the Yoda title is truncated', async () => {
+    writeRollout(rolloutPath, { id: 'thread-1', cwd });
+    insertThread(statePath, rolloutPath, {
+      id: 'thread-1',
+      cwd,
+      title: '@src/renderer/features/tasks/context-panel.tsx:91:5 context pane should be compact',
+      firstUserMessage:
+        '@src/renderer/features/tasks/context-panel.tsx:91:5 context pane should be compact',
+      createdAtMs: Date.parse('2026-06-02T11:00:00.000Z'),
+    });
+
+    const context = await getCodexSessionContext(
+      cwd,
+      'yoda-conversation-id',
+      '@src/renderer/features/tasks/context-panel.tsx:91:5 context pane',
+      '2026-06-02 11:00:00'
+    );
+
+    expect(context?.threadId).toBe('thread-1');
+    expect(context?.rolloutPath).toBe(rolloutPath);
+  });
+
+  it('falls back to rollout files when the state DB has no matching thread', async () => {
+    const sessionDir = join(codexHome, 'sessions', '2026', '06', '02');
+    const sessionRolloutPath = join(sessionDir, 'rollout-2026-06-02T11-00-00-conversation-1.jsonl');
+    mkdirSync(sessionDir, { recursive: true });
+    writeRollout(sessionRolloutPath, { cwd });
+
+    const context = await getCodexSessionContext(cwd, 'conversation-1');
+
+    expect(context).toEqual(
+      expect.objectContaining({
+        threadId: 'conversation-1',
+        rolloutPath: sessionRolloutPath,
+        title: 'Implement Codex context',
+        model: 'gpt-5.5',
+        modelProvider: 'openai',
+        cliVersion: '0.136.0',
+        approvalMode: 'on-request',
+        sandboxPolicy: 'workspace-write',
+        baseInstructions: 'Base instructions',
+      })
+    );
+    expect(context?.prompts[0]?.text).toBe('Implement Codex context');
+  });
+
+  it('does not fall back to an unrelated latest rollout for the same cwd', async () => {
+    const sessionDir = join(codexHome, 'sessions', '2026', '06', '02');
+    const sessionRolloutPath = join(sessionDir, 'rollout-2026-06-02T11-00-00-thread-1.jsonl');
+    mkdirSync(sessionDir, { recursive: true });
+    writeRollout(sessionRolloutPath, { cwd, id: 'thread-1' });
+
+    const context = await getCodexSessionContext(cwd, 'missing-conversation', 'Missing title');
+
+    expect(context).toBeNull();
+  });
 });
 
 function createStateDb(statePath: string): void {
@@ -127,6 +185,8 @@ function createStateDb(statePath: string): void {
         first_user_message TEXT NOT NULL,
         preview TEXT NOT NULL,
         archived INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        created_at_ms INTEGER,
         updated_at INTEGER NOT NULL,
         updated_at_ms INTEGER
       );
@@ -153,9 +213,11 @@ function insertThread(
     cwd: string;
     title: string;
     firstUserMessage: string;
+    createdAtMs?: number;
   }
 ): void {
   const db = new Database(statePath);
+  const createdAtMs = args.createdAtMs ?? 1000;
   try {
     db.prepare(
       `
@@ -173,9 +235,11 @@ function insertThread(
           first_user_message,
           preview,
           archived,
+          created_at,
+          created_at_ms,
           updated_at,
           updated_at_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 1000)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
       `
     ).run(
       args.id,
@@ -189,7 +253,11 @@ function insertThread(
       'on-request',
       'workspace-write',
       args.firstUserMessage,
-      args.firstUserMessage
+      args.firstUserMessage,
+      Math.floor(createdAtMs / 1000),
+      createdAtMs,
+      Math.floor(createdAtMs / 1000),
+      createdAtMs
     );
   } finally {
     db.close();
@@ -217,14 +285,14 @@ function insertDynamicTool(statePath: string, threadId: string): void {
   }
 }
 
-function writeRollout(path: string): void {
+function writeRollout(path: string, args?: { cwd?: string; id?: string }): void {
   const rows = [
     {
       timestamp: '2026-06-02T11:00:00.000Z',
       type: 'session_meta',
       payload: {
-        id: 'conversation-1',
-        cwd: '/repo',
+        id: args?.id ?? 'conversation-1',
+        cwd: args?.cwd ?? '/repo',
         cli_version: '0.136.0',
         model_provider: 'openai',
         base_instructions: { text: 'Base instructions' },
@@ -259,6 +327,15 @@ function writeRollout(path: string): void {
         images: [],
         local_images: [],
         text_elements: [],
+      },
+    },
+    {
+      timestamp: '2026-06-02T11:00:04.000Z',
+      type: 'event_msg',
+      payload: {
+        type: 'task_complete',
+        turn_id: 'turn-1',
+        last_agent_message: 'Done',
       },
     },
   ];

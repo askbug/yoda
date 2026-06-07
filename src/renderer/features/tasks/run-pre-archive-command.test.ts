@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getConversationSessionInfo: vi.fn(),
   getCodexSessionContext: vi.fn(),
   getTaskStore: vi.fn(),
+  ensureConversation: vi.fn(),
   sendInput: vi.fn(),
   warn: vi.fn(),
 }));
@@ -65,6 +66,7 @@ function mockProvisionedConversation(conversation: ReturnType<typeof makeConvers
   mocks.asProvisioned.mockReturnValue({
     path: '/workspace',
     conversations: {
+      ensureConversation: mocks.ensureConversation,
       conversations: new Map([['conversation-1', conversation]]),
     },
   });
@@ -78,6 +80,7 @@ describe('runPreArchiveCommand', () => {
       sessionTitle: 'Resolved Codex thread',
     });
     mocks.getCodexSessionContext.mockResolvedValue({ completedTurnCount: 0 });
+    mocks.ensureConversation.mockResolvedValue(true);
     mocks.sendInput.mockResolvedValue({ ok: true });
   });
 
@@ -89,8 +92,14 @@ describe('runPreArchiveCommand', () => {
       return { ok: true };
     });
 
-    await runPreArchiveCommand('project-1', 'task-1', 'lovstudio-git-commit-with-context');
+    await runPreArchiveCommand(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      'lovstudio-git-commit-with-context'
+    );
 
+    expect(mocks.ensureConversation).toHaveBeenCalledWith('conversation-1');
     expect(mocks.sendInput.mock.calls).toEqual([
       ['codex-session', '$lovstudio-git-commit-with-context'],
       ['codex-session', ' '],
@@ -106,7 +115,12 @@ describe('runPreArchiveCommand', () => {
       return { ok: true };
     });
 
-    await runPreArchiveCommand('project-1', 'task-1', 'lovstudio-git-commit-with-context');
+    await runPreArchiveCommand(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      'lovstudio-git-commit-with-context'
+    );
 
     expect(mocks.sendInput.mock.calls).toEqual([
       ['claude-session', '/lovstudio-git-commit-with-context'],
@@ -123,9 +137,15 @@ describe('runPreArchiveCommand', () => {
       return { ok: true };
     });
 
-    await runPreArchiveCommand('project-1', 'task-1', 'lovstudio-git-commit-with-context', {
-      signal: abortController.signal,
-    });
+    await runPreArchiveCommand(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      'lovstudio-git-commit-with-context',
+      {
+        signal: abortController.signal,
+      }
+    );
 
     expect(mocks.sendInput.mock.calls).toEqual([
       ['codex-session', '$lovstudio-git-commit-with-context'],
@@ -144,7 +164,12 @@ describe('runPreArchiveCommand', () => {
       .mockResolvedValueOnce({ completedTurnCount: 2 })
       .mockResolvedValueOnce({ completedTurnCount: 3 });
 
-    const run = runPreArchiveCommand('project-1', 'task-1', 'lovstudio-git-commit-with-context');
+    const run = runPreArchiveCommand(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      'lovstudio-git-commit-with-context'
+    );
     await vi.runAllTimersAsync();
     await run;
 
@@ -177,7 +202,12 @@ describe('runPreArchiveCommand', () => {
         completedTurnCount: 9,
       });
 
-    const run = runPreArchiveCommand('project-1', 'task-1', 'lovstudio-git-commit-with-context');
+    const run = runPreArchiveCommand(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      'lovstudio-git-commit-with-context'
+    );
     await vi.runAllTimersAsync();
     await run;
 
@@ -212,13 +242,19 @@ describe('runPreArchiveCommand', () => {
       completedTurnCount: 4,
     });
 
-    const run = runPreArchiveCommand('project-1', 'task-1', 'lovstudio-git-commit-with-context');
+    const run = runPreArchiveCommand(
+      'project-1',
+      'task-1',
+      'conversation-1',
+      'lovstudio-git-commit-with-context'
+    );
     await vi.runAllTimersAsync();
     await run;
 
     expect(mocks.warn).toHaveBeenCalledWith('runPreArchiveCommand failed', {
       projectId: 'project-1',
       taskId: 'task-1',
+      conversationId: 'conversation-1',
       error: 'Error: Timed out waiting for pre-archive command to finish',
     });
     vi.useRealTimers();

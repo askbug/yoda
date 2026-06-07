@@ -1,5 +1,6 @@
 import { defineEvent } from '@shared/ipc/events';
 import type { PullRequest } from '@shared/pull-requests';
+import type { TaskNamingSnapshot } from '@shared/task-naming';
 
 export const taskStatusUpdatedChannel = defineEvent<{
   taskId: string;
@@ -13,6 +14,8 @@ export const taskRenamedChannel = defineEvent<{
   name: string;
   isUserNamed: boolean;
 }>('task:renamed');
+
+export const taskNamingUpdatedChannel = defineEvent<TaskNamingSnapshot>('task:naming-updated');
 
 export const taskPrUpdatedChannel = defineEvent<{
   taskId: string;

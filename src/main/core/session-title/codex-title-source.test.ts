@@ -107,6 +107,7 @@ describe('CodexSessionTitleSource helpers', () => {
       id: 'current',
       cwd: '/repo',
       title: 'Current title',
+      firstUserMessage: '',
       createdAtMs: 3_000,
       updatedAtMs: 3_000,
     });
@@ -139,6 +140,7 @@ describe('CodexSessionTitleSource helpers', () => {
       id: 'current-session',
       cwd: '/repo',
       title: 'Current session',
+      firstUserMessage: '',
       createdAtMs: 2_000,
       updatedAtMs: 4_000,
     });
@@ -227,6 +229,7 @@ describe('CodexSessionTitleSource helpers', () => {
       id: 'thread-1',
       cwd: '/repo',
       title: 'Renamed by Codex',
+      firstUserMessage: '',
       createdAtMs: 6_000,
       updatedAtMs: 6_000,
     });

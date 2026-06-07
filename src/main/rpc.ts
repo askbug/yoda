@@ -17,6 +17,7 @@ import { linearController } from './core/linear/controller';
 import { lovcodeController } from './core/lovcode/controller';
 import { maasController } from './core/maas/controller';
 import { mcpController } from './core/mcp/controller';
+import { mobileGatewayController } from './core/mobile-gateway/controller';
 import { plainController } from './core/plain/controller';
 import { projectController } from './core/projects/controller';
 import { ptyController } from './core/pty/controller';
@@ -54,6 +55,7 @@ export const rpcRouter = createRPCRouter({
   linear: linearController,
   lovcode: lovcodeController,
   maas: maasController,
+  mobileGateway: mobileGatewayController,
   plain: plainController,
   skills: skillsController,
   ssh: sshController,

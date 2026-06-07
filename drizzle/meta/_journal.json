@@ -127,6 +127,20 @@
       "when": 1780646107577,
       "tag": "0017_funny_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1780694080062,
+      "tag": "0018_striped_human_torch",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1780733129964,
+      "tag": "0019_dashing_the_hood",
+      "breakpoints": true
     }
   ]
 }

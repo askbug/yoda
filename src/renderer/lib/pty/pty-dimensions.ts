@@ -13,7 +13,7 @@ import { type Terminal } from '@xterm/xterm';
 // types. Both code paths are necessary: the proposed `dimensions` API works in
 // xterm 5.x, while xterm 6.x exposes cell metrics only via `_core`.
 interface XtermCellDimensions {
-  css: { cell: { width: number; height: number } };
+  css?: { cell?: { width?: number; height?: number } };
 }
 
 interface XtermInternals {
@@ -32,20 +32,35 @@ export interface TerminalDimensions {
   rows: number;
 }
 
+function readDimensions(read: () => XtermCellDimensions | undefined): XtermCellDimensions | null {
+  try {
+    return read() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function toCellMetrics(dims: XtermCellDimensions | null): { width: number; height: number } | null {
+  const width = dims?.css?.cell?.width;
+  const height = dims?.css?.cell?.height;
+  if (typeof width !== 'number' || typeof height !== 'number') return null;
+  if (width === 0 || height === 0) return null;
+  return { width, height };
+}
+
 export function getCellMetrics(terminal: Terminal): { width: number; height: number } | null {
   const t = terminal as unknown as XtermInternals;
   // Proposed API (xterm 5.x). Undefined on the public Terminal in xterm 6.x.
-  const dims = t.dimensions;
-  if (dims && dims.css.cell.width !== 0 && dims.css.cell.height !== 0) {
-    return { width: dims.css.cell.width, height: dims.css.cell.height };
-  }
+  const proposedMetrics = toCellMetrics(readDimensions(() => t.dimensions));
+  if (proposedMetrics) return proposedMetrics;
+
   // xterm 6.x: the public Terminal delegates to `_core` (the internal Terminal instance).
   // FitAddon receives this same internal object via addon.activate(terminal).
-  const coreDims = t._core?._renderService?.dimensions ?? t._core?.renderService?.dimensions;
-  if (coreDims?.css?.cell?.width && coreDims.css.cell.height) {
-    return { width: coreDims.css.cell.width, height: coreDims.css.cell.height };
-  }
-  return null;
+  const core = t._core;
+  return (
+    toCellMetrics(readDimensions(() => core?._renderService?.dimensions)) ??
+    toCellMetrics(readDimensions(() => core?.renderService?.dimensions))
+  );
 }
 
 /**

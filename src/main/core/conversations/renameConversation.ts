@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
+import { conversationRenamedChannel } from '@shared/events/conversationEvents';
 import { db } from '@main/db/client';
 import { conversations } from '@main/db/schema';
+import { events } from '@main/lib/events';
 import { conversationEvents } from './conversation-events';
 
 export async function renameConversation(conversationId: string, name: string) {
@@ -20,5 +22,11 @@ export async function renameConversation(conversationId: string, name: string) {
       existing.taskId,
       name
     );
+    events.emit(conversationRenamedChannel, {
+      conversationId,
+      projectId: existing.projectId,
+      taskId: existing.taskId,
+      title: name,
+    });
   }
 }

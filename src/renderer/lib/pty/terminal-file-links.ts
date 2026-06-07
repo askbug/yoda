@@ -1,4 +1,8 @@
 import type { IBufferLine, ILink, ILinkProvider, Terminal } from '@xterm/xterm';
+import {
+  createTerminalLinkHoverHandlers,
+  isTerminalLinkActivation,
+} from './terminal-link-activation';
 import { isTerminalLinkCellInRange, type TerminalLinkCellPosition } from './terminal-link-target';
 
 const MAX_WRAPPED_LINE_LENGTH = 2048;
@@ -191,20 +195,27 @@ class TerminalFileLinkProvider implements ILinkProvider {
     }
 
     const links = getTerminalFileLinkMatches(this.terminal, bufferLineNumber, options).map(
-      (match): ILink => ({
-        range: match.range,
-        text: match.text,
-        decorations: {
-          pointerCursor: true,
-          underline: true,
-        },
-        activate: (event) => {
-          if (!isTerminalFileLinkActivation(event)) return;
-          event.preventDefault();
-          event.stopPropagation();
-          this.getOptions()?.onOpen(match.target);
-        },
-      })
+      (match): ILink => {
+        const hoverHandlers = createTerminalLinkHoverHandlers(this.terminal);
+
+        return {
+          range: match.range,
+          text: match.text,
+          decorations: {
+            pointerCursor: true,
+            underline: true,
+          },
+          activate: (event) => {
+            if (!isTerminalLinkActivation(event)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            this.getOptions()?.onOpen(match.target);
+          },
+          hover: hoverHandlers.hover,
+          leave: hoverHandlers.leave,
+          dispose: hoverHandlers.dispose,
+        };
+      }
     );
 
     callback(links.length > 0 ? links : undefined);
@@ -340,8 +351,4 @@ function mapStringIndexToBufferCell(
   }
 
   return [lineIndex, start];
-}
-
-function isTerminalFileLinkActivation(event: MouseEvent): boolean {
-  return event.button === 0;
 }

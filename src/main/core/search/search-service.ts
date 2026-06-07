@@ -3,7 +3,7 @@ import type { Project } from '@shared/projects';
 import type { CommandPaletteQuery, SearchItem, SearchItemKind } from '@shared/search';
 import type { Task } from '@shared/tasks';
 import { db, sqlite } from '@main/db/client';
-import { conversations, projects, tasks } from '@main/db/schema';
+import { projects, tasks } from '@main/db/schema';
 import { log } from '@main/lib/logger';
 import { conversationEvents } from '../conversations/conversation-events';
 import { projectEvents } from '../projects/project-events';
@@ -49,6 +49,9 @@ class SearchService {
     conversationEvents.on('conversation:renamed', (conversationId, projectId, taskId, newTitle) => {
       this.upsertConversationById(conversationId, projectId, taskId, newTitle);
     });
+    conversationEvents.on('conversation:archived', (conversationId) =>
+      this.removeByType('conversation', conversationId)
+    );
     conversationEvents.on('conversation:deleted', (conversationId) =>
       this.removeByType('conversation', conversationId)
     );
@@ -143,7 +146,7 @@ class SearchService {
         .prepare(
           `SELECT c.id, c.title, c.project_id, c.task_id
            FROM conversations c
-           WHERE c.task_id = ?
+           WHERE c.task_id = ? AND c.archived_at IS NULL
            ORDER BY c.last_interacted_at DESC
            LIMIT 10`
         )
@@ -221,6 +224,22 @@ class SearchService {
     title: string
   ): void {
     try {
+      const active = sqlite
+        .prepare(
+          `SELECT 1
+           FROM conversations c
+           INNER JOIN tasks t ON c.task_id = t.id
+           WHERE c.id = ?
+             AND c.archived_at IS NULL
+             AND t.archived_at IS NULL
+           LIMIT 1`
+        )
+        .get(conversationId);
+      if (!active) {
+        this.removeByType('conversation', conversationId);
+        return;
+      }
+
       sqlite
         .prepare(
           `INSERT OR REPLACE INTO search_index(item_type, item_id, project_id, task_id, title, keywords)
@@ -255,7 +274,14 @@ class SearchService {
 
       const allTasks = db.select().from(tasks).all();
       const allProjects = db.select().from(projects).all();
-      const allConversations = db.select().from(conversations).all();
+      const allConversations = sqlite
+        .prepare(
+          `SELECT c.id, c.project_id, c.task_id, c.title
+           FROM conversations c
+           INNER JOIN tasks t ON c.task_id = t.id
+           WHERE c.archived_at IS NULL AND t.archived_at IS NULL`
+        )
+        .all() as RecentConversationRow[];
 
       const upsertStmt = sqlite.prepare(
         `INSERT OR REPLACE INTO search_index(item_type, item_id, project_id, task_id, title, keywords)
@@ -272,7 +298,7 @@ class SearchService {
           upsertStmt.run('project', p.id, null, null, p.name, p.path);
         }
         for (const c of allConversations) {
-          upsertStmt.run('conversation', c.id, c.projectId, c.taskId, c.title, '');
+          upsertStmt.run('conversation', c.id, c.project_id, c.task_id, c.title, '');
         }
       })();
 

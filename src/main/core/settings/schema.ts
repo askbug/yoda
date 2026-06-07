@@ -1,8 +1,15 @@
 import z from 'zod';
+import { AGENT_MODEL_CANDIDATE_SOURCES } from '@shared/agent-model-candidates';
 import { AGENT_PROVIDER_IDS, AGENT_PROVIDERS } from '@shared/agent-provider-registry';
+import { customThemeSelectionSchema, customThemesSettingsSchema } from '@shared/custom-theme';
 import { MAAS_PLATFORM_IDS } from '@shared/maas';
 import { openInAppIdSchema } from '@shared/openInApps';
 import { quickActionSchema } from '@shared/project-settings';
+import {
+  DEFAULT_TASK_NAMING_RECENT_TASK_LIMIT,
+  DEFAULT_TASK_NAMING_TIMEOUT_MS,
+  TASK_NAMING_CONTEXT_SOURCE_IDS,
+} from '@shared/task-naming';
 import {
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
   MAX_TERMINAL_SCROLLBACK_LINES,
@@ -32,6 +39,26 @@ export const notificationSettingsSchema = z.object({
 
 export const taskSettingsSchema = z.object({
   autoGenerateName: z.boolean(),
+  namingModel: z.string(),
+  namingLanguage: z.enum(['app', 'prompt', 'en', 'zh-CN']),
+  namingContext: z.object(
+    Object.fromEntries(TASK_NAMING_CONTEXT_SOURCE_IDS.map((id) => [id, z.boolean()])) as Record<
+      (typeof TASK_NAMING_CONTEXT_SOURCE_IDS)[number],
+      z.ZodBoolean
+    >
+  ),
+  namingRecentTaskLimit: z
+    .number()
+    .int()
+    .min(0)
+    .max(20)
+    .catch(DEFAULT_TASK_NAMING_RECENT_TASK_LIMIT),
+  namingRequestTimeoutMs: z
+    .number()
+    .int()
+    .min(3_000)
+    .max(60_000)
+    .catch(DEFAULT_TASK_NAMING_TIMEOUT_MS),
   autoTrustWorktrees: z.boolean(),
 });
 
@@ -74,6 +101,28 @@ export const maasSettingsSchema = z.object({
   connections: z.array(maasConnectionSchema),
 });
 
+export const agentModelCandidateCacheEntrySchema = z.object({
+  source: z.enum(AGENT_MODEL_CANDIDATE_SOURCES),
+  models: z.array(z.string()),
+  fetchedAt: z.string(),
+  expiresAt: z.string(),
+  error: z.string().optional(),
+});
+
+export const agentModelCandidateProviderSettingsSchema = z.preprocess(
+  (value) => (Array.isArray(value) ? { sources: value, hiddenModels: [] } : value),
+  z.object({
+    sources: z.array(agentModelCandidateCacheEntrySchema).default([]),
+    hiddenModels: z.array(z.string()).default([]),
+  })
+);
+
+export const agentModelCandidatesSettingsSchema = z.object({
+  providers: z
+    .partialRecord(z.enum(AGENT_PROVIDER_IDS), agentModelCandidateProviderSettingsSchema)
+    .default({}),
+});
+
 export const terminalSettingsSchema = z.object({
   fontFamily: z.string().optional(),
   autoCopyOnSelection: z.boolean(),
@@ -85,17 +134,18 @@ export const terminalSettingsSchema = z.object({
     .catch(DEFAULT_TERMINAL_SCROLLBACK_LINES),
 });
 
+const legacyThemeSchema = z.enum(['ylight', 'ydark', 'emlight', 'emdark']).transform((value) => {
+  if (value === 'emlight') return 'ylight' as const;
+  if (value === 'emdark') return 'ydark' as const;
+  return value;
+});
+
 export const themeSchema = z
-  .enum(['ylight', 'ydark', 'emlight', 'emdark'])
+  .union([legacyThemeSchema, customThemeSelectionSchema])
   .nullable()
   .catch(null)
   .optional()
-  .default(null)
-  .transform((value) => {
-    if (value === 'emlight') return 'ylight' as const;
-    if (value === 'emdark') return 'ydark' as const;
-    return value as 'ylight' | 'ydark' | null | undefined;
-  });
+  .default(null);
 
 export const defaultAgentSchema = z.optional(z.enum(AGENT_PROVIDER_IDS)).default(DEFAULT_AGENT_ID);
 
@@ -150,11 +200,19 @@ export const providerCustomConfigEntrySchema = z.object({
   sessionIdOnResumeOnly: z.boolean().optional(),
   extraArgs: z.string().optional(),
   env: z.record(z.string(), z.string()).optional(),
+  namingModel: z.string().optional(),
+  namingCommand: z.string().optional(),
 });
 
 export const providerConfigDefaults = Object.fromEntries(
   AGENT_PROVIDERS.filter(
-    (p) => p.cli || p.resumeFlag || p.autoApproveFlag || p.initialPromptFlag || p.defaultArgs
+    (p) =>
+      p.cli ||
+      p.resumeFlag ||
+      p.autoApproveFlag ||
+      p.initialPromptFlag ||
+      p.defaultArgs ||
+      p.namingCommand
   ).map((p) => [
     p.id,
     {
@@ -166,6 +224,7 @@ export const providerConfigDefaults = Object.fromEntries(
       ...(p.defaultArgs ? { defaultArgs: p.defaultArgs } : {}),
       ...(p.sessionIdFlag ? { sessionIdFlag: p.sessionIdFlag } : {}),
       ...(p.sessionIdOnResumeOnly ? { sessionIdOnResumeOnly: p.sessionIdOnResumeOnly } : {}),
+      ...(p.namingCommand ? { namingCommand: p.namingCommand } : {}),
     },
   ])
 );
@@ -224,6 +283,7 @@ export const APP_SETTINGS_SCHEMA_MAP = {
   agentAutoApproveDefaults: agentAutoApproveDefaultsSchema,
   automations: automationsSettingsSchema,
   maas: maasSettingsSchema,
+  agentModelCandidates: agentModelCandidatesSettingsSchema,
   defaultAgent: defaultAgentSchema,
   reviewPrompt: reviewPromptSchema,
   keyboard: keyboardSettingsSchema,
@@ -232,6 +292,7 @@ export const APP_SETTINGS_SCHEMA_MAP = {
   openIn: openInSettingsSchema,
   interface: interfaceSettingsSchema,
   terminal: terminalSettingsSchema,
+  customThemes: customThemesSettingsSchema,
   browserPreview: browserPreviewSettingsSchema,
   homeDraft: homeDraftSchema,
 } as const;
@@ -243,6 +304,7 @@ export const appSettingsSchema = z.object({
   agentAutoApproveDefaults: agentAutoApproveDefaultsSchema,
   automations: automationsSettingsSchema,
   maas: maasSettingsSchema,
+  agentModelCandidates: agentModelCandidatesSettingsSchema,
   defaultAgent: defaultAgentSchema,
   reviewPrompt: reviewPromptSchema,
   keyboard: keyboardSettingsSchema,
@@ -251,6 +313,7 @@ export const appSettingsSchema = z.object({
   openIn: openInSettingsSchema,
   interface: interfaceSettingsSchema,
   terminal: terminalSettingsSchema,
+  customThemes: customThemesSettingsSchema,
   browserPreview: browserPreviewSettingsSchema,
   homeDraft: homeDraftSchema,
 });

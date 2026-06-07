@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron';
 import { type AgentProviderId } from '@shared/agent-provider-registry';
 import { agentEventChannel, type AgentEvent } from '@shared/events/agentEvents';
 import { makePtyId } from '@shared/ptyId';
+import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { type Pty } from '@main/core/pty/pty';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
@@ -116,6 +117,7 @@ export function wireAgentClassifier({
           },
         };
         const appFocused = isAppFocused();
+        agentSessionRuntimeStore.setFromAgentEvent(event);
         void maybeShowNotification(event, appFocused);
         events.emit(agentEventChannel, { event, appFocused });
       } catch (err) {

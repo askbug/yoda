@@ -5,21 +5,44 @@ import {
   getClaimedCodexThreadId,
   readCodexThreadTitle,
   resolveCodexStatePath,
+  type CodexThreadTitle,
 } from '@main/core/session-title/codex-title-source';
 
 const SQLITE_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 const CODEX_CREATED_AT_MATCH_MAX_DISTANCE_MS = 2 * 60_000;
 
+export type AgentResumeSession = {
+  sessionId: string;
+  sessionTitle?: string;
+};
+
+type ResolvedCodexThread = {
+  id: string;
+  title?: string;
+};
+
+export function resolveAgentResumeSession(
+  conversation: Conversation,
+  cwd?: string
+): AgentResumeSession {
+  if (conversation.providerId !== 'codex') {
+    return { sessionId: conversation.id, sessionTitle: conversation.title };
+  }
+
+  const thread = resolveCodexThreadForConversation({
+    conversationId: conversation.id,
+    cwd,
+    title: conversation.title,
+    createdAt: conversation.createdAt,
+  });
+  return {
+    sessionId: thread?.id ?? conversation.id,
+    sessionTitle: thread?.title ?? conversation.title,
+  };
+}
+
 export function resolveAgentResumeSessionId(conversation: Conversation, cwd?: string): string {
-  if (conversation.providerId !== 'codex') return conversation.id;
-  return (
-    resolveCodexThreadIdForConversation({
-      conversationId: conversation.id,
-      cwd,
-      title: conversation.title,
-      createdAt: conversation.createdAt,
-    }) ?? conversation.id
-  );
+  return resolveAgentResumeSession(conversation, cwd).sessionId;
 }
 
 export function resolveCodexThreadIdForConversation({
@@ -35,10 +58,34 @@ export function resolveCodexThreadIdForConversation({
   createdAt?: string | null;
   statePath?: string;
 }): string | undefined {
-  const claimedThreadId = getClaimedCodexThreadId(conversationId);
-  if (claimedThreadId) return claimedThreadId;
+  return resolveCodexThreadForConversation({
+    conversationId,
+    cwd,
+    title,
+    createdAt,
+    statePath,
+  })?.id;
+}
 
-  if (readCodexThreadTitle(statePath, conversationId)) return conversationId;
+export function resolveCodexThreadForConversation({
+  conversationId,
+  cwd,
+  title,
+  createdAt,
+  statePath = resolveCodexStatePath(),
+}: {
+  conversationId: string;
+  cwd?: string;
+  title?: string;
+  createdAt?: string | null;
+  statePath?: string;
+}): ResolvedCodexThread | undefined {
+  const claimedThreadId = getClaimedCodexThreadId(conversationId);
+  if (claimedThreadId)
+    return toResolvedThread(readCodexThreadTitle(statePath, claimedThreadId), claimedThreadId);
+
+  const direct = readCodexThreadTitle(statePath, conversationId);
+  if (direct) return toResolvedThread(direct, conversationId);
 
   const trimmedCwd = cwd?.trim();
   if (!trimmedCwd) return undefined;
@@ -49,19 +96,30 @@ export function resolveCodexThreadIdForConversation({
       statePath,
       cwd: trimmedCwd,
       title: trimmedTitle,
+      includeArchived: true,
     });
-    if (byTitle) return byTitle.id;
+    if (byTitle) return toResolvedThread(byTitle);
   }
 
   const createdAtMs = parseTimestampMs(createdAt);
   if (createdAtMs === undefined) return undefined;
 
-  return findClosestCodexThreadTitleByCreatedAt({
+  const byCreatedAt = findClosestCodexThreadTitleByCreatedAt({
     statePath,
     cwd: trimmedCwd,
     targetCreatedAtMs: createdAtMs,
     maxDistanceMs: CODEX_CREATED_AT_MATCH_MAX_DISTANCE_MS,
-  })?.id;
+    includeArchived: true,
+  });
+  return toResolvedThread(byCreatedAt);
+}
+
+function toResolvedThread(
+  thread: CodexThreadTitle | undefined,
+  fallbackId?: string
+): ResolvedCodexThread | undefined {
+  if (thread) return { id: thread.id, title: thread.title };
+  return fallbackId ? { id: fallbackId } : undefined;
 }
 
 function parseTimestampMs(value: string | null | undefined): number | undefined {

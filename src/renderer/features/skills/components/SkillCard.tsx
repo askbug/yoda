@@ -1,7 +1,10 @@
 import { motion } from 'framer-motion';
-import { Pencil, Plus } from 'lucide-react';
+import { AlertTriangle, Pencil, Plus, PowerOff } from 'lucide-react';
 import React from 'react';
-import type { CatalogSkill } from '@shared/skills/types';
+import { useTranslation } from 'react-i18next';
+import type { CatalogSkill, SkillValidationIssue } from '@shared/skills/types';
+import { parseFrontmatter } from '@shared/skills/validation';
+import { cn } from '@renderer/utils/utils';
 import SkillIconRenderer from './SkillIconRenderer';
 
 interface SkillCardProps {
@@ -11,6 +14,11 @@ interface SkillCardProps {
 }
 
 const SkillCard: React.FC<SkillCardProps> = ({ skill, onSelect, onInstall }) => {
+  const { t } = useTranslation();
+  const description = React.useMemo(() => getDisplayDescription(skill), [skill]);
+  const primaryIssue = skill.validationIssues?.[0];
+  const hasValidationIssues = Boolean(primaryIssue);
+
   return (
     <motion.div
       role="button"
@@ -24,14 +32,35 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, onSelect, onInstall }) => 
           onSelect(skill);
         }
       }}
-      className="group flex w-full cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/20 p-4 text-left text-card-foreground shadow-sm transition-all hover:bg-muted/40 hover:shadow-md"
+      className={cn(
+        'group flex w-full cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/20 p-4 text-left text-card-foreground shadow-sm transition-all hover:bg-muted/40 hover:shadow-md',
+        hasValidationIssues &&
+          'border-amber-500/40 bg-amber-500/5 hover:border-amber-500/60 hover:bg-amber-500/10'
+      )}
     >
       <SkillIconRenderer skill={skill} />
 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <h3 className="truncate text-sm font-semibold">{skill.displayName}</h3>
-        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{skill.description}</p>
+        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground" title={description}>
+          {description}
+        </p>
+        {skill.disabled && (
+          <p className="mt-1 flex min-w-0 items-center gap-1 text-[11px] leading-tight text-muted-foreground">
+            <PowerOff className="h-3 w-3 shrink-0" />
+            <span className="truncate">{t('skills.disabled')}</span>
+          </p>
+        )}
+        {primaryIssue && (
+          <p
+            className="mt-1 flex min-w-0 items-center gap-1 text-[11px] leading-tight text-amber-600 dark:text-amber-400"
+            title={formatValidationIssueTitle(primaryIssue)}
+          >
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            <span className="truncate">{formatValidationIssueSummary(primaryIssue)}</span>
+          </p>
+        )}
       </div>
 
       {/* Action */}
@@ -55,5 +84,29 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, onSelect, onInstall }) => 
     </motion.div>
   );
 };
+
+function getDisplayDescription(skill: CatalogSkill): string {
+  if (skill.skillMdContent) {
+    const parsedDescription = parseFrontmatter(skill.skillMdContent).frontmatter.description;
+    if (parsedDescription && !isYamlBlockMarker(parsedDescription)) return parsedDescription;
+  }
+
+  const description = skill.description || skill.frontmatter.description || '';
+  return isYamlBlockMarker(description) ? '' : description;
+}
+
+function isYamlBlockMarker(value: string): boolean {
+  return /^[>|][+-]?$/.test(value.trim());
+}
+
+function formatValidationIssueSummary(issue: SkillValidationIssue): string {
+  return `Codex: ${issue.message}`;
+}
+
+function formatValidationIssueTitle(issue: SkillValidationIssue): string {
+  return issue.path
+    ? `Codex: ${issue.path}: ${issue.message}`
+    : formatValidationIssueSummary(issue);
+}
 
 export default SkillCard;

@@ -43,6 +43,16 @@ export const skillsController = createRPCController({
     }
   },
 
+  setDisabled: async (args: { skillId: string; disabled: boolean }) => {
+    try {
+      const skill = await skillsService.setSkillDisabled(args.skillId, args.disabled);
+      return { success: true, data: skill };
+    } catch (error) {
+      log.error('Failed to update skill disabled state:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+
   getDetail: async (args: { skillId: string }) => {
     try {
       const skill = await skillsService.getSkillDetail(args.skillId);

@@ -48,7 +48,7 @@ export function StickyDiffEditor({
   const onEditorChangeRef = useRef(onEditorChange);
   onEditorChangeRef.current = onEditorChange;
 
-  const { effectiveTheme } = useTheme();
+  const { effectiveTheme, themeFingerprint } = useTheme();
 
   // Create editor once on mount, dispose on unmount.
   // Monaco is guaranteed ready because bootstrap awaited diffEditorPool.init().
@@ -102,7 +102,7 @@ export function StickyDiffEditor({
   // Sync global Monaco theme (affects all editor instances simultaneously).
   useEffect(() => {
     diffEditorPool.setTheme(effectiveTheme);
-  }, [effectiveTheme]);
+  }, [effectiveTheme, themeFingerprint]);
 
   // Reactive content application — recreated when URIs change.
   // The autorun waits for both models to be 'ready' in the registry, then calls

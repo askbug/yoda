@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { useIssueSearch } from '@renderer/features/tasks/components/issue-selector/useIssueSearch';
 import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
 import { ListPopoverCard } from '@renderer/lib/components/list-popover-card';
 import { useParams } from '@renderer/lib/layout/navigation-provider';
@@ -16,15 +17,18 @@ import { Toggle } from '@renderer/lib/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { cn } from '@renderer/utils/utils';
+import type { TaskIssueLinkingState } from '../issues-view/task-issue-links';
 import { TaskRow, type ReadyTask } from './task-row';
 
 function TaskVirtualList({
   tasks,
   selectedIds,
+  issueLinking,
   onToggleSelect,
 }: {
   tasks: ReadyTask[];
   selectedIds: Set<string>;
+  issueLinking: TaskIssueLinkingState;
   onToggleSelect: (id: string) => void;
 }) {
   const { t } = useTranslation();
@@ -34,7 +38,7 @@ function TaskVirtualList({
   const virtualizer = useVirtualizer({
     count: tasks.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 60,
+    estimateSize: () => 76,
     overscan: 5,
     measureElement: (el) => el.getBoundingClientRect().height,
   });
@@ -76,6 +80,7 @@ function TaskVirtualList({
               <TaskRow
                 task={task}
                 isSelected={selectedIds.has(task.data.id)}
+                issueLinking={issueLinking}
                 onToggleSelect={() => onToggleSelect(task.data.id)}
               />
             </div>
@@ -150,6 +155,15 @@ export const TaskList = observer(function TaskList() {
   const showCreateTaskModal = useShowModal('taskModal');
 
   const taskView = store?.view.taskView ?? null;
+  const repositoryUrl = store?.repository.repositoryUrl ?? '';
+  const projectPath = store?.data.path ?? '';
+  const issueSearch = useIssueSearch(repositoryUrl, projectPath, projectId);
+  const issueLinking: TaskIssueLinkingState = {
+    issues: issueSearch.issues,
+    isLoading: issueSearch.isProviderLoading,
+    hasAnyIntegration: issueSearch.hasAnyIntegration,
+    onSearchTermChange: issueSearch.handleSetSearchTerm,
+  };
   const showCommandPalette = useShowModal('commandPaletteModal');
 
   const allTasks = taskManager
@@ -266,6 +280,7 @@ export const TaskList = observer(function TaskList() {
       <TaskVirtualList
         tasks={filteredTasks}
         selectedIds={taskView.selectedIds}
+        issueLinking={issueLinking}
         onToggleSelect={(id) => taskView.toggleSelect(id)}
       />
 

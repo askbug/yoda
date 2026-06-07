@@ -30,7 +30,7 @@ describe('i18n locales', () => {
     await i18n.changeLanguage('zh-CN');
 
     expect(i18n.resolvedLanguage).toBe('zh-CN');
-    expect(i18n.t('sidebar.newSession')).toBe(zhCN.sidebar.newSession);
+    expect(i18n.t('sidebar.newTask')).toBe(zhCN.sidebar.newTask);
 
     await i18n.changeLanguage('en');
   });

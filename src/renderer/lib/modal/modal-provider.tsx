@@ -1,7 +1,7 @@
 import { runInAction } from 'mobx';
-import { useObserver } from 'mobx-react-lite';
 import { useCallback, type ReactNode } from 'react';
 import { type modalRegistry } from '@renderer/app/modal-registry';
+import { useMobxValue } from '@renderer/lib/hooks/use-mobx-value';
 import { modalStore } from './modal-store';
 
 export interface BaseModalProps<TResult = unknown> {
@@ -58,7 +58,7 @@ export function useModalContext() {
     });
   }, []);
 
-  const hasActiveCloseGuard = useObserver(() => modalStore.closeGuardActive);
+  const hasActiveCloseGuard = useMobxValue(() => modalStore.closeGuardActive);
 
   return { closeModal, showModal, transitionModal, hasActiveCloseGuard, setCloseGuard };
 }

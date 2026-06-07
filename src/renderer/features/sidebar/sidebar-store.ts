@@ -560,5 +560,4 @@ export class SidebarStore implements Snapshottable<SidebarSnapshot> {
     if (!project.mountedProject) return true;
     return Array.from(project.mountedProject.taskManager.tasks.values()).some(isActiveSidebarTask);
   }
-
 }

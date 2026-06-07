@@ -112,7 +112,44 @@ export function useSkills() {
     [uninstallMutation]
   );
 
-  const { data: detailData } = useQuery({
+  const setDisabledMutation = useMutation({
+    mutationFn: async ({ skillId, disabled }: { skillId: string; disabled: boolean }) => {
+      const result = await rpc.skills.setDisabled({ skillId, disabled });
+      if (!result.success) throw new Error(result.error ?? 'Could not update skill');
+      return { skillId, disabled };
+    },
+    onError: (error, variables) => {
+      toast({
+        title: variables.disabled ? 'Disable failed' : 'Enable failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+    onSuccess: ({ skillId, disabled }) => {
+      captureTelemetry(disabled ? 'skill_disabled' : 'skill_enabled');
+      toast({
+        title: disabled ? 'Skill disabled' : 'Skill enabled',
+        description: disabled
+          ? `${skillId} is no longer available to agents`
+          : `${skillId} is available to agents again`,
+      });
+      void queryClient.invalidateQueries({ queryKey: ['skills'] });
+    },
+  });
+
+  const setDisabled = useCallback(
+    async (skillId: string, disabled: boolean): Promise<boolean> => {
+      try {
+        await setDisabledMutation.mutateAsync({ skillId, disabled });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [setDisabledMutation]
+  );
+
+  const { data: detailData, isFetching: isDetailLoading } = useQuery({
     queryKey: ['skills', 'detail', selectedSkillId],
     queryFn: async () => {
       const result = await rpc.skills.getDetail({ skillId: selectedSkillId! });
@@ -166,6 +203,7 @@ export function useSkills() {
     searchQuery,
     setSearchQuery,
     selectedSkill,
+    isDetailLoading,
     showDetailModal,
     filteredSkills,
     installedSkills,
@@ -173,6 +211,7 @@ export function useSkills() {
     refresh,
     install,
     uninstall,
+    setDisabled,
     openDetail,
     closeDetail,
   };

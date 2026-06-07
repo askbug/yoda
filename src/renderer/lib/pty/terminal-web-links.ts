@@ -1,9 +1,21 @@
 import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm';
 import { getWindowedLineStrings, mapStringRangeToViewportRange } from './terminal-file-links';
+import {
+  createTerminalLinkHoverHandlers,
+  isTerminalLinkActivation,
+} from './terminal-link-activation';
 import { isTerminalLinkCellInRange, type TerminalLinkCellPosition } from './terminal-link-target';
 
-// Mirrors @xterm/addon-web-links' URL regex (RFC-style).
-const URL_REGEX = /(?:https?|HTTPS?|ftp|FTP|file|FILE):\/\/[^\s"'<>`]+[^\s"'<>`.,;:!?)\]}]/g;
+// Mirrors @xterm/addon-web-links' URL regex (RFC-style), with CJK punctuation
+// treated as hard delimiters because Chinese/Japanese prose often has no
+// whitespace after punctuation.
+const URL_REGEX =
+  /(?:https?|HTTPS?|ftp|FTP|file|FILE):\/\/[^\s"'<>`、，。；：！？（）「」『』【】〈〉《》“”‘’]+[^\s"'<>`、，。；：！？（）「」『』【】〈〉《》“”‘’.,;:!?)\]}]/g;
+
+interface TerminalWebLinkCandidate {
+  url: string;
+  index: number;
+}
 
 export interface TerminalWebLinkOptions {
   onOpen: (url: string) => void;
@@ -12,6 +24,22 @@ export interface TerminalWebLinkOptions {
 export interface TerminalWebLinkMatch {
   range: ILink['range'];
   url: string;
+}
+
+export function extractTerminalWebLinkCandidates(line: string): TerminalWebLinkCandidate[] {
+  const candidates: TerminalWebLinkCandidate[] = [];
+
+  URL_REGEX.lastIndex = 0;
+  for (const match of line.matchAll(URL_REGEX)) {
+    const url = match[0];
+    if (!url) continue;
+    candidates.push({
+      url,
+      index: match.index ?? 0,
+    });
+  }
+
+  return candidates;
 }
 
 export function getTerminalWebLinkMatches(
@@ -23,19 +51,16 @@ export function getTerminalWebLinkMatches(
   if (!line) return [];
 
   const matches: TerminalWebLinkMatch[] = [];
-  URL_REGEX.lastIndex = 0;
-  for (const match of line.matchAll(URL_REGEX)) {
-    const url = match[0];
-    if (!url) continue;
+  for (const candidate of extractTerminalWebLinkCandidates(line)) {
     const range = mapStringRangeToViewportRange(
       terminal,
       startLineIndex,
-      match.index ?? 0,
-      url.length
+      candidate.index,
+      candidate.url.length
     );
     if (!range) continue;
 
-    matches.push({ range, url });
+    matches.push({ range, url: candidate.url });
   }
 
   return matches;
@@ -73,8 +98,10 @@ class TerminalWebLinkProvider implements ILinkProvider {
       return;
     }
 
-    const links = getTerminalWebLinkMatches(this.terminal, bufferLineNumber).map(
-      (match): ILink => ({
+    const links = getTerminalWebLinkMatches(this.terminal, bufferLineNumber).map((match): ILink => {
+      const hoverHandlers = createTerminalLinkHoverHandlers(this.terminal);
+
+      return {
         range: match.range,
         text: match.url,
         decorations: {
@@ -82,13 +109,16 @@ class TerminalWebLinkProvider implements ILinkProvider {
           underline: true,
         },
         activate: (event) => {
-          if (event.button !== 0) return;
+          if (!isTerminalLinkActivation(event)) return;
           event.preventDefault();
           event.stopPropagation();
           this.getOptions()?.onOpen(match.url);
         },
-      })
-    );
+        hover: hoverHandlers.hover,
+        leave: hoverHandlers.leave,
+        dispose: hoverHandlers.dispose,
+      };
+    });
 
     callback(links.length > 0 ? links : undefined);
   }

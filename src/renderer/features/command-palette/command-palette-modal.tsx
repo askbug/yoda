@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
 import { FolderOpen, GitBranch, Loader2, MessageSquare, MessagesSquare, Zap } from 'lucide-react';
-import { useObserver } from 'mobx-react-lite';
 import React, { useDeferredValue, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SearchItem } from '@shared/search';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { getTaskStore, getTaskView } from '@renderer/features/tasks/stores/task-selectors';
 import { commandRegistry } from '@renderer/lib/commands/registry';
+import { useMobxValue } from '@renderer/lib/hooks/use-mobx-value';
 import { APP_SHORTCUTS } from '@renderer/lib/hooks/useKeyboardShortcuts';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
@@ -115,7 +115,7 @@ export function CommandPaletteModal({
     enabled: !inSessionsScope || searchText.length === 0,
   });
 
-  const actions = useObserver((): PaletteAction[] =>
+  const actions = useMobxValue((): PaletteAction[] =>
     commandRegistry.activeCommands
       .filter((cmd) => cmd.enabled !== false)
       .map((cmd) => ({

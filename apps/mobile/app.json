@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Yoda Mobile",
+    "slug": "yoda-mobile",
+    "scheme": "yodamobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "ai.lovstudio.yoda.mobile",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Yoda Mobile connects to the Yoda desktop app on your local network.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "ai.lovstudio.yoda.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#F7F7F2"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a2a704fb-220c-452d-a752-44739fe0c58e"
+      }
+    },
+    "owner": "markshawn2020"
+  }
+}

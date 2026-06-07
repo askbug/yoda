@@ -19,6 +19,8 @@ import { appSettingsService } from '../settings/settings-service';
 
 const SECRET_PREFIX = 'yoda-maas-token';
 const REAL_RECORDS_CACHE_TTL_MS = 30_000;
+const ZENMUX_MODEL_CATALOG_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const ZENMUX_MODEL_CATALOG_TIMEOUT_MS = 10_000;
 const ZENMUX_USAGE_LOOKBACK_DAYS = 60;
 const ZENMUX_MAX_MODELS_PER_BUCKET = 50;
 
@@ -43,6 +45,24 @@ type ZenmuxTimeseriesResponse = {
     ending_at?: string;
     series?: ZenmuxTimeseriesBucket[];
   };
+  error?: string | { message?: string };
+  message?: string;
+};
+
+type ZenmuxCatalogModel = {
+  id?: string;
+  object?: string;
+  input_modalities?: string[];
+  output_modalities?: string[];
+};
+
+type ZenmuxModelsResponse = {
+  data?: ZenmuxCatalogModel[];
+  error?: string | { message?: string };
+  message?: string;
+};
+
+type ZenmuxErrorBody = {
   error?: string | { message?: string };
   message?: string;
 };
@@ -148,7 +168,7 @@ function zenmuxManagementUrl(endpoint: string, path: string): URL {
   return new URL(`${managementBase}/${path.replace(/^\/+/, '')}`);
 }
 
-function getErrorMessage(body: ZenmuxTimeseriesResponse | null, fallback: string): string {
+function getErrorMessage(body: ZenmuxErrorBody | null, fallback: string): string {
   if (!body) return fallback;
   if (typeof body.error === 'string' && body.error.trim()) return body.error;
   if (typeof body.error === 'object' && body.error.message?.trim()) return body.error.message;
@@ -253,6 +273,9 @@ function buildZenmuxUsageRecords(
 
 export class MaasService {
   private readonly recordsCacheByConnection = new Map<string, TTLCache<RealRecordsResult>>();
+  private readonly zenmuxModelCatalogCache = new TTLCache<string[]>(
+    ZENMUX_MODEL_CATALOG_CACHE_TTL_MS
+  );
 
   async listConnections(): Promise<MaasConnection[]> {
     const settings = await appSettingsService.get('maas');
@@ -389,6 +412,27 @@ export class MaasService {
     };
   }
 
+  async listTextModelCandidates(forceRefresh = false): Promise<string[]> {
+    const settings = await appSettingsService.get('maas');
+    if (!getConnectedPlatform(settings, 'zenmux')) return [];
+
+    const result = await this.listRealRecords(settings, 'zenmux', forceRefresh);
+    const models = new Set<string>();
+    for (const record of result.records) {
+      const model = record.model?.trim();
+      if (record.kind === 'text' && model) models.add(model);
+    }
+    return [...models];
+  }
+
+  async listZenmuxCatalogTextModelCandidates(forceRefresh = false): Promise<string[]> {
+    if (forceRefresh) {
+      this.zenmuxModelCatalogCache.invalidate();
+    }
+
+    return this.zenmuxModelCatalogCache.get(() => this.fetchZenmuxCatalogTextModels());
+  }
+
   private async listRealRecords(
     settings: MaasSettings,
     platformId: MaasPlatformId,
@@ -502,6 +546,59 @@ export class MaasService {
 
     return body;
   }
+
+  private async fetchZenmuxCatalogTextModels(): Promise<string[]> {
+    const base = `${MAAS_PLATFORMS.zenmux.defaultEndpoint.replace(/\/+$/, '')}/`;
+    const url = new URL('models', base);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ZENMUX_MODEL_CATALOG_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      let body: ZenmuxModelsResponse | null = null;
+      try {
+        body = (await response.json()) as ZenmuxModelsResponse;
+      } catch {
+        body = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `ZenMux model catalog returned ${response.status}: ${getErrorMessage(
+            body,
+            response.statusText || 'Request failed.'
+          )}`
+        );
+      }
+
+      if (!Array.isArray(body?.data)) {
+        throw new Error('ZenMux model catalog did not return a model list.');
+      }
+
+      const models = new Set<string>();
+      for (const model of body.data) {
+        const id = model.id?.trim();
+        if (!id) continue;
+        if (model.object && model.object !== 'model') continue;
+        if (!isTextCatalogModel(model)) continue;
+        models.add(id);
+      }
+
+      return [...models];
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }
 
 export const maasService = new MaasService();
+
+function isTextCatalogModel(model: ZenmuxCatalogModel): boolean {
+  const outputModalities = model.output_modalities ?? [];
+  if (outputModalities.length > 0 && !outputModalities.includes('text')) return false;
+
+  const inputModalities = model.input_modalities ?? [];
+  if (inputModalities.length > 0 && !inputModalities.includes('text')) return false;
+
+  return inferInvocationKind(model.id ?? '') === 'text';
+}

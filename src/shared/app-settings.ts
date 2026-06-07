@@ -2,6 +2,7 @@ import type z from 'zod';
 import {
   appSettingsSchema,
   type agentAutoApproveDefaultsSchema,
+  type agentModelCandidatesSettingsSchema,
   type automationEntrySchema,
   type automationsSettingsSchema,
   type homeDraftSchema,
@@ -13,8 +14,8 @@ import {
   type providerCustomConfigEntrySchema,
   type taskSettingsSchema,
   type terminalSettingsSchema,
-  type themeSchema,
 } from '@main/core/settings/schema';
+import type { CustomTheme, CustomThemesSettings, ThemeSelection } from './custom-theme';
 
 export type LocalProjectSettings = z.infer<typeof localProjectSettingsSchema>;
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
@@ -24,8 +25,10 @@ export type AgentAutoApproveDefaults = z.infer<typeof agentAutoApproveDefaultsSc
 export type AutomationEntry = z.infer<typeof automationEntrySchema>;
 export type AutomationsSettings = z.infer<typeof automationsSettingsSchema>;
 export type MaasSettings = z.infer<typeof maasSettingsSchema>;
+export type AgentModelCandidatesSettings = z.infer<typeof agentModelCandidatesSettingsSchema>;
 export type TerminalSettings = z.infer<typeof terminalSettingsSchema>;
-export type Theme = z.infer<typeof themeSchema>;
+export type Theme = ThemeSelection;
+export type { CustomTheme, CustomThemesSettings };
 
 export type InterfaceSettings = z.infer<typeof interfaceSettingsSchema>;
 export type HomeDraft = z.infer<typeof homeDraftSchema>;

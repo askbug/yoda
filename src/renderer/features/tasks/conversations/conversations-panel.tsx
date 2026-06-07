@@ -4,9 +4,11 @@ import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { AgentStatusIndicator } from '@renderer/features/tasks/components/agent-status-indicator';
 import { useIsActiveTask } from '@renderer/features/tasks/hooks/use-is-active-task';
 import { getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import AgentLogo from '@renderer/lib/components/agent-logo';
 import { rpc } from '@renderer/lib/ipc';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { PaneSizingProvider } from '@renderer/lib/pty/pane-sizing-context';
@@ -22,7 +24,10 @@ import { TerminalSearchOverlay } from '@renderer/lib/pty/terminal-search-overlay
 import { useTerminalSearch } from '@renderer/lib/pty/use-terminal-search';
 import { Button } from '@renderer/lib/ui/button';
 import { EmptyState } from '@renderer/lib/ui/empty-state';
+import { RelativeTime } from '@renderer/lib/ui/relative-time';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
+import { agentConfig } from '@renderer/utils/agentConfig';
+import { cn } from '@renderer/utils/utils';
 import type { ConversationStore } from './conversation-manager';
 
 function getResumeInitialSize(
@@ -77,6 +82,11 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
   const activeSession = activeConversation?.session ?? null;
   const activeSessionId = activeSession?.sessionId ?? null;
   const hasConversationTabs = tm.resolvedTabs.some((t) => t.kind === 'conversation');
+  const conversationStores = Array.from(conversations.conversations.values()).sort((a, b) => {
+    const aTime = a.data.lastInteractedAt ? Date.parse(a.data.lastInteractedAt) : 0;
+    const bTime = b.data.lastInteractedAt ? Date.parse(b.data.lastInteractedAt) : 0;
+    return bTime - aTime;
+  });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalContainerRef = useRef<HTMLDivElement>(null);
@@ -201,22 +211,35 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
         >
           <PaneSizingProvider paneId="conversations" sessionIds={allSessionIds}>
             {!hasConversationTabs ? (
-              <EmptyState
-                icon={<MessageSquare className="h-5 w-5 text-muted-foreground" />}
-                label={t('tasks.conversations.emptyTitle')}
-                description={t('tasks.conversations.emptyDescription')}
-                action={
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCreate}
-                    className="flex items-center gap-2"
-                  >
-                    {t('tasks.conversations.createConversation')}
-                    <ShortcutHint settingsKey="newConversation" />
-                  </Button>
-                }
-              />
+              conversationStores.length > 0 ? (
+                <ConversationSessionList
+                  conversations={conversationStores}
+                  title={t('tasks.conversations.sessions')}
+                  createLabel={t('tasks.conversations.createConversation')}
+                  createAction={handleCreate}
+                  onOpen={(conversationId) => {
+                    tm.openConversation(conversationId);
+                    provisioned.taskView.setFocusedRegion('main');
+                  }}
+                />
+              ) : (
+                <EmptyState
+                  icon={<MessageSquare className="h-5 w-5 text-muted-foreground" />}
+                  label={t('tasks.conversations.emptyTitle')}
+                  description={t('tasks.conversations.emptyDescription')}
+                  action={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCreate}
+                      className="flex items-center gap-2"
+                    >
+                      {t('tasks.conversations.createConversation')}
+                      <ShortcutHint settingsKey="newConversation" />
+                    </Button>
+                  }
+                />
+              )
             ) : (
               <div className="flex min-h-0 flex-1 flex-col">
                 {activeSessionId && activeSession?.status === 'ready' && activeSession.pty ? (
@@ -251,5 +274,93 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
         </div>
       </div>
     </div>
+  );
+});
+
+const ConversationSessionList = observer(function ConversationSessionList({
+  conversations,
+  title,
+  createLabel,
+  createAction,
+  onOpen,
+}: {
+  conversations: ConversationStore[];
+  title: string;
+  createLabel: string;
+  createAction: () => void;
+  onOpen: (conversationId: string) => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-medium text-foreground">{title}</span>
+          <span className="shrink-0 text-xs tabular-nums text-foreground-passive">
+            {conversations.length}
+          </span>
+        </div>
+        <Button size="sm" variant="outline" onClick={createAction} className="flex gap-2">
+          {createLabel}
+          <ShortcutHint settingsKey="newConversation" />
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-1">
+          {conversations.map((conversation) => (
+            <ConversationSessionListItem
+              key={conversation.data.id}
+              conversation={conversation}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const ConversationSessionListItem = observer(function ConversationSessionListItem({
+  conversation,
+  onOpen,
+}: {
+  conversation: ConversationStore;
+  onOpen: (conversationId: string) => void;
+}) {
+  const providerId = conversation.data.providerId;
+  const config = agentConfig[providerId];
+  const title = conversation.data.title.trim() || conversation.data.id;
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        'group flex h-9 w-full items-center gap-2 rounded-md border border-transparent px-2 text-left outline-none transition-colors',
+        'hover:border-border hover:bg-background-1 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring'
+      )}
+      onClick={() => onOpen(conversation.data.id)}
+      title={title}
+    >
+      <span className="flex size-6 shrink-0 items-center justify-center rounded bg-background-2">
+        {config ? (
+          <AgentLogo
+            logo={config.logo}
+            alt={config.alt}
+            isSvg={config.isSvg}
+            invertInDark={config.invertInDark}
+            className="size-4"
+          />
+        ) : (
+          <MessageSquare className="size-4 text-foreground-passive" />
+        )}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{title}</span>
+      <span className="flex shrink-0 items-center text-xs text-foreground-passive">
+        {conversation.indicatorStatus ? (
+          <AgentStatusIndicator status={conversation.indicatorStatus} />
+        ) : (
+          <RelativeTime value={conversation.data.lastInteractedAt ?? ''} compact />
+        )}
+      </span>
+    </button>
   );
 });

@@ -5,9 +5,9 @@ import type { Issue } from '@shared/tasks';
 import { useIssues } from '@renderer/features/integrations/use-issues';
 import { CreateIssueButton } from '@renderer/features/projects/components/issues-view/create-issue-button';
 import {
-  IssueLinkedSessions,
-  IssueSessionLinkPopover,
-} from '@renderer/features/projects/components/issues-view/issue-session-links';
+  IssueLinkedTasks,
+  IssueTaskLinkPopover,
+} from '@renderer/features/projects/components/issues-view/issue-task-links';
 import { getRepositoryStore } from '@renderer/features/projects/stores/project-selectors';
 import {
   IssueIdentifier,
@@ -92,8 +92,8 @@ const ProjectIssueRow = observer(function ProjectIssueRow({
           ) : null}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <IssueLinkedSessions issue={issue} projectId={projectId} />
-          <IssueSessionLinkPopover issue={issue} projectId={projectId} />
+          <IssueLinkedTasks issue={issue} projectId={projectId} />
+          <IssueTaskLinkPopover issue={issue} projectId={projectId} />
         </div>
       </div>
       <div className="pointer-events-none absolute right-3 top-0 flex h-full items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">

@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { log } from '@main/lib/logger';
+import { summarizeTitle } from './llm-summarizer';
 import type {
   SessionTitleContext,
   SessionTitleSource,
@@ -14,6 +15,7 @@ export type CodexThreadTitle = {
   id: string;
   cwd: string;
   title: string;
+  firstUserMessage: string;
   createdAtMs: number;
   updatedAtMs: number;
 };
@@ -62,6 +64,7 @@ export function findNewCodexThreadTitle(params: {
             id,
             cwd,
             title,
+            first_user_message AS firstUserMessage,
             COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
             COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
           FROM threads
@@ -97,6 +100,7 @@ export function findRecentCodexThreadTitle(params: {
             id,
             cwd,
             title,
+            first_user_message AS firstUserMessage,
             COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
             COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
           FROM threads
@@ -116,6 +120,7 @@ export function findCodexThreadTitleByTitle(params: {
   statePath: string;
   cwd: string;
   title: string;
+  includeArchived?: boolean;
 }): CodexThreadTitle | undefined {
   return withCodexState(params.statePath, (db) => {
     const row = db
@@ -125,11 +130,12 @@ export function findCodexThreadTitleByTitle(params: {
             id,
             cwd,
             title,
+            first_user_message AS firstUserMessage,
             COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
             COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
           FROM threads
           WHERE cwd = ?
-            AND archived = 0
+            AND (? = 1 OR archived = 0)
             AND (
               title = ?
               OR first_user_message = ?
@@ -139,7 +145,7 @@ export function findCodexThreadTitleByTitle(params: {
           LIMIT 1
         `
       )
-      .get(params.cwd, params.title, params.title, params.title);
+      .get(params.cwd, params.includeArchived ? 1 : 0, params.title, params.title, params.title);
     return parseCodexThreadTitle(row);
   });
 }
@@ -149,6 +155,7 @@ export function findClosestCodexThreadTitleByCreatedAt(params: {
   cwd: string;
   targetCreatedAtMs: number;
   maxDistanceMs: number;
+  includeArchived?: boolean;
 }): CodexThreadTitle | undefined {
   const minCreatedAtMs = params.targetCreatedAtMs - params.maxDistanceMs;
   const maxCreatedAtMs = params.targetCreatedAtMs + params.maxDistanceMs;
@@ -160,11 +167,12 @@ export function findClosestCodexThreadTitleByCreatedAt(params: {
             id,
             cwd,
             title,
+            first_user_message AS firstUserMessage,
             COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
             COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
           FROM threads
           WHERE cwd = ?
-            AND archived = 0
+            AND (? = 1 OR archived = 0)
             AND COALESCE(created_at_ms, created_at * 1000) >= ?
             AND COALESCE(created_at_ms, created_at * 1000) <= ?
           ORDER BY ABS(COALESCE(created_at_ms, created_at * 1000) - ?) ASC,
@@ -173,7 +181,13 @@ export function findClosestCodexThreadTitleByCreatedAt(params: {
           LIMIT 1
         `
       )
-      .get(params.cwd, minCreatedAtMs, maxCreatedAtMs, params.targetCreatedAtMs);
+      .get(
+        params.cwd,
+        params.includeArchived ? 1 : 0,
+        minCreatedAtMs,
+        maxCreatedAtMs,
+        params.targetCreatedAtMs
+      );
     return parseCodexThreadTitle(row);
   });
 }
@@ -190,6 +204,7 @@ export function readCodexThreadTitle(
             id,
             cwd,
             title,
+            first_user_message AS firstUserMessage,
             COALESCE(created_at_ms, created_at * 1000) AS createdAtMs,
             COALESCE(updated_at_ms, updated_at * 1000) AS updatedAtMs
           FROM threads
@@ -233,6 +248,8 @@ type CodexThreadTitlePollerOptions = {
   isResuming: boolean;
   onTitle: TitleListener;
 };
+
+const summarizedThreadIds = new Set<string>();
 
 class CodexThreadTitlePoller implements SessionTitleWatcher {
   private timer: NodeJS.Timeout | undefined;
@@ -282,7 +299,7 @@ class CodexThreadTitlePoller implements SessionTitleWatcher {
             });
 
       if (row && this.tryBindThread(row)) {
-        this.emitIfChanged(row.title);
+        this.handleRow(row);
       }
     } catch (error) {
       log.warn('CodexSessionTitleSource: poll failed', {
@@ -296,6 +313,41 @@ class CodexThreadTitlePoller implements SessionTitleWatcher {
     }
   }
 
+  private handleRow(row: CodexThreadTitle): void {
+    const isUnrenamed = row.firstUserMessage.length > 0 && row.title === row.firstUserMessage;
+    if (isUnrenamed) {
+      this.maybeSummarize(row);
+      return;
+    }
+    this.emitIfChanged(row.title);
+  }
+
+  private maybeSummarize(row: CodexThreadTitle): void {
+    if (summarizedThreadIds.has(row.id)) {
+      this.stop();
+      return;
+    }
+    summarizedThreadIds.add(row.id);
+    void summarizeTitle(row.firstUserMessage)
+      .then((title) => {
+        if (this.stopped) return;
+        if (!title) {
+          this.stop();
+          return;
+        }
+        this.emitIfChanged(title);
+      })
+      .catch((error) => {
+        log.warn('CodexSessionTitleSource: summarize failed', {
+          threadId: row.id,
+          error: String(error),
+        });
+      })
+      .finally(() => {
+        this.stop();
+      });
+  }
+
   private emitIfChanged(title: string): void {
     if (!title || title === this.lastTitle) return;
     this.lastTitle = title;
@@ -303,6 +355,8 @@ class CodexThreadTitlePoller implements SessionTitleWatcher {
       this.options.onTitle(title);
     } catch (error) {
       log.warn('CodexSessionTitleSource: listener threw', { error: String(error) });
+    } finally {
+      this.stop();
     }
   }
 
@@ -390,10 +444,12 @@ function parseCodexThreadTitle(row: unknown): CodexThreadTitle | undefined {
   if (typeof rec.updatedAtMs !== 'number') return undefined;
   const title = rec.title.trim();
   if (!title) return undefined;
+  const firstUserMessage = typeof rec.firstUserMessage === 'string' ? rec.firstUserMessage : '';
   return {
     id: rec.id,
     cwd: rec.cwd,
     title,
+    firstUserMessage,
     createdAtMs: rec.createdAtMs,
     updatedAtMs: rec.updatedAtMs,
   };

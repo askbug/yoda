@@ -6,6 +6,7 @@ import { ManageRunScriptsModal } from '@renderer/features/projects/components/ma
 import { ManageQuickActionsModal } from '@renderer/features/projects/components/overview-view/manage-quick-actions-modal';
 import { RenameProjectModal } from '@renderer/features/projects/components/rename-project-modal';
 import { ShareProjectConfigModal } from '@renderer/features/projects/components/settings-view/share-project-config-modal';
+import { MobileConnectionModal } from '@renderer/features/sidebar/mobile-connection-modal';
 import { CreateSkillModal } from '@renderer/features/skills/components/CreateSkillModal';
 import { AddRemoteModal } from '@renderer/features/tasks/add-remote-modal';
 import { ArchiveTaskWithNoteModal } from '@renderer/features/tasks/archive-task-with-note-modal';
@@ -21,6 +22,7 @@ import { ChangeProjectConnectionModal } from '@renderer/lib/components/change-pr
 import { ConfirmActionDialog } from '@renderer/lib/components/confirm-action-dialog';
 import { FeedbackModal } from '@renderer/lib/components/feedback-modal/feedback-modal';
 import { GithubDeviceFlowModalOverlay } from '@renderer/lib/components/github-device-flow-modal';
+import { QuitAgentSessionsModal } from '@renderer/lib/components/quit-agent-sessions-modal';
 import { type ModalComponent } from '@renderer/lib/modal/modal-provider';
 
 export type ModalSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -63,5 +65,7 @@ export const modalRegistry = {
   manageQuickActionsModal: createModal(ManageQuickActionsModal, { size: 'md' }),
   integrationSetupModal: createModal(IntegrationSetupModal, { size: 'md' }),
   addRemoteModal: createModal(AddRemoteModal),
+  mobileConnectionModal: createModal(MobileConnectionModal, { size: 'md' }),
+  quitAgentSessionsModal: createModal(QuitAgentSessionsModal, { size: 'md' }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } satisfies Record<string, ModalRegistryEntry<any, any>>;

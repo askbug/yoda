@@ -5,10 +5,15 @@ import { agentSessionExitedChannel } from '@shared/events/agentEvents';
 import { makePtyId } from '@shared/ptyId';
 import { makePtySessionId } from '@shared/ptySessionId';
 import { agentHookService } from '@main/core/agent-hooks/agent-hook-service';
+import { makeCodexNotifyCommand } from '@main/core/agent-hooks/agent-notify-command';
 import { wireAgentClassifier } from '@main/core/agent-hooks/classifier-wiring';
 import { claudeTrustService } from '@main/core/agent-hooks/claude-trust-service';
 import { HookConfigWriter } from '@main/core/agent-hooks/hook-config';
-import type { ConversationProvider } from '@main/core/conversations/types';
+import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
+import type {
+  ActiveConversationSession,
+  ConversationProvider,
+} from '@main/core/conversations/types';
 import type { IExecutionContext } from '@main/core/execution-context/types';
 import { LocalFileSystem } from '@main/core/fs/impl/local-fs';
 import { spawnLocalPty } from '@main/core/pty/local-pty';
@@ -45,6 +50,7 @@ export class LocalConversationProvider implements ConversationProvider {
   private readonly hookConfigWriter: HookConfigWriter;
   private readonly preparedHookProviders = new Map<string, boolean>();
   private readonly tmuxSessionNames = new Map<string, string>();
+  private readonly sessionInfos = new Map<string, Omit<ActiveConversationSession, 'detachable'>>();
 
   constructor({
     projectId,
@@ -106,7 +112,9 @@ export class LocalConversationProvider implements ConversationProvider {
         ctx: this.ctx,
       });
     }
-    const { command, args } = buildAgentCommand({
+    const port = agentHookService.getPort();
+    const token = agentHookService.getToken();
+    const { command, args: baseArgs } = buildAgentCommand({
       providerId: conversation.providerId,
       providerConfig,
       autoApprove: conversation.autoApprove,
@@ -115,6 +123,7 @@ export class LocalConversationProvider implements ConversationProvider {
       initialPrompt,
       workingDirectory: this.taskPath,
     });
+    const args = withCodexRuntimeNotifyArgs(conversation.providerId, baseArgs, port);
     const providerEnv = resolveProviderEnv(providerConfig);
 
     const tmuxSessionName = await this.resolveTmuxSessionName(sessionId);
@@ -137,8 +146,6 @@ export class LocalConversationProvider implements ConversationProvider {
     });
 
     const ptyId = makePtyId(conversation.providerId, conversation.id);
-    const port = agentHookService.getPort();
-    const token = agentHookService.getToken();
     const sessionStartedAtMs = Date.now();
     const pty = spawnLocalPty({
       id: sessionId,
@@ -173,6 +180,12 @@ export class LocalConversationProvider implements ConversationProvider {
     pty.onExit(({ exitCode }) => {
       ptySessionRegistry.unregister(sessionId);
       this.sessions.delete(sessionId);
+      this.sessionInfos.delete(sessionId);
+      agentSessionRuntimeStore.remove({
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        conversationId: conversation.id,
+      });
       telemetryService.capture('agent_run_finished', {
         provider: conversation.providerId,
         exit_code: typeof exitCode === 'number' ? exitCode : -1,
@@ -191,6 +204,22 @@ export class LocalConversationProvider implements ConversationProvider {
 
     ptySessionRegistry.register(sessionId, pty);
     this.sessions.set(sessionId, pty);
+    this.sessionInfos.set(sessionId, {
+      sessionId,
+      conversationId: conversation.id,
+      projectId: conversation.projectId,
+      taskId: conversation.taskId,
+      providerId: conversation.providerId,
+      title: conversation.title,
+    });
+    agentSessionRuntimeStore.setStatus(
+      {
+        projectId: conversation.projectId,
+        taskId: conversation.taskId,
+        conversationId: conversation.id,
+      },
+      initialPrompt?.trim() ? 'working' : 'idle'
+    );
     if (tmuxSessionName) this.tmuxSessionNames.set(sessionId, tmuxSessionName);
     sessionTitleManager.start({
       providerId: conversation.providerId,
@@ -231,6 +260,14 @@ export class LocalConversationProvider implements ConversationProvider {
     return count;
   }
 
+  getActiveSessions(): ActiveConversationSession[] {
+    return Array.from(this.sessions.keys()).flatMap((sessionId) => {
+      const info = this.sessionInfos.get(sessionId);
+      if (!info) return [];
+      return [{ ...info, detachable: this.tmuxSessionNames.has(sessionId) }];
+    });
+  }
+
   private async prepareHookConfig(providerId: Conversation['providerId']): Promise<void> {
     try {
       const localProjectSettings = await appSettingsService.get('localProject');
@@ -268,6 +305,12 @@ export class LocalConversationProvider implements ConversationProvider {
       this.sessions.delete(sessionId);
       ptySessionRegistry.unregister(sessionId);
     }
+    this.sessionInfos.delete(sessionId);
+    agentSessionRuntimeStore.remove({
+      projectId: this.projectId,
+      taskId: this.taskId,
+      conversationId,
+    });
     const tmuxSessionName = this.tmuxSessionNames.get(sessionId);
     this.tmuxSessionNames.delete(sessionId);
     if (tmuxSessionName) {
@@ -285,6 +328,7 @@ export class LocalConversationProvider implements ConversationProvider {
     await Promise.all(tmuxSessionNames.map((name) => killTmuxSession(this.ctx, name)));
     this.knownSessionIds.clear();
     this.tmuxSessionNames.clear();
+    this.sessionInfos.clear();
   }
 
   async detachAll(): Promise<void> {
@@ -296,6 +340,23 @@ export class LocalConversationProvider implements ConversationProvider {
       } catch {}
       ptySessionRegistry.unregister(sessionId);
     }
+    for (const info of this.sessionInfos.values()) {
+      agentSessionRuntimeStore.remove(info);
+    }
     this.sessions.clear();
+    this.sessionInfos.clear();
   }
+}
+
+function withCodexRuntimeNotifyArgs(
+  providerId: Conversation['providerId'],
+  args: string[],
+  hookPort: number
+): string[] {
+  if (providerId !== 'codex' || hookPort <= 0) return args;
+  return ['-c', `notify=${tomlArray(makeCodexNotifyCommand())}`, ...args];
+}
+
+function tomlArray(values: string[]): string {
+  return `[${values.map((value) => JSON.stringify(value)).join(',')}]`;
 }

@@ -3,6 +3,12 @@ import { join } from 'node:path';
 import type { AppSettings, AppSettingsKey } from '@shared/app-settings';
 import { MAAS_PLATFORMS } from '@shared/maas';
 import type { OpenInAppId } from '@shared/openInApps';
+import {
+  DEFAULT_TASK_NAMING_CONTEXT,
+  DEFAULT_TASK_NAMING_MODEL,
+  DEFAULT_TASK_NAMING_RECENT_TASK_LIMIT,
+  DEFAULT_TASK_NAMING_TIMEOUT_MS,
+} from '@shared/task-naming';
 import { DEFAULT_TERMINAL_SCROLLBACK_LINES } from '@shared/terminal-settings';
 import { getDefaultLocalWorktreeDirectory } from './worktree-defaults';
 
@@ -28,6 +34,11 @@ export const SETTINGS_DEFAULTS = {
   }),
   tasks: {
     autoGenerateName: true,
+    namingModel: DEFAULT_TASK_NAMING_MODEL,
+    namingLanguage: 'app' as const,
+    namingContext: DEFAULT_TASK_NAMING_CONTEXT,
+    namingRecentTaskLimit: DEFAULT_TASK_NAMING_RECENT_TASK_LIMIT,
+    namingRequestTimeoutMs: DEFAULT_TASK_NAMING_TIMEOUT_MS,
     autoTrustWorktrees: true,
   },
   agentAutoApproveDefaults: {},
@@ -37,6 +48,9 @@ export const SETTINGS_DEFAULTS = {
   maas: {
     selectedPlatformId: MAAS_PLATFORMS.zenmux.id,
     connections: [],
+  },
+  agentModelCandidates: {
+    providers: {},
   },
   notifications: {
     enabled: true,
@@ -49,6 +63,9 @@ export const SETTINGS_DEFAULTS = {
     scrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   },
   theme: null,
+  customThemes: {
+    items: [],
+  },
   defaultAgent: DEFAULT_AGENT_ID,
   reviewPrompt: DEFAULT_REVIEW_PROMPT,
   keyboard: {},

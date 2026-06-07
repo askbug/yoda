@@ -4,6 +4,7 @@ import type { Branch, CreateBranchError, FetchPrForReviewError, PushError } from
 import type { PullRequest } from '@shared/pull-requests';
 
 export type TaskLifecycleStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'cancelled';
+export type TaskSetupStatus = 'ready' | 'pending' | 'naming_failed' | 'branch_failed';
 
 export type Issue = {
   provider: 'github' | 'linear' | 'jira' | 'gitlab' | 'plain' | 'forgejo' | 'featurebase';
@@ -33,13 +34,16 @@ export type Task = {
   archivedAt?: string;
   archiveNote?: string;
   lastInteractedAt?: string;
-  /** All issues linked to this session. New code should prefer this over linkedIssue. */
+  /** All issues linked to this task. New code should prefer this over linkedIssue. */
   linkedIssues?: Issue[];
   /** @deprecated Use linkedIssues. Preserved as the primary linked issue for compatibility. */
   linkedIssue?: Issue;
   isPinned: boolean;
   needsReview: boolean;
   isUserNamed: boolean;
+  setupStatus: TaskSetupStatus;
+  setupError?: string;
+  setupRequiresBranchName?: boolean;
   prs: PullRequest[];
   conversations: Record<string, number>;
   workspaceProvider?: 'byoi';
@@ -68,6 +72,13 @@ export type CreateTaskStrategy =
     }
   | { kind: 'no-worktree' };
 
+export function createTaskStrategyRequiresBranchName(strategy: CreateTaskStrategy): boolean {
+  return (
+    strategy.kind === 'new-branch' ||
+    (strategy.kind === 'from-pull-request' && Boolean(strategy.taskBranch))
+  );
+}
+
 export type CreateTaskParams = {
   id: string;
   projectId: string;
@@ -94,12 +105,23 @@ export type CreateTaskError =
   | { type: 'provision-failed'; message: string }
   | { type: 'provision-timeout'; timeoutMs: number; step: ProvisionStep | null };
 
-export type CreateTaskWarning = {
-  type: 'branch-publish-failed';
-  branch: string;
-  remote: string;
-  error: PushError;
-};
+export type CreateTaskWarning =
+  | {
+      type: 'branch-publish-failed';
+      branch: string;
+      remote: string;
+      error: PushError;
+    }
+  | {
+      type: 'task-naming-failed';
+      message: string;
+      blocksProvision: boolean;
+    }
+  | {
+      type: 'branch-setup-failed';
+      branch: string;
+      message: string;
+    };
 
 export type CreateTaskSuccess = {
   task: Task;

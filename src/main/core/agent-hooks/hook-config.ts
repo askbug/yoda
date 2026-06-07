@@ -1,20 +1,14 @@
-import * as toml from 'smol-toml';
 import type { AgentProviderId } from '@shared/agent-provider-registry';
 import { resolveCommandPath } from '@main/core/dependencies/probe';
 import type { IExecutionContext } from '@main/core/execution-context/types';
 import type { FileSystemProvider } from '@main/core/fs/types';
 import { log } from '@main/lib/logger';
-import {
-  makeClaudeHookCommand,
-  makeCodexNotifyCommand,
-  makeOpenCodePluginContent,
-} from './agent-notify-command';
+import { makeClaudeHookCommand, makeOpenCodePluginContent } from './agent-notify-command';
 import piYodaExtension from './pi-yoda-extension.ts?raw';
 
 const YODA_MARKER = 'YODA_HOOK_PORT';
 
 const CLAUDE_SETTINGS_PATH = '.claude/settings.local.json';
-const CODEX_CONFIG_PATH = '.codex/config.toml';
 const PI_YODA_EXTENSION_PATH = '.pi/extensions/yoda-hook.ts';
 const OPENCODE_PLUGIN_PATH = '.opencode/plugins/yoda-notifications.js';
 const GITIGNORE_PATH = '.gitignore';
@@ -49,21 +43,6 @@ export class HookConfigWriter {
     }
 
     await this.fs.write(CLAUDE_SETTINGS_PATH, JSON.stringify({ ...config, hooks }, null, 2) + '\n');
-    return true;
-  }
-
-  async writeCodexNotify(): Promise<boolean> {
-    if (!(await resolveCommandPath('codex', this.exec))) return false;
-
-    const config: Record<string, unknown> = (await this.fs.exists(CODEX_CONFIG_PATH))
-      ? await this.fs
-          .read(CODEX_CONFIG_PATH)
-          .then((result) => toml.parse(result.content) ?? {})
-          .catch(() => ({}))
-      : {};
-
-    config.notify = makeCodexNotifyCommand();
-    await this.fs.write(CODEX_CONFIG_PATH, toml.stringify(config));
     return true;
   }
 
@@ -109,10 +88,6 @@ export class HookConfigWriter {
     }
 
     if (providerId === 'codex') {
-      const wroteConfig = await this.writeCodexNotify();
-      if (wroteConfig && writeGitIgnoreEntries) {
-        await this.ensureGitIgnoreEntries([CODEX_CONFIG_PATH]);
-      }
       return;
     }
 

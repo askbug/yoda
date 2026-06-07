@@ -4,15 +4,29 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { agentTargets, skillScanPaths } from '@shared/skills/agentTargets';
 import type { CatalogIndex, CatalogSkill, DetectedAgent } from '@shared/skills/types';
-import { generateSkillMd, isValidSkillName, parseFrontmatter } from '@shared/skills/validation';
+import {
+  generateSkillMd,
+  isValidSkillName,
+  parseFrontmatter,
+  validateSkillFrontmatter,
+} from '@shared/skills/validation';
 import { log } from '@main/lib/logger';
 import bundledCatalog from './bundled-catalog.json';
 
 const SKILLS_ROOT = path.join(os.homedir(), '.agentskills');
 const YODA_META = path.join(SKILLS_ROOT, '.yoda');
 const CATALOG_INDEX_PATH = path.join(YODA_META, 'catalog-index.json');
+const SKILL_MD_FILENAME = 'SKILL.md';
+const DISABLED_SKILL_MD_FILENAME = 'SKILL.md.disabled';
 
 const MAX_REDIRECTS = 5;
+
+function isPathInside(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  return (
+    relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative))
+  );
+}
 
 function httpsGet(url: string, redirectCount = 0): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -50,7 +64,7 @@ function httpsGet(url: string, redirectCount = 0): Promise<string> {
 }
 
 export class SkillsService {
-  private static readonly CATALOG_VERSION = 2;
+  private static readonly CATALOG_VERSION = 3;
   private catalogCache: CatalogIndex | null = null;
 
   async initialize(): Promise<void> {
@@ -169,23 +183,14 @@ export class SkillsService {
           continue;
         }
 
-        const skillMdPath = path.join(skillDir, 'SKILL.md');
-        try {
-          const content = await fs.promises.readFile(skillMdPath, 'utf-8');
-          const { frontmatter } = parseFrontmatter(content);
+        const localSkill = await this.readLocalSkill(skillDir);
+        if (localSkill) {
           seen.add(entry.name);
-          skills.push({
-            id: entry.name,
-            displayName: frontmatter.name || entry.name,
-            description: frontmatter.description || '',
-            source: 'local',
-            frontmatter,
-            installed: true,
-            localPath: skillDir,
-            skillMdContent: content,
-          });
-        } catch {
-          // No SKILL.md — not a valid skill directory, skip silently
+          skills.push(
+            this.buildLocalSkill(entry.name, skillDir, localSkill.content, {
+              disabled: localSkill.disabled,
+            })
+          );
         }
       }
     }
@@ -201,8 +206,14 @@ export class SkillsService {
     // If installed, load the full SKILL.md from disk
     if (skill.installed && skill.localPath) {
       try {
-        const content = await fs.promises.readFile(path.join(skill.localPath, 'SKILL.md'), 'utf-8');
-        return { ...skill, skillMdContent: content };
+        const localSkill = await this.readLocalSkill(skill.localPath);
+        if (!localSkill) return skill;
+        return this.mergeCatalogSkillWithLocal(
+          skill,
+          this.buildLocalSkill(skill.id, skill.localPath, localSkill.content, {
+            disabled: localSkill.disabled,
+          })
+        );
       } catch {
         // Return what we have
       }
@@ -266,7 +277,7 @@ export class SkillsService {
       } catch {
         content = generateSkillMd(skill.displayName, skill.description);
       }
-      await fs.promises.writeFile(path.join(tmpDir, 'SKILL.md'), content);
+      await fs.promises.writeFile(path.join(tmpDir, SKILL_MD_FILENAME), content);
 
       // Remove stale target dir if present (e.g. from a previous failed install)
       await fs.promises.rm(skillDir, { recursive: true, force: true }).catch(() => {});
@@ -283,6 +294,7 @@ export class SkillsService {
       return {
         ...skill,
         installed: true,
+        disabled: false,
         localPath: skillDir,
         skillMdContent: content,
       };
@@ -333,7 +345,7 @@ export class SkillsService {
 
     const skillContent = generateSkillMd(name, description, content?.trim());
 
-    await fs.promises.writeFile(path.join(skillDir, 'SKILL.md'), skillContent);
+    await fs.promises.writeFile(path.join(skillDir, SKILL_MD_FILENAME), skillContent);
 
     // Sync to agents
     await this.syncToAgents(name);
@@ -349,9 +361,44 @@ export class SkillsService {
       source: 'local',
       frontmatter,
       installed: true,
+      disabled: false,
       localPath: skillDir,
       skillMdContent: skillContent,
     };
+  }
+
+  async setSkillDisabled(skillId: string, disabled: boolean): Promise<CatalogSkill> {
+    await this.initialize();
+    const catalog = await this.getCatalogIndex();
+    const skill = catalog.skills.find((s) => s.id === skillId);
+    if (!skill) throw new Error(`Skill "${skillId}" not found in catalog`);
+    if (!skill.installed || !skill.localPath) {
+      throw new Error(`Skill "${skillId}" is not installed`);
+    }
+
+    const activePath = path.join(skill.localPath, SKILL_MD_FILENAME);
+    const disabledPath = path.join(skill.localPath, DISABLED_SKILL_MD_FILENAME);
+
+    if (disabled) {
+      if (!skill.disabled) {
+        await this.assertMissingFile(disabledPath, 'disabled skill file');
+        await fs.promises.rename(activePath, disabledPath);
+      }
+      await this.unsyncFromAgents(skillId);
+    } else {
+      if (skill.disabled) {
+        await this.assertMissingFile(activePath, 'active skill file');
+        await fs.promises.rename(disabledPath, activePath);
+      }
+      if (this.isYodaManagedSkillPath(skill.localPath)) {
+        await this.syncToAgents(skillId);
+      }
+    }
+
+    this.catalogCache = null;
+    const updated = await this.getSkillDetail(skillId);
+    if (!updated) throw new Error(`Skill "${skillId}" not found after update`);
+    return updated;
   }
 
   async syncToAgents(skillId: string): Promise<void> {
@@ -427,6 +474,45 @@ export class SkillsService {
 
   // --- Private helpers ---
 
+  private async readLocalSkill(
+    skillDir: string
+  ): Promise<{ content: string; disabled: boolean } | null> {
+    try {
+      return {
+        content: await fs.promises.readFile(path.join(skillDir, SKILL_MD_FILENAME), 'utf-8'),
+        disabled: false,
+      };
+    } catch {
+      // Fall through to the disabled marker file.
+    }
+
+    try {
+      return {
+        content: await fs.promises.readFile(
+          path.join(skillDir, DISABLED_SKILL_MD_FILENAME),
+          'utf-8'
+        ),
+        disabled: true,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private async assertMissingFile(filePath: string, label: string): Promise<void> {
+    try {
+      await fs.promises.access(filePath);
+      throw new Error(`Cannot update skill: ${label} already exists at ${filePath}`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+  }
+
+  private isYodaManagedSkillPath(skillPath: string): boolean {
+    return isPathInside(SKILLS_ROOT, skillPath) && !isPathInside(YODA_META, skillPath);
+  }
+
   private loadBundledCatalog(): CatalogIndex {
     return bundledCatalog as CatalogIndex;
   }
@@ -447,14 +533,9 @@ export class SkillsService {
       const local = installedMap.get(skill.id);
       if (local) {
         installedMap.delete(skill.id);
-        return {
-          ...skill,
-          installed: true,
-          localPath: local.localPath,
-          skillMdContent: local.skillMdContent,
-        };
+        return this.mergeCatalogSkillWithLocal(skill, local);
       }
-      return { ...skill, installed: false };
+      return { ...skill, installed: false, disabled: false };
     });
 
     // Add locally-installed skills not in the catalog
@@ -463,6 +544,47 @@ export class SkillsService {
     }
 
     return { ...catalog, skills: mergedSkills };
+  }
+
+  private buildLocalSkill(
+    id: string,
+    skillDir: string,
+    content: string,
+    options: { disabled?: boolean } = {}
+  ): CatalogSkill {
+    const { frontmatter } = parseFrontmatter(content);
+    const skillFilePath = path.join(skillDir, 'SKILL.md');
+    const validationIssues = validateSkillFrontmatter(frontmatter, { skillFilePath });
+
+    return {
+      id,
+      displayName: frontmatter.name || id,
+      description: frontmatter.description || '',
+      source: 'local',
+      frontmatter,
+      validationIssues,
+      installed: true,
+      disabled: options.disabled ?? false,
+      localPath: skillDir,
+      skillMdContent: content,
+    };
+  }
+
+  private mergeCatalogSkillWithLocal(
+    catalogSkill: CatalogSkill,
+    local: CatalogSkill
+  ): CatalogSkill {
+    return {
+      ...catalogSkill,
+      displayName: local.displayName || catalogSkill.displayName,
+      description: local.description || catalogSkill.description,
+      frontmatter: local.frontmatter,
+      validationIssues: local.validationIssues,
+      installed: true,
+      disabled: local.disabled ?? false,
+      localPath: local.localPath,
+      skillMdContent: local.skillMdContent,
+    };
   }
 
   private async fetchOpenAICatalog(): Promise<CatalogSkill[]> {

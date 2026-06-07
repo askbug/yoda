@@ -1,4 +1,4 @@
-import { FileDiff, FolderOpen, ListChecks, Pin, Sparkles, Terminal } from 'lucide-react';
+import { FileDiff, FolderOpen, ListChecks, Pencil, Pin, Sparkles, Terminal } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
 import type { Issue } from '@shared/tasks';
@@ -18,6 +18,7 @@ import { ConnectionStatusDot } from '@renderer/lib/components/connection-status-
 import { OpenInMenu } from '@renderer/lib/components/titlebar/open-in-menu';
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { rpc } from '@renderer/lib/ipc';
+import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { Separator } from '@renderer/lib/ui/separator';
@@ -77,6 +78,7 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
   taskId: string;
 }) {
   const { t } = useTranslation();
+  const { navigate } = useNavigate();
   const taskStore = getTaskStore(projectId, taskId)!;
   const taskPayload = getRegisteredTaskData(projectId, taskId)!;
   const linkedIssues =
@@ -88,36 +90,40 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
   const projectStore = asMounted(getProjectStore(projectId));
 
   const projectName = projectDisplayName(getProjectStore(projectId));
+  const taskName = taskDisplayName(taskStore);
 
   const isRemoteProject = projectStore?.data.type === 'ssh';
   return (
     <Titlebar
       leftSlot={
         <div className="flex items-center gap-1 px-2 min-w-0">
-          <button
-            type="button"
-            className="flex items-center gap-1 text-sm text-foreground-muted hover:text-foreground min-w-0 rounded px-1 -mx-1 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            onClick={() => {
-              const currentName = taskDisplayName(taskStore);
-              if (!currentName) return;
-              showRename({ projectId, taskId, currentName });
-            }}
-            title={t('tasks.rename.title')}
-          >
-            <span className="flex items-center gap-1 min-w-0">
-              <span className="text-sm text-foreground-passive shrink-0 inline-flex items-baseline gap-1">
-                {projectName}
-                <span className="text-[11px] text-foreground-passive/70 font-mono truncate max-w-28">
-                  ({provisionedTask.workspace.git.branchName})
-                </span>
+          <div className="flex min-w-0 items-center gap-1 text-sm">
+            <button
+              type="button"
+              className="-mx-1 inline-flex min-w-0 items-baseline gap-1 rounded px-1 text-foreground-passive hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={() => navigate('project', { projectId })}
+              title={t('sidebar.openProjectDetails')}
+              aria-label={t('sidebar.openProjectDetails')}
+            >
+              <span className="truncate">{projectName}</span>
+              <span className="max-w-28 shrink-0 truncate font-mono text-[11px] text-foreground-passive/70">
+                ({provisionedTask.workspace.git.branchName})
               </span>
-              <span className="text-sm text-foreground-passive shrink-0">/</span>
-              <span className="flex items-center gap-1.5 min-w-0">
-                <span className="truncate">{taskDisplayName(taskStore)}</span>
-                <ConnectionStatusDot state={provisionedTask.workspace.connectionState} />
-              </span>
-            </span>
-          </button>
+            </button>
+            <span className="shrink-0 text-foreground-passive">/</span>
+            <button
+              type="button"
+              className="-mx-1 flex min-w-0 items-center gap-1.5 rounded px-1 text-foreground-muted hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={() => {
+                if (!taskName) return;
+                showRename({ projectId, taskId, currentName: taskName });
+              }}
+              title={t('tasks.rename.title')}
+            >
+              <span className="truncate">{taskName}</span>
+              <ConnectionStatusDot state={provisionedTask.workspace.connectionState} />
+            </button>
+          </div>
           <TaskGitDiffStats task={taskStore} />
           <LinkedIssuesBadgeGroup issues={linkedIssues} />
           <button
@@ -166,14 +172,29 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
             onValueChange={([tab]) => {
               if (!tab) {
                 taskView.setSidebarCollapsed(true);
-              } else {
-                taskView.setSidebarTab(tab as SidebarTab);
-                taskView.setSidebarCollapsed(false);
+                return;
               }
+              if (!isSidebarTab(tab)) return;
+              taskView.setSidebarTab(tab);
+              taskView.setSidebarCollapsed(false);
             }}
             size="icon-sm"
             className="border-none"
           >
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <ToggleGroupItem
+                    size="icon-sm"
+                    value="rename"
+                    aria-label={t('tasks.rename.panelTitle')}
+                  >
+                    <Pencil className="size-3.5" />
+                  </ToggleGroupItem>
+                }
+              />
+              <TooltipContent>{t('tasks.rename.panelTitle')}</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -224,6 +245,17 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
     />
   );
 });
+
+function isSidebarTab(value: string): value is SidebarTab {
+  return (
+    value === 'task' ||
+    value === 'conversations' ||
+    value === 'changes' ||
+    value === 'files' ||
+    value === 'context' ||
+    value === 'rename'
+  );
+}
 
 function LinkedIssuesBadgeGroup({ issues }: { issues: Issue[] }) {
   const { t } = useTranslation();

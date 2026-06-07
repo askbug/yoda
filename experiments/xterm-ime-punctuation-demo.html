@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>xterm IME Punctuation Probe</title>
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f6f1;
+        --paper: #ffffff;
+        --ink: #1e2328;
+        --muted: #68727d;
+        --line: #d7ddd5;
+        --accent: #0b6b57;
+        --accent-soft: #e2f2ec;
+        --warn: #9a5b00;
+        --warn-soft: #fff3d8;
+        --bad: #b42318;
+        --bad-soft: #ffebe8;
+        --good: #087443;
+        --good-soft: #e1f5ea;
+        --mono: 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+        --sans: 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--ink);
+        font: 14px/1.5 var(--sans);
+      }
+
+      header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 22px 28px 18px;
+        border-bottom: 1px solid var(--line);
+        background: var(--paper);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 23px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        appearance: none;
+        height: 34px;
+        padding: 0 12px;
+        border: 1px solid #aeb6ad;
+        border-radius: 6px;
+        background: var(--paper);
+        color: var(--ink);
+        font: 700 13px/1 var(--sans);
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: minmax(380px, 0.95fr) minmax(480px, 1.15fr);
+        gap: 14px;
+        padding: 14px;
+      }
+
+      .panel {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        overflow: hidden;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .panel-body {
+        display: grid;
+        gap: 12px;
+        padding: 14px;
+      }
+
+      #terminal {
+        height: 260px;
+        padding: 8px;
+        border-radius: 6px;
+        background: #111614;
+      }
+
+      .xterm {
+        height: 100%;
+      }
+
+      .test-strip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .label {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .chip {
+        display: inline-flex;
+        min-height: 28px;
+        align-items: center;
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fafaf7;
+        font-family: var(--mono);
+      }
+
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 11px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fafaf7;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      input[type='checkbox'] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent);
+      }
+
+      .verdict {
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #f8f8f3;
+      }
+
+      .verdict.good {
+        background: var(--good-soft);
+        border-color: #a8dec1;
+      }
+
+      .verdict.warn {
+        background: var(--warn-soft);
+        border-color: #e2c16d;
+      }
+
+      .verdict.bad {
+        background: var(--bad-soft);
+        border-color: #f0aaa4;
+      }
+
+      .result {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      .result-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        background: #f3f4ef;
+        font-weight: 800;
+      }
+
+      pre {
+        margin: 0;
+        min-height: 42px;
+        padding: 10px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font: 12px/1.5 var(--mono);
+      }
+
+      .log-wrap {
+        max-height: calc(100vh - 190px);
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font: 12px/1.45 var(--mono);
+      }
+
+      th,
+      td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #e7eae3;
+        color: #29302d;
+        font: 800 11px/1.35 var(--sans);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .event-type {
+        display: inline-block;
+        padding: 1px 6px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        font: 800 11px/1.4 var(--sans);
+      }
+
+      @media (max-width: 980px) {
+        header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .toolbar {
+          justify-content: flex-start;
+        }
+
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>xterm IME Punctuation Probe</h1>
+        <p class="subtitle">
+          纯 xterm 6.0.0 最小实例，用于对比标准 textarea 之后继续隔离 xterm 输入层。
+        </p>
+      </div>
+      <div class="toolbar">
+        <button id="focusButton" type="button">聚焦 xterm</button>
+        <button id="clearButton" type="button">清空</button>
+        <button id="copyButton" type="button">复制 JSON</button>
+        <button id="downloadButton" type="button">下载 JSON</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Pure xterm</h2>
+          <span id="envValue" class="note"></span>
+        </div>
+        <div class="panel-body">
+          <div class="test-strip">
+            <span class="label">Suggested</span>
+            <span class="chip">，</span>
+            <span class="chip">。</span>
+            <span class="chip">！</span>
+            <span class="chip">？</span>
+            <span class="chip">；</span>
+            <span class="chip">：</span>
+            <span class="chip">、</span>
+            <span class="chip">“”</span>
+            <span class="chip">（）</span>
+            <span class="chip">【】</span>
+          </div>
+
+          <div id="terminal"></div>
+
+          <label class="toggle">
+            <input id="simulateKeydownToggle" type="checkbox" />
+            Simulate bad keydown fallback in addition to pure xterm log
+          </label>
+
+          <div id="verdict" class="verdict">
+            尚未输入。请聚焦 xterm 后用中文输入法键入中文标点。
+          </div>
+
+          <div class="result">
+            <div class="result-title">
+              <span>xterm onData stream</span>
+              <span id="xtermCount" class="note">0 chars</span>
+            </div>
+            <pre id="xtermStream"></pre>
+          </div>
+
+          <div class="result">
+            <div class="result-title">
+              <span>Simulated keydown fallback</span>
+              <span id="fallbackCount" class="note">0 chars</span>
+            </div>
+            <pre id="fallbackStream"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Event Log</h2>
+          <span id="eventCount" class="note">0 events</span>
+        </div>
+        <div class="log-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Source</th>
+                <th>Event</th>
+                <th>Key</th>
+                <th>Data</th>
+                <th>Input Type</th>
+                <th>Compose</th>
+                <th>Textarea</th>
+              </tr>
+            </thead>
+            <tbody id="eventBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+    <script>
+      const CJK_PUNCTUATION = new Set(Array.from('，。！？；：、“”‘’（）【】《》'));
+      const ASCII_PUNCTUATION = new Set(Array.from(',.!?;:\\"\'()[]<>/\\\\`-=_+{}'));
+      const EVENT_TYPES = [
+        'keydown',
+        'keypress',
+        'keyup',
+        'beforeinput',
+        'input',
+        'compositionstart',
+        'compositionupdate',
+        'compositionend',
+      ];
+
+      const terminalElement = document.getElementById('terminal');
+      const eventBody = document.getElementById('eventBody');
+      const simulateKeydownToggle = document.getElementById('simulateKeydownToggle');
+      const state = {
+        events: [],
+        xtermStream: '',
+        fallbackStream: '',
+      };
+
+      document.getElementById('envValue').textContent =
+        `${navigator.platform || 'unknown'} · ${navigator.language || 'unknown'} · ${location.protocol}`;
+
+      const term = new Terminal({
+        cols: 80,
+        rows: 12,
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: '"SFMono-Regular", "Menlo", "Consolas", monospace',
+        lineHeight: 1.25,
+        letterSpacing: 0,
+        allowProposedApi: true,
+        convertEol: true,
+        theme: {
+          background: '#111614',
+          foreground: '#d7f6e6',
+          cursor: '#d7f6e6',
+          selectionBackground: '#315d4e',
+        },
+      });
+      const fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(terminalElement);
+      fitAddon.fit();
+      term.write('IME punctuation probe ready. Type Chinese punctuation here.\r\n\r\n');
+      term.focus();
+
+      window.addEventListener('resize', () => fitAddon.fit());
+
+      function codePoints(value) {
+        return Array.from(value).map((char) => {
+          const point = char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+          return `${char} U+${point}`;
+        });
+      }
+
+      function compact(value) {
+        if (value === null || value === undefined || value === '') return '';
+        return `${JSON.stringify(value)} ${codePoints(value).join(' ')}`;
+      }
+
+      function printableKey(event) {
+        if (!(event instanceof KeyboardEvent)) return '';
+        if (event.ctrlKey || event.metaKey || event.altKey) return '';
+        if (event.key.length !== 1) return '';
+        return event.key;
+      }
+
+      function updateResults() {
+        document.getElementById('xtermStream').textContent = compact(state.xtermStream);
+        document.getElementById('fallbackStream').textContent = compact(state.fallbackStream);
+        document.getElementById('xtermCount').textContent =
+          `${Array.from(state.xtermStream).length} chars`;
+        document.getElementById('fallbackCount').textContent =
+          `${Array.from(state.fallbackStream).length} chars`;
+        document.getElementById('eventCount').textContent = `${state.events.length} events`;
+
+        const xtermHasCjk = Array.from(state.xtermStream).some((char) => CJK_PUNCTUATION.has(char));
+        const xtermHasAscii = Array.from(state.xtermStream).some((char) =>
+          ASCII_PUNCTUATION.has(char)
+        );
+        const fallbackHasAscii = Array.from(state.fallbackStream).some((char) =>
+          ASCII_PUNCTUATION.has(char)
+        );
+        const verdict = document.getElementById('verdict');
+        verdict.className = 'verdict';
+
+        if (!state.xtermStream && !state.fallbackStream) {
+          verdict.textContent = '尚未输入。请聚焦 xterm 后用中文输入法键入中文标点。';
+        } else if (xtermHasCjk && fallbackHasAscii) {
+          verdict.classList.add('warn');
+          verdict.textContent =
+            '纯 xterm onData 能拿到中文标点，但 keydown fallback 会产生英文标点。Yoda 应重点检查 custom key handler。';
+        } else if (xtermHasCjk) {
+          verdict.classList.add('good');
+          verdict.textContent =
+            '纯 xterm 能拿到中文标点。若 Yoda 内异常，问题更可能在 Yoda 的输入桥、快捷键处理或附加监听。';
+        } else if (xtermHasAscii) {
+          verdict.classList.add('bad');
+          verdict.textContent =
+            '纯 xterm onData 得到英文标点。问题可能在 xterm/Chromium/IME 组合，需要看事件日志。';
+        } else {
+          verdict.classList.add('warn');
+          verdict.textContent =
+            '已有输入，但还没有标点样本。请继续键入中文逗号、句号、问号、感叹号。';
+        }
+      }
+
+      function renderRow(row) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.index}</td>
+          <td>${row.source}</td>
+          <td><span class="event-type">${row.type}</span></td>
+          <td>${compact(row.key)}<br>${row.code || ''}<br>${row.keyCode || ''}</td>
+          <td>${compact(row.data)}</td>
+          <td>${row.inputType || ''}</td>
+          <td>${row.isComposing ? 'true' : 'false'}</td>
+          <td>${compact(row.textareaValue)}</td>
+        `;
+        eventBody.appendChild(tr);
+        tr.scrollIntoView({ block: 'nearest' });
+      }
+
+      function logDomEvent(event) {
+        const textarea = term.textarea;
+        const row = {
+          index: state.events.length + 1,
+          time: new Date().toISOString(),
+          source: 'textarea',
+          type: event.type,
+          key: event instanceof KeyboardEvent ? event.key : '',
+          code: event instanceof KeyboardEvent ? event.code : '',
+          keyCode: event instanceof KeyboardEvent ? event.keyCode : '',
+          charCode: event instanceof KeyboardEvent ? event.charCode : '',
+          which: event instanceof KeyboardEvent ? event.which : '',
+          data: event instanceof InputEvent || event instanceof CompositionEvent ? event.data : '',
+          inputType: event instanceof InputEvent ? event.inputType : '',
+          isComposing: 'isComposing' in event ? Boolean(event.isComposing) : false,
+          defaultPrevented: event.defaultPrevented,
+          textareaValue: textarea ? textarea.value : '',
+        };
+        state.events.push(row);
+        renderRow(row);
+
+        if (event.type === 'keydown' && simulateKeydownToggle.checked) {
+          state.fallbackStream += printableKey(event);
+          updateResults();
+        }
+      }
+
+      function bindTextareaListeners() {
+        const textarea = term.textarea;
+        if (!textarea) return;
+        for (const type of EVENT_TYPES) {
+          textarea.addEventListener(type, logDomEvent, true);
+        }
+      }
+
+      bindTextareaListeners();
+
+      term.onData((data) => {
+        state.xtermStream += data;
+        term.write(data);
+        const row = {
+          index: state.events.length + 1,
+          time: new Date().toISOString(),
+          source: 'xterm',
+          type: 'onData',
+          key: '',
+          code: '',
+          keyCode: '',
+          charCode: '',
+          which: '',
+          data,
+          inputType: '',
+          isComposing: false,
+          defaultPrevented: false,
+          textareaValue: term.textarea ? term.textarea.value : '',
+        };
+        state.events.push(row);
+        renderRow(row);
+        updateResults();
+      });
+
+      document.getElementById('focusButton').addEventListener('click', () => term.focus());
+      document.getElementById('clearButton').addEventListener('click', () => {
+        state.events = [];
+        state.xtermStream = '';
+        state.fallbackStream = '';
+        eventBody.textContent = '';
+        term.clear();
+        term.write('IME punctuation probe ready. Type Chinese punctuation here.\r\n\r\n');
+        updateResults();
+        term.focus();
+      });
+
+      function exportPayload() {
+        return {
+          generatedAt: new Date().toISOString(),
+          environment: {
+            xtermVersion: '6.0.0',
+            platform: navigator.platform,
+            language: navigator.language,
+            languages: navigator.languages,
+            userAgent: navigator.userAgent,
+            protocol: location.protocol,
+          },
+          values: {
+            xtermOnDataStream: state.xtermStream,
+            simulatedKeydownFallback: state.fallbackStream,
+          },
+          events: state.events,
+        };
+      }
+
+      document.getElementById('copyButton').addEventListener('click', async () => {
+        await navigator.clipboard.writeText(JSON.stringify(exportPayload(), null, 2));
+      });
+
+      document.getElementById('downloadButton').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(exportPayload(), null, 2)], {
+          type: 'application/json',
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `xterm-ime-punctuation-probe-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+
+      updateResults();
+    </script>
+  </body>
+</html>

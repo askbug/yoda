@@ -1,3 +1,4 @@
+import type { AgentProviderId } from '@shared/agent-provider-registry';
 import type { DeepLinkTarget } from '@shared/deep-links';
 import type { DependencyStatusUpdatedEvent } from '@shared/dependencies';
 import { defineEvent } from '@shared/ipc/events';
@@ -75,3 +76,33 @@ export const tmuxUnavailableChannel = defineEvent<{
   auto: boolean;
   connectionId?: string;
 }>('tmux:unavailable');
+
+export type QuitAgentSessionInfo = {
+  sessionId: string;
+  conversationId: string;
+  projectId: string;
+  taskId: string;
+  taskTitle?: string;
+  providerId: AgentProviderId;
+  title: string;
+  detachable: boolean;
+};
+
+export type QuitAgentSessionsRequest = {
+  requestId: string;
+  running: number;
+  keepable: number;
+  nonKeepableSessions: QuitAgentSessionInfo[];
+};
+
+export type QuitAgentSessionsResponse =
+  | { requestId: string; action: 'cancel' }
+  | { requestId: string; action: 'quit'; mode: 'detach' | 'terminate' };
+
+export const quitAgentSessionsRequestedChannel = defineEvent<QuitAgentSessionsRequest>(
+  'app:quit-agent-sessions-requested'
+);
+
+export const quitAgentSessionsRespondedChannel = defineEvent<QuitAgentSessionsResponse>(
+  'app:quit-agent-sessions-responded'
+);

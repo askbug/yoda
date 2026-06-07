@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Bot,
   FolderInput,
   Layers,
@@ -6,12 +7,17 @@ import {
   Puzzle,
   Search,
   Settings,
+  Smartphone,
   SquarePen,
   Workflow,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  useSkillValidationIssues,
+  type SkillValidationIssueEntry,
+} from '@renderer/features/skills/useSkillValidationIssues';
 import {
   isCurrentView,
   useNavigate,
@@ -23,7 +29,7 @@ import { sidebarStore } from '@renderer/lib/stores/app-state';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { cn } from '@renderer/utils/utils';
 import { SidebarPinnedTaskList } from './pinned-task-list';
-import { SidebarProjectlessSessionList } from './projectless-session-list';
+import { SidebarProjectlessTaskList } from './projectless-task-list';
 import { ProjectsGroupLabel } from './projects-group-label';
 import {
   SidebarContainer,
@@ -33,6 +39,7 @@ import {
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
+  SidebarMenuRow,
 } from './sidebar-primitives';
 import { SidebarSpace } from './sidebar-space';
 import { SidebarVirtualList } from './sidebar-virtual-list';
@@ -46,6 +53,8 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
 
   const showFeedbackModal = useShowModal('feedbackModal');
   const showCommandPalette = useShowModal('commandPaletteModal');
+  const showMobileConnection = useShowModal('mobileConnectionModal');
+  const { count: skillIssueCount, firstIssue: firstSkillIssue } = useSkillValidationIssues();
   const { isDragOver, onDragOver, onDragEnter, onDragLeave, onDrop } = useSidebarDrop();
 
   const { params: taskParams } = useParams('task');
@@ -57,7 +66,20 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
         ? projectParams.projectId
         : undefined;
   const currentTaskId = currentView === 'task' ? taskParams.taskId : undefined;
-  const handleNewSession = React.useCallback(() => {
+  const skillIssueLabel =
+    skillIssueCount > 0 ? t('sidebar.skillIssues', { count: skillIssueCount }) : null;
+  const skillIssueTitle =
+    skillIssueLabel && firstSkillIssue
+      ? `${skillIssueLabel}\n${formatSkillIssueTitle(firstSkillIssue)}`
+      : (skillIssueLabel ?? undefined);
+  const handleOpenFirstSkillIssue = React.useCallback(() => {
+    if (!firstSkillIssue) {
+      navigate('skills');
+      return;
+    }
+    navigate('skills', { focusSkillId: firstSkillIssue.skill.id });
+  }, [firstSkillIssue, navigate]);
+  const handleNewTask = React.useCallback(() => {
     if (currentProjectId) {
       navigate('home', { projectId: currentProjectId });
       return;
@@ -90,13 +112,13 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
           <SidebarMenu>
             <SidebarMenuButton
               isActive={isCurrentView(currentView, 'home')}
-              onClick={handleNewSession}
-              aria-label={t('sidebar.newSession')}
+              onClick={handleNewTask}
+              aria-label={t('sidebar.newTask')}
               className="w-full justify-between"
             >
               <span className="flex items-center gap-2 min-w-0 w-full">
                 <SquarePen className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="truncate min-w-0">{t('sidebar.newSession')}</span>
+                <span className="truncate min-w-0">{t('sidebar.newTask')}</span>
               </span>
               <ShortcutHint settingsKey="newProject" />
             </SidebarMenuButton>
@@ -104,12 +126,12 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               onClick={() =>
                 showCommandPalette({ projectId: currentProjectId, taskId: currentTaskId })
               }
-              aria-label={t('sidebar.searchSession')}
+              aria-label={t('sidebar.searchTasks')}
               className="w-full justify-between"
             >
               <span className="flex items-center gap-2 min-w-0 w-full">
                 <Search className="h-5 w-5 sm:h-4 sm:w-4 shrink-0" />
-                <span className="truncate min-w-0">{t('sidebar.searchSession')}</span>
+                <span className="truncate min-w-0">{t('sidebar.searchTasks')}</span>
               </span>
               <ShortcutHint settingsKey="commandPalette" />
             </SidebarMenuButton>
@@ -127,7 +149,7 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               </SidebarGroupContent>
             )}
           </SidebarGroup>
-          <SidebarProjectlessSessionList />
+          <SidebarProjectlessTaskList />
         </SidebarContent>
         <div className="flex flex-col border-t border-border">
           <SidebarMenu className="px-2 pt-2">
@@ -149,15 +171,34 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
               <Layers className="h-5 w-5 sm:h-4 sm:w-4" />
               {t('sidebar.maas')}
             </SidebarMenuButton>
-            <SidebarMenuButton
+            <SidebarMenuRow
               isActive={isCurrentView(currentView, 'skills')}
-              onClick={() => navigate('skills')}
-              aria-label={t('sidebar.skills')}
-              className="w-full justify-start"
+              className="gap-1 px-1 py-1"
             >
-              <Puzzle className="h-5 w-5 sm:h-4 sm:w-4" />
-              {t('sidebar.skills')}
-            </SidebarMenuButton>
+              <button
+                type="button"
+                onClick={() => navigate('skills')}
+                onMouseDown={(event) => event.preventDefault()}
+                aria-label={t('sidebar.skills')}
+                className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Puzzle className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" />
+                <span className="truncate">{t('sidebar.skills')}</span>
+              </button>
+              {skillIssueCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleOpenFirstSkillIssue}
+                  onMouseDown={(event) => event.preventDefault()}
+                  aria-label={`${skillIssueLabel}: ${t('sidebar.openFirstSkillIssue')}`}
+                  title={skillIssueTitle}
+                  className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-1.5 text-[10px] font-medium text-amber-600 transition-colors hover:border-amber-500/70 hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-400"
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  {formatIssueCount(skillIssueCount)}
+                </button>
+              )}
+            </SidebarMenuRow>
             <SidebarMenuButton
               isActive={isCurrentView(currentView, 'automation')}
               onClick={() => navigate('automation')}
@@ -166,6 +207,14 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
             >
               <Workflow className="h-5 w-5 sm:h-4 sm:w-4" />
               {t('sidebar.automation')}
+            </SidebarMenuButton>
+            <SidebarMenuButton
+              onClick={() => showMobileConnection({})}
+              aria-label={t('sidebar.mobile')}
+              className="w-full justify-start"
+            >
+              <Smartphone className="h-5 w-5 sm:h-4 sm:w-4" />
+              {t('sidebar.mobile')}
             </SidebarMenuButton>
             <SidebarMenuButton
               isActive={isCurrentView(currentView, 'settings')}
@@ -196,3 +245,12 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
     </div>
   );
 });
+
+function formatIssueCount(count: number): string {
+  return count > 99 ? '99+' : String(count);
+}
+
+function formatSkillIssueTitle(entry: SkillValidationIssueEntry): string {
+  const location = entry.issue.path ? `${entry.issue.path}: ` : '';
+  return `${entry.skill.displayName}: Codex: ${location}${entry.issue.message}`;
+}

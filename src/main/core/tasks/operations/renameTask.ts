@@ -1,13 +1,13 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { taskRenamedChannel } from '@shared/events/taskEvents';
-import { deriveTaskSlug, normalizeTaskDisplayName } from '@shared/task-name';
+import { normalizeTaskDisplayName } from '@shared/task-name';
 import { projectManager } from '@main/core/projects/project-manager';
 import { taskEvents } from '@main/core/tasks/task-events';
 import { mapTaskRowToTask } from '@main/core/tasks/utils/utils';
 import { db } from '@main/db/client';
 import { tasks } from '@main/db/schema';
 import { events } from '@main/lib/events';
-import { appSettingsService } from '../../settings/settings-service';
+import { renameTaskBranchForName } from './taskBranchRename';
 
 export async function renameTask(
   projectId: string,
@@ -23,39 +23,22 @@ export async function renameTask(
   const displayName = normalizeTaskDisplayName(newName);
   if (!displayName) throw new Error('Task name cannot be empty');
 
-  const oldBranch = row.taskBranch;
-  const sourceBranch = row.sourceBranch ?? undefined;
-  let newBranch: string | null = null;
-
-  if (oldBranch) {
-    if (sourceBranch && oldBranch !== sourceBranch.branch) {
-      const siblings = await db
-        .select({ id: tasks.id })
-        .from(tasks)
-        .where(and(eq(tasks.projectId, row.projectId), eq(tasks.taskBranch, oldBranch)))
-        .limit(2);
-
-      if (siblings.length === 1) {
-        const branchSlug = deriveTaskSlug(displayName);
-        if (branchSlug) {
-          const suffix = Math.random().toString(36).slice(2, 7);
-          const branchPrefix = (await appSettingsService.get('project')).branchPrefix ?? '';
-          newBranch = branchPrefix
-            ? `${branchPrefix}/${branchSlug}-${suffix}`
-            : `${branchSlug}-${suffix}`;
-
-          await project.repository.renameBranch(oldBranch, newBranch);
-        }
-      }
-    }
-  }
+  const branchRename = await renameTaskBranchForName({
+    project,
+    projectId,
+    taskId,
+    oldBranch: row.taskBranch,
+    sourceBranch: row.sourceBranch,
+    displayName,
+  });
+  if (!branchRename.success) throw new Error(branchRename.error);
 
   const [updatedRow] = await db
     .update(tasks)
     .set({
       name: displayName,
       isUserNamed: 1,
-      taskBranch: newBranch ?? row.taskBranch,
+      taskBranch: branchRename.data ?? row.taskBranch,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(tasks.id, taskId))

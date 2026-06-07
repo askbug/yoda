@@ -12,18 +12,22 @@ import { yodaAccountService } from './core/account/services/yoda-account-service
 import { agentHookService } from './core/agent-hooks/agent-hook-service';
 import { resolveQuitAgentSessionsDecision } from './core/app/quit-agent-sessions';
 import { appService } from './core/app/service';
+import { agentSessionRuntimeStore } from './core/conversations/agent-session-runtime';
 import { localDependencyManager } from './core/dependencies/dependency-manager';
 import { editorBufferService } from './core/editor/editor-buffer-service';
 import { gitWatcherRegistry } from './core/git/git-watcher-registry';
+import { mobileGatewayService } from './core/mobile-gateway/mobile-gateway-service';
 import { ensureInternalProject } from './core/projects/operations/ensureInternalProject';
 import { projectManager } from './core/projects/project-manager';
 import { ptySessionRegistry } from './core/pty/pty-session-registry';
 import { prSyncScheduler } from './core/pull-requests/pr-sync-scheduler';
 import { searchService } from './core/search/search-service';
+import { providerModelCandidatesService } from './core/settings/provider-model-candidates-service';
 import { appSettingsService } from './core/settings/settings-service';
 import { taskManager } from './core/tasks/task-manager';
 import { updateService } from './core/updates/update-service';
 import { viewStateService } from './core/view-state/view-state-service';
+import type { TeardownMode } from './core/workspaces/workspace-registry';
 import { initializeDatabase } from './db/initialize';
 import { log } from './lib/logger';
 import { telemetryService } from './lib/telemetry';
@@ -90,6 +94,7 @@ void app.whenReady().then(async () => {
   const __bootMark = (label: string) =>
     console.log(`[DEBUG][boot] ${label} +${Date.now() - __bootT0}ms`);
   __bootMark('whenReady fired');
+  agentSessionRuntimeStore.initialize();
 
   // Login-shell env capture (`$SHELL -ilc 'env'`) can take 1-2s when the user
   // has a heavy zsh init (mise/oh-my-zsh/starship). Downstream consumers (PTY,
@@ -172,6 +177,10 @@ void app.whenReady().then(async () => {
     log.error('Failed to start agent event service:', e);
   });
 
+  mobileGatewayService.initialize().catch((e) => {
+    log.error('Failed to start mobile gateway service:', e);
+  });
+
   yodaAccountService.loadSessionToken().catch((e) => {
     log.warn('Failed to load account session token:', e);
   });
@@ -179,6 +188,10 @@ void app.whenReady().then(async () => {
   // Dependency probe shells out to user tools, so wait for the login-shell
   // PATH to land before probing — otherwise nvm/mise-managed binaries miss.
   void userEnvReady.then(() => {
+    providerModelCandidatesService.refreshStartupModelCatalog().catch((e) => {
+      log.warn('Failed to refresh provider model catalog:', e);
+    });
+
     localDependencyManager.probeAll().catch((e) => {
       log.error('Failed to probe dependencies:', e);
     });
@@ -198,19 +211,8 @@ process.on('SIGINT', () => app.quit());
 
 let shutdownStarted = false;
 
-app.on('before-quit', (event) => {
-  event.preventDefault();
+function beginShutdown(mode: TeardownMode): void {
   if (shutdownStarted) return;
-
-  const shutdownDecision = resolveQuitAgentSessionsDecision(
-    taskManager.getActiveAgentSessionSummary(),
-    (options) => {
-      const win = BrowserWindow.getAllWindows()[0];
-      return win ? dialog.showMessageBoxSync(win, options) : dialog.showMessageBoxSync(options);
-    }
-  );
-
-  if (shutdownDecision.action === 'cancel') return;
 
   shutdownStarted = true;
   telemetryService.capture('app_closed');
@@ -218,11 +220,13 @@ app.on('before-quit', (event) => {
     void (async () => {
       try {
         agentHookService.dispose();
+        agentSessionRuntimeStore.dispose();
+        mobileGatewayService.dispose();
         updateService.dispose();
         prSyncScheduler.dispose();
         const [gitWatcherResult, projectManagerResult] = await Promise.allSettled([
           gitWatcherRegistry.dispose(),
-          projectManager.dispose({ mode: shutdownDecision.mode }),
+          projectManager.dispose({ mode }),
         ]);
         if (gitWatcherResult.status === 'rejected') {
           log.error('Failed to shutdown git watcher registry:', gitWatcherResult.reason);
@@ -235,4 +239,29 @@ app.on('before-quit', (event) => {
       }
     })();
   });
+}
+
+app.on('before-quit', (event) => {
+  event.preventDefault();
+  if (shutdownStarted) return;
+
+  const summary = taskManager.getActiveAgentSessionSummary();
+  if (summary.running <= 0) {
+    beginShutdown('terminate');
+    return;
+  }
+
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win?.isMinimized()) win.restore();
+  win?.focus();
+
+  const shutdownDecision = resolveQuitAgentSessionsDecision(summary, (options) => {
+    const fallbackWin = win && !win.isDestroyed() ? win : undefined;
+    return fallbackWin
+      ? dialog.showMessageBoxSync(fallbackWin, options)
+      : dialog.showMessageBoxSync(options);
+  });
+
+  if (shutdownDecision.action === 'cancel') return;
+  beginShutdown(shutdownDecision.mode);
 });

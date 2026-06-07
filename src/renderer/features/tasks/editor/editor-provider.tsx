@@ -66,7 +66,7 @@ export const EditorProvider = observer(function EditorProvider({
 }) {
   const provisionedTask = useProvisionedTask();
   const { editorView, tabManager } = provisionedTask.taskView;
-  const { effectiveTheme } = useTheme();
+  const { effectiveTheme, themeFingerprint } = useTheme();
   const isActive = useIsActiveTask(taskId);
 
   // Conflict dialog — shown when editorView.pendingConflictUri is set.
@@ -95,7 +95,7 @@ export const EditorProvider = observer(function EditorProvider({
     const m = codeEditorPool.getMonaco();
     if (m) defineMonacoThemes(m as Parameters<typeof defineMonacoThemes>[0]);
     codeEditorPool.setTheme(getMonacoTheme(effectiveTheme));
-  }, [effectiveTheme]);
+  }, [effectiveTheme, themeFingerprint]);
 
   // ---------------------------------------------------------------------------
   // Editor setup — fires when the lease arrives. Configures the editor,

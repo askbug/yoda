@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ModalRenderer } from '@renderer/lib/modal/modal-renderer';
 import { OnboardingShell } from './onboarding-shell';
 
-type OnboardingStep = 'sign-in' | 'import';
+type OnboardingStep = 'sign-in';
 
 export function Onboarding({
   steps: initialSteps,

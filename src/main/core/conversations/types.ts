@@ -1,5 +1,16 @@
 import { type Conversation } from '@shared/conversations';
 
+export type ActiveConversationSession = {
+  sessionId: string;
+  conversationId: string;
+  projectId: string;
+  taskId: string;
+  taskTitle?: string;
+  providerId: Conversation['providerId'];
+  title: string;
+  detachable: boolean;
+};
+
 export interface ConversationProvider {
   startSession(
     conversation: Conversation,
@@ -8,8 +19,7 @@ export interface ConversationProvider {
     initialPrompt?: string
   ): Promise<void>;
   stopSession(conversationId: string): Promise<void>;
-  getActiveSessionCount(): number;
-  getDetachableSessionCount(): number;
+  getActiveSessions(): ActiveConversationSession[];
   destroyAll(): Promise<void>;
   detachAll(): Promise<void>;
 }

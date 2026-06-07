@@ -10,6 +10,11 @@ export type ConversationCrudHooks = {
     taskId: string,
     newTitle: string
   ) => void | Promise<void>;
+  'conversation:archived': (
+    conversationId: string,
+    projectId: string,
+    taskId: string
+  ) => void | Promise<void>;
   'conversation:deleted': (conversationId: string) => void | Promise<void>;
 };
 

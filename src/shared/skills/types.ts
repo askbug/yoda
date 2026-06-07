@@ -7,6 +7,17 @@ export interface SkillFrontmatter {
   'allowed-tools'?: string;
 }
 
+export interface SkillValidationIssue {
+  severity: 'error' | 'warning';
+  agent: 'codex';
+  field: string;
+  code: string;
+  message: string;
+  path?: string;
+  max?: number;
+  actual?: number;
+}
+
 export interface CatalogSkill {
   /** Skill directory name */
   id: string;
@@ -28,8 +39,12 @@ export interface CatalogSkill {
   skillMdContent?: string;
   /** Parsed frontmatter */
   frontmatter: SkillFrontmatter;
+  /** Agent compatibility or format validation issues */
+  validationIssues?: SkillValidationIssue[];
   /** Whether skill is installed locally */
   installed: boolean;
+  /** Whether installed skill is locally disabled without uninstalling */
+  disabled?: boolean;
   /** Filesystem path if installed */
   localPath?: string;
 }

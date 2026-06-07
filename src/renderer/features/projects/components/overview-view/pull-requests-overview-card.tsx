@@ -2,12 +2,7 @@ import { ArrowRight, GitPullRequest } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
 import { usePullRequests } from '@renderer/features/projects/components/pr-view/usePullRequests';
-import {
-  asMounted,
-  getProjectStore,
-  getRepositoryStore,
-} from '@renderer/features/projects/stores/project-selectors';
-import type { ProjectView } from '@renderer/features/projects/stores/project-view';
+import { getRepositoryStore } from '@renderer/features/projects/stores/project-selectors';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
@@ -20,7 +15,6 @@ export const PullRequestsOverviewCard = observer(function PullRequestsOverviewCa
   projectId: string;
 }) {
   const { t } = useTranslation();
-  const project = asMounted(getProjectStore(projectId));
   const repo = getRepositoryStore(projectId);
   const repositoryUrl = repo?.repositoryUrl ?? null;
 
@@ -31,7 +25,7 @@ export const PullRequestsOverviewCard = observer(function PullRequestsOverviewCa
   });
 
   const goToPrs = () => {
-    if (project) project.view.setProjectView('pull-request' as ProjectView);
+    if (repositoryUrl) void rpc.app.openExternal(repositoryUrl);
   };
 
   const recent = prs.slice(0, RECENT_LIMIT);

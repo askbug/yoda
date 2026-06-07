@@ -9,6 +9,11 @@ import {
 import { YODA_DOCS_URL, YODA_RELEASES_URL } from '@shared/urls';
 import { events } from '@main/lib/events';
 
+function restartApp(): void {
+  app.relaunch();
+  app.quit();
+}
+
 export function setupApplicationMenu(): void {
   const isMac = process.platform === 'darwin';
 
@@ -32,6 +37,10 @@ export function setupApplicationMenu(): void {
               {
                 label: 'Check for Updates\u2026',
                 click: () => events.emit(menuCheckForUpdatesChannel, undefined),
+              },
+              {
+                label: `Restart ${app.name}`,
+                click: restartApp,
               },
               { type: 'separator' as const },
               { role: 'services' as const },
@@ -60,6 +69,10 @@ export function setupApplicationMenu(): void {
                 label: 'Settings\u2026',
                 accelerator: 'CmdOrCtrl+,',
                 click: () => events.emit(menuOpenSettingsChannel, undefined),
+              },
+              {
+                label: `Restart ${app.name}`,
+                click: restartApp,
               },
               { type: 'separator' as const },
             ]

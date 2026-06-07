@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IME Punctuation Probe</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f7f4;
+        --paper: #ffffff;
+        --ink: #1e2328;
+        --muted: #66707a;
+        --line: #d9ddd8;
+        --line-strong: #aeb6ad;
+        --accent: #0b6b57;
+        --accent-soft: #e4f2ed;
+        --warn: #9a5b00;
+        --warn-soft: #fff3d8;
+        --bad: #b42318;
+        --bad-soft: #ffebe8;
+        --good: #087443;
+        --good-soft: #e1f5ea;
+        --mono: 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+        --sans: 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 22px 28px 18px;
+        border-bottom: 1px solid var(--line);
+        background: var(--paper);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 23px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin: 6px 0 0;
+        color: var(--muted);
+        max-width: 860px;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      button {
+        appearance: none;
+        border: 1px solid var(--line-strong);
+        background: var(--paper);
+        color: var(--ink);
+        height: 34px;
+        padding: 0 12px;
+        border-radius: 6px;
+        font: 600 13px/1 var(--sans);
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .status-bar {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+        border-bottom: 1px solid var(--line);
+        background: #eef0ea;
+      }
+
+      .status-item {
+        padding: 10px 14px;
+        border-right: 1px solid var(--line);
+        min-width: 0;
+      }
+
+      .status-item:last-child {
+        border-right: 0;
+      }
+
+      .label {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .value {
+        display: block;
+        margin-top: 3px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.35fr);
+        gap: 14px;
+        padding: 14px;
+        min-height: 0;
+      }
+
+      .panel {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        min-width: 0;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .panel-note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .panel-body {
+        padding: 14px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 106px;
+        resize: vertical;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        padding: 10px;
+        background: #fffefb;
+        color: var(--ink);
+        font: 14px/1.55 var(--mono);
+        outline: none;
+      }
+
+      textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+
+      .terminal-probe {
+        min-height: 118px;
+        background: #141917;
+        color: #d7f6e6;
+        border-color: #24352f;
+      }
+
+      .terminal-probe:focus {
+        border-color: #3dc69f;
+        box-shadow: 0 0 0 3px rgba(61, 198, 159, 0.18);
+      }
+
+      .test-strip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fafaf7;
+        font-family: var(--mono);
+      }
+
+      .results {
+        display: grid;
+        gap: 10px;
+      }
+
+      .result {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      .result .result-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        background: #f3f4ef;
+        border-bottom: 1px solid var(--line);
+        font-weight: 700;
+      }
+
+      .result pre {
+        margin: 0;
+        min-height: 42px;
+        padding: 10px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font: 12px/1.5 var(--mono);
+      }
+
+      .verdict {
+        padding: 10px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: #f8f8f3;
+      }
+
+      .verdict.good {
+        background: var(--good-soft);
+        border-color: #a8dec1;
+      }
+
+      .verdict.warn {
+        background: var(--warn-soft);
+        border-color: #e2c16d;
+      }
+
+      .verdict.bad {
+        background: var(--bad-soft);
+        border-color: #f0aaa4;
+      }
+
+      .event-tools {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        background: #f8f8f3;
+      }
+
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      input[type='checkbox'] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent);
+      }
+
+      .log-wrap {
+        max-height: calc(100vh - 248px);
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      th,
+      td {
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #e7eae3;
+        color: #29302d;
+        font-family: var(--sans);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      td {
+        max-width: 260px;
+        word-break: break-word;
+      }
+
+      .event-type {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #fff;
+        font-family: var(--sans);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      @media (max-width: 980px) {
+        header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .toolbar {
+          justify-content: flex-start;
+        }
+
+        .status-bar,
+        main {
+          grid-template-columns: 1fr;
+        }
+
+        .status-item {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .log-wrap {
+          max-height: 60vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <div>
+          <h1>IME Punctuation Probe</h1>
+          <p class="subtitle">
+            用原生 textarea 与 terminal-like 输入模型对比中文标点，判断问题来自标准输入环境还是来自
+            keydown 发送策略。
+          </p>
+        </div>
+        <div class="toolbar">
+          <button id="clearButton" type="button">清空</button>
+          <button id="copyButton" type="button">复制 JSON</button>
+          <button id="downloadButton" type="button">下载 JSON</button>
+        </div>
+      </header>
+
+      <section class="status-bar" aria-label="environment">
+        <div class="status-item">
+          <span class="label">Platform</span>
+          <span id="platformValue" class="value"></span>
+        </div>
+        <div class="status-item">
+          <span class="label">Language</span>
+          <span id="languageValue" class="value"></span>
+        </div>
+        <div class="status-item">
+          <span class="label">Protocol</span>
+          <span id="protocolValue" class="value"></span>
+        </div>
+        <div class="status-item">
+          <span class="label">User Agent</span>
+          <span id="userAgentValue" class="value"></span>
+        </div>
+      </section>
+
+      <main>
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Input Surface</h2>
+            <span class="panel-note">请用中文输入法在两个输入框里手动键入标点</span>
+          </div>
+          <div class="panel-body stack">
+            <div class="test-strip" aria-label="test punctuation">
+              <span class="label">Suggested</span>
+              <span class="chip">，</span>
+              <span class="chip">。</span>
+              <span class="chip">！</span>
+              <span class="chip">？</span>
+              <span class="chip">；</span>
+              <span class="chip">：</span>
+              <span class="chip">、</span>
+              <span class="chip">“”</span>
+              <span class="chip">（）</span>
+              <span class="chip">【】</span>
+            </div>
+
+            <label>
+              <span class="label">Native textarea</span>
+              <textarea id="nativeInput" autocomplete="off" spellcheck="false"></textarea>
+            </label>
+
+            <label>
+              <span class="label">Terminal probe textarea</span>
+              <textarea
+                id="probeInput"
+                class="terminal-probe"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
+            </label>
+
+            <section class="results" aria-label="results">
+              <div id="verdict" class="verdict">
+                尚未输入。先在 Native textarea 中输入中文标点，再在 Terminal probe
+                中输入同一组按键。
+              </div>
+
+              <div class="result">
+                <div class="result-title">
+                  <span>Native textarea value</span>
+                  <span id="nativeCount" class="panel-note">0 chars</span>
+                </div>
+                <pre id="nativeValue"></pre>
+              </div>
+
+              <div class="result">
+                <div class="result-title">
+                  <span>Keydown-immediate stream</span>
+                  <span id="keydownCount" class="panel-note">0 chars</span>
+                </div>
+                <pre id="keydownStream"></pre>
+              </div>
+
+              <div class="result">
+                <div class="result-title">
+                  <span>Input-first stream</span>
+                  <span id="inputCount" class="panel-note">0 chars</span>
+                </div>
+                <pre id="inputStream"></pre>
+              </div>
+
+              <div class="result">
+                <div class="result-title">
+                  <span>Value-diff stream</span>
+                  <span id="diffCount" class="panel-note">0 chars</span>
+                </div>
+                <pre id="diffStream"></pre>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Event Log</h2>
+            <span id="eventCount" class="panel-note">0 events</span>
+          </div>
+          <div class="event-tools">
+            <label class="toggle">
+              <input id="autoScrollToggle" type="checkbox" checked />
+              Auto scroll
+            </label>
+            <label class="toggle">
+              <input id="showValueToggle" type="checkbox" />
+              Show full value
+            </label>
+          </div>
+          <div id="logWrap" class="log-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Target</th>
+                  <th>Event</th>
+                  <th>Key</th>
+                  <th>Data</th>
+                  <th>Input Type</th>
+                  <th>Compose</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody id="eventBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const CJK_PUNCTUATION = new Set(Array.from('，。！？；：、“”‘’（）【】《》'));
+      const ASCII_PUNCTUATION = new Set(Array.from(',.!?;:\\"\'()[]<>/\\\\`-=_+{}'));
+      const EVENT_TYPES = [
+        'keydown',
+        'keypress',
+        'keyup',
+        'beforeinput',
+        'input',
+        'compositionstart',
+        'compositionupdate',
+        'compositionend',
+      ];
+
+      const nativeInput = document.getElementById('nativeInput');
+      const probeInput = document.getElementById('probeInput');
+      const eventBody = document.getElementById('eventBody');
+      const logWrap = document.getElementById('logWrap');
+      const autoScrollToggle = document.getElementById('autoScrollToggle');
+      const showValueToggle = document.getElementById('showValueToggle');
+
+      const state = {
+        events: [],
+        previousValue: new WeakMap(),
+        keydownStream: '',
+        inputFirstStream: '',
+        diffStream: '',
+      };
+
+      document.getElementById('platformValue').textContent = navigator.platform || 'unknown';
+      document.getElementById('languageValue').textContent = navigator.language || 'unknown';
+      document.getElementById('protocolValue').textContent = location.protocol;
+      document.getElementById('userAgentValue').textContent = navigator.userAgent;
+
+      state.previousValue.set(nativeInput, nativeInput.value);
+      state.previousValue.set(probeInput, probeInput.value);
+
+      function codePoints(value) {
+        return Array.from(value).map((char) => {
+          const point = char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+          return `${char} U+${point}`;
+        });
+      }
+
+      function compact(value) {
+        if (value === null || value === undefined || value === '') return '';
+        return `${JSON.stringify(value)} ${codePoints(value).join(' ')}`;
+      }
+
+      function printableKey(event) {
+        if (!(event instanceof KeyboardEvent)) return '';
+        if (event.ctrlKey || event.metaKey || event.altKey) return '';
+        if (event.key.length !== 1) return '';
+        return event.key;
+      }
+
+      function diffValues(previous, current) {
+        let start = 0;
+        while (
+          start < previous.length &&
+          start < current.length &&
+          previous[start] === current[start]
+        ) {
+          start += 1;
+        }
+
+        let previousEnd = previous.length;
+        let currentEnd = current.length;
+        while (
+          previousEnd > start &&
+          currentEnd > start &&
+          previous[previousEnd - 1] === current[currentEnd - 1]
+        ) {
+          previousEnd -= 1;
+          currentEnd -= 1;
+        }
+
+        return {
+          removed: previous.slice(start, previousEnd),
+          inserted: current.slice(start, currentEnd),
+        };
+      }
+
+      function appendInputFirst(event, diff) {
+        if (!(event instanceof InputEvent)) return '';
+        if (event.inputType === 'deleteContentBackward') {
+          state.inputFirstStream = state.inputFirstStream.slice(0, -1);
+          return '';
+        }
+        if (
+          event.inputType === 'insertText' ||
+          event.inputType === 'insertCompositionText' ||
+          event.inputType === 'insertReplacementText'
+        ) {
+          const text = event.data || diff.inserted;
+          if (text) state.inputFirstStream += text;
+          return text;
+        }
+        if (diff.inserted) {
+          state.inputFirstStream += diff.inserted;
+          return diff.inserted;
+        }
+        return '';
+      }
+
+      function updateResults() {
+        const nativeValue = nativeInput.value;
+        const keydownValue = state.keydownStream;
+        const inputValue = state.inputFirstStream;
+        const diffValue = state.diffStream;
+
+        document.getElementById('nativeValue').textContent = compact(nativeValue);
+        document.getElementById('keydownStream').textContent = compact(keydownValue);
+        document.getElementById('inputStream').textContent = compact(inputValue);
+        document.getElementById('diffStream').textContent = compact(diffValue);
+
+        document.getElementById('nativeCount').textContent =
+          `${Array.from(nativeValue).length} chars`;
+        document.getElementById('keydownCount').textContent =
+          `${Array.from(keydownValue).length} chars`;
+        document.getElementById('inputCount').textContent =
+          `${Array.from(inputValue).length} chars`;
+        document.getElementById('diffCount').textContent = `${Array.from(diffValue).length} chars`;
+        document.getElementById('eventCount').textContent = `${state.events.length} events`;
+
+        const nativeHasCjk = Array.from(nativeValue).some((char) => CJK_PUNCTUATION.has(char));
+        const nativeHasAscii = Array.from(nativeValue).some((char) => ASCII_PUNCTUATION.has(char));
+        const inputHasCjk = Array.from(inputValue + diffValue).some((char) =>
+          CJK_PUNCTUATION.has(char)
+        );
+        const keydownHasAscii = Array.from(keydownValue).some((char) =>
+          ASCII_PUNCTUATION.has(char)
+        );
+
+        const verdict = document.getElementById('verdict');
+        verdict.className = 'verdict';
+        if (!nativeValue && !keydownValue && !inputValue && !diffValue) {
+          verdict.textContent =
+            '尚未输入。先在 Native textarea 中输入中文标点，再在 Terminal probe 中输入同一组按键。';
+        } else if (nativeHasCjk && inputHasCjk && keydownHasAscii) {
+          verdict.classList.add('warn');
+          verdict.textContent =
+            '标准输入可以产生中文标点，但 keydown-immediate stream 出现英文标点。terminal 若信任 keydown，存在复现风险。';
+        } else if (nativeHasCjk && inputHasCjk) {
+          verdict.classList.add('good');
+          verdict.textContent =
+            '标准输入与 input/value-diff 路径都能拿到中文标点。优先检查 terminal 自定义 key handler 是否过早发送 keydown。';
+        } else if (!nativeHasCjk && nativeHasAscii) {
+          verdict.classList.add('bad');
+          verdict.textContent =
+            'Native textarea 本身只得到英文标点。当前标准环境、输入法设置或浏览器事件路径已经无法产生中文标点。';
+        } else {
+          verdict.classList.add('warn');
+          verdict.textContent =
+            '事件已记录，但还不足以判断。请继续输入中文逗号、句号、问号、感叹号、顿号等标点。';
+        }
+      }
+
+      function renderRow(row) {
+        const tr = document.createElement('tr');
+        const valueCell = showValueToggle.checked
+          ? compact(row.value)
+          : compact(row.value).slice(0, 80);
+        tr.innerHTML = `
+          <td>${row.index}</td>
+          <td>${row.target}</td>
+          <td><span class="event-type">${row.type}</span></td>
+          <td>${compact(row.key)}<br>${row.code || ''}<br>${row.keyCode || ''}</td>
+          <td>${compact(row.data)}</td>
+          <td>${row.inputType || ''}</td>
+          <td>${row.isComposing ? 'true' : 'false'}</td>
+          <td>${valueCell}</td>
+        `;
+        eventBody.appendChild(tr);
+      }
+
+      function logEvent(targetName, event) {
+        const target = event.currentTarget;
+        const previous = state.previousValue.get(target) || '';
+        const current = target.value || '';
+        const diff = diffValues(previous, current);
+
+        let keydownDelta = '';
+        let inputDelta = '';
+        if (target === probeInput && event.type === 'keydown') {
+          keydownDelta = printableKey(event);
+          state.keydownStream += keydownDelta;
+        }
+        if (target === probeInput && event.type === 'input') {
+          inputDelta = appendInputFirst(event, diff);
+          if (diff.removed) {
+            state.diffStream = state.diffStream.slice(0, -Array.from(diff.removed).length);
+          }
+          if (diff.inserted) {
+            state.diffStream += diff.inserted;
+          }
+        }
+
+        const row = {
+          index: state.events.length + 1,
+          time: new Date().toISOString(),
+          target: targetName,
+          type: event.type,
+          key: event instanceof KeyboardEvent ? event.key : '',
+          code: event instanceof KeyboardEvent ? event.code : '',
+          keyCode: event instanceof KeyboardEvent ? event.keyCode : '',
+          charCode: event instanceof KeyboardEvent ? event.charCode : '',
+          which: event instanceof KeyboardEvent ? event.which : '',
+          data: event instanceof InputEvent || event instanceof CompositionEvent ? event.data : '',
+          inputType: event instanceof InputEvent ? event.inputType : '',
+          isComposing: 'isComposing' in event ? Boolean(event.isComposing) : false,
+          shiftKey: event instanceof KeyboardEvent ? event.shiftKey : false,
+          altKey: event instanceof KeyboardEvent ? event.altKey : false,
+          ctrlKey: event instanceof KeyboardEvent ? event.ctrlKey : false,
+          metaKey: event instanceof KeyboardEvent ? event.metaKey : false,
+          defaultPrevented: event.defaultPrevented,
+          value: current,
+          selectionStart: target.selectionStart,
+          selectionEnd: target.selectionEnd,
+          diff,
+          keydownDelta,
+          inputDelta,
+        };
+
+        state.events.push(row);
+        state.previousValue.set(target, current);
+        renderRow(row);
+        updateResults();
+
+        if (autoScrollToggle.checked) {
+          logWrap.scrollTop = logWrap.scrollHeight;
+        }
+      }
+
+      for (const eventType of EVENT_TYPES) {
+        nativeInput.addEventListener(eventType, (event) => logEvent('native', event), true);
+        probeInput.addEventListener(eventType, (event) => logEvent('probe', event), true);
+      }
+
+      showValueToggle.addEventListener('change', () => {
+        eventBody.textContent = '';
+        for (const row of state.events) renderRow(row);
+      });
+
+      document.getElementById('clearButton').addEventListener('click', () => {
+        nativeInput.value = '';
+        probeInput.value = '';
+        eventBody.textContent = '';
+        state.events = [];
+        state.keydownStream = '';
+        state.inputFirstStream = '';
+        state.diffStream = '';
+        state.previousValue.set(nativeInput, '');
+        state.previousValue.set(probeInput, '');
+        updateResults();
+        nativeInput.focus();
+      });
+
+      function exportPayload() {
+        return {
+          generatedAt: new Date().toISOString(),
+          environment: {
+            platform: navigator.platform,
+            language: navigator.language,
+            languages: navigator.languages,
+            userAgent: navigator.userAgent,
+            protocol: location.protocol,
+          },
+          values: {
+            nativeTextarea: nativeInput.value,
+            probeTextarea: probeInput.value,
+            keydownImmediateStream: state.keydownStream,
+            inputFirstStream: state.inputFirstStream,
+            valueDiffStream: state.diffStream,
+          },
+          events: state.events,
+        };
+      }
+
+      document.getElementById('copyButton').addEventListener('click', async () => {
+        const text = JSON.stringify(exportPayload(), null, 2);
+        await navigator.clipboard.writeText(text);
+      });
+
+      document.getElementById('downloadButton').addEventListener('click', () => {
+        const text = JSON.stringify(exportPayload(), null, 2);
+        const blob = new Blob([text], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `ime-punctuation-probe-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+
+      updateResults();
+      nativeInput.focus();
+    </script>
+  </body>
+</html>

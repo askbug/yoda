@@ -14,7 +14,7 @@ import { SidebarTaskItem } from './task-item';
 
 const MAX_TASKS_RENDERED = 50;
 
-export const SidebarProjectlessSessionList = observer(function SidebarProjectlessSessionList() {
+export const SidebarProjectlessTaskList = observer(function SidebarProjectlessTaskList() {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   const internalProject = asMounted(getProjectStore(INTERNAL_PROJECT_ID));
@@ -35,7 +35,7 @@ export const SidebarProjectlessSessionList = observer(function SidebarProjectles
   return (
     <SidebarGroup className="mb-0 shrink-0 flex flex-col">
       <SidebarSectionHeader
-        label={t('sidebar.conversations')}
+        label={t('sidebar.tasks')}
         collapsed={collapsed}
         onToggle={() => setCollapsed((c) => !c)}
       />

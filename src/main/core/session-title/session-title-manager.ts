@@ -1,11 +1,10 @@
 import { eq, sql } from 'drizzle-orm';
 import type { AgentProviderId } from '@shared/agent-provider-registry';
-import { taskRenamedChannel } from '@shared/events/taskEvents';
-import { normalizeTaskDisplayName } from '@shared/task-name';
-import { taskEvents } from '@main/core/tasks/task-events';
-import { mapTaskRowToTask } from '@main/core/tasks/utils/utils';
+import { conversationRenamedChannel } from '@shared/events/conversationEvents';
+import { normalizeTaskDisplayName as normalizeSessionTitle } from '@shared/task-name';
+import { conversationEvents } from '@main/core/conversations/conversation-events';
 import { db } from '@main/db/client';
-import { conversations, tasks } from '@main/db/schema';
+import { conversations } from '@main/db/schema';
 import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
 import { ClaudeSessionTitleSource } from './claude-title-source';
@@ -57,39 +56,38 @@ class SessionTitleManager {
   }
 
   private async applyTitle(ctx: SessionTitleContext, rawTitle: string): Promise<void> {
-    const displayName = normalizeTaskDisplayName(rawTitle);
-    if (!displayName) return;
+    const displayTitle = normalizeSessionTitle(rawTitle);
+    if (!displayTitle) return;
 
-    // Only mirror onto the task name if this conversation is the task's primary
-    // (= initial) one. Avoids later side conversations renaming the task.
     const [convRow] = await db
-      .select({ isInitial: conversations.isInitialConversation })
+      .select({ title: conversations.title })
       .from(conversations)
       .where(eq(conversations.id, ctx.conversationId))
       .limit(1);
-    if (!convRow || convRow.isInitial !== true) return;
+    if (!convRow) return;
 
-    const [row] = await db.select().from(tasks).where(eq(tasks.id, ctx.taskId)).limit(1);
-    if (!row || row.isUserNamed === 1) return;
-    if (row.name === displayName) return;
-
-    const [updatedRow] = await db
-      .update(tasks)
-      .set({
-        name: displayName,
-        updatedAt: sql`CURRENT_TIMESTAMP`,
-      })
-      .where(eq(tasks.id, ctx.taskId))
-      .returning();
-
-    if (!updatedRow) return;
-    taskEvents._emit('task:updated', mapTaskRowToTask(updatedRow));
-    events.emit(taskRenamedChannel, {
-      taskId: ctx.taskId,
-      projectId: ctx.projectId,
-      name: displayName,
-      isUserNamed: false,
-    });
+    if (convRow.title !== displayTitle) {
+      await db
+        .update(conversations)
+        .set({
+          title: displayTitle,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(conversations.id, ctx.conversationId));
+      conversationEvents._emit(
+        'conversation:renamed',
+        ctx.conversationId,
+        ctx.projectId,
+        ctx.taskId,
+        displayTitle
+      );
+      events.emit(conversationRenamedChannel, {
+        conversationId: ctx.conversationId,
+        projectId: ctx.projectId,
+        taskId: ctx.taskId,
+        title: displayTitle,
+      });
+    }
   }
 }
 

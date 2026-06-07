@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@renderer/utils/utils';
-import { ImportStep } from './import-step';
 import { SignInStep } from './sign-in-step';
 
-type OnboardingStep = 'sign-in' | 'import';
+type OnboardingStep = 'sign-in';
 
 const stepConfig: Record<
   OnboardingStep,
@@ -13,10 +12,6 @@ const stepConfig: Record<
   'sign-in': {
     labelKey: 'onboarding.signInTitle',
     component: SignInStep,
-  },
-  import: {
-    labelKey: 'onboarding.importTitle',
-    component: ImportStep,
   },
 };
 

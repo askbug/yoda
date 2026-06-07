@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { existsSync, type Dirent } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -11,6 +11,7 @@ import type {
   CodexTurnContext,
 } from '@shared/conversations';
 import {
+  findClosestCodexThreadTitleByCreatedAt,
   getClaimedCodexThreadId,
   resolveCodexStatePath,
 } from '@main/core/session-title/codex-title-source';
@@ -36,32 +37,59 @@ type ParsedCodexRollout = {
   developerMessages: ClaudeSessionPrompt[];
   prompts: ClaudeSessionPrompt[];
   turnContexts: CodexTurnContext[];
+  dynamicTools: CodexDynamicTool[];
+  completedTurnCount: number;
   cliVersion: string | null;
   modelProvider: string | null;
 };
 
+type CodexRolloutMeta = {
+  id: string;
+  cwd: string;
+  timestamp: string | null;
+  cliVersion: string | null;
+  modelProvider: string | null;
+  memoryMode: string | null;
+};
+
+const MAX_CODEX_ROLLOUT_SCAN_FILES = 500;
+const CODEX_CREATED_AT_MATCH_MAX_DISTANCE_MS = 2 * 60_000;
+const SQLITE_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
 export async function getCodexSessionContext(
   cwd: string,
   conversationId: string,
-  conversationTitle?: string
+  conversationTitle?: string,
+  conversationCreatedAt?: string | null
 ): Promise<CodexSessionContext | null> {
-  const statePath = resolveCodexStatePath();
-  const thread = resolveCodexThread({
-    statePath,
-    cwd,
-    conversationId,
-    conversationTitle,
-  });
+  const codexHome = resolveCodexHome();
+  const statePath = resolveCodexStatePath(codexHome);
+  const thread =
+    resolveCodexThread({
+      statePath,
+      cwd,
+      conversationId,
+      conversationTitle,
+      conversationCreatedAt,
+    }) ??
+    (await resolveCodexThreadFromRollouts({
+      codexHome,
+      cwd,
+      conversationId,
+      conversationTitle,
+      conversationCreatedAt,
+    }));
   if (!thread) return null;
 
-  const [rollout, memoryFiles, dynamicTools, skillsListing] = await Promise.all([
+  const [rollout, memoryFiles, dbDynamicTools, skills] = await Promise.all([
     loadRollout(thread.rolloutPath),
     loadMemoryFiles(cwd),
     loadDynamicTools(statePath, thread.id),
-    scanCodexSkills(cwd),
+    scanCodexSkills(cwd, { codexHome }),
   ]);
 
   const parsed = rollout ? parseCodexRollout(rollout, thread.firstUserMessage) : emptyRollout();
+  const dynamicTools = dbDynamicTools.length > 0 ? dbDynamicTools : parsed.dynamicTools;
 
   return {
     threadId: thread.id,
@@ -78,10 +106,166 @@ export async function getCodexSessionContext(
     developerMessages: parsed.developerMessages,
     memoryFiles,
     dynamicTools,
-    skillsListing,
+    skills,
+    skillsListing: formatSkillListing(skills),
     prompts: parsed.prompts,
     turnContexts: parsed.turnContexts,
+    completedTurnCount: parsed.completedTurnCount,
   };
+}
+
+export async function getCodexSessionModel(
+  cwd: string,
+  conversationId: string,
+  conversationTitle?: string,
+  conversationCreatedAt?: string | null
+): Promise<string | null> {
+  const codexHome = resolveCodexHome();
+  const statePath = resolveCodexStatePath(codexHome);
+  const thread =
+    resolveCodexThread({
+      statePath,
+      cwd,
+      conversationId,
+      conversationTitle,
+      conversationCreatedAt,
+    }) ??
+    (await resolveCodexThreadFromRollouts({
+      codexHome,
+      cwd,
+      conversationId,
+      conversationTitle,
+      conversationCreatedAt,
+    }));
+  return thread?.model?.trim() || null;
+}
+
+function resolveCodexHome(): string {
+  return process.env.CODEX_HOME ?? join(homedir(), '.codex');
+}
+
+async function resolveCodexThreadFromRollouts({
+  codexHome,
+  cwd,
+  conversationId,
+  conversationTitle,
+  conversationCreatedAt,
+}: {
+  codexHome: string;
+  cwd: string;
+  conversationId: string;
+  conversationTitle?: string;
+  conversationCreatedAt?: string | null;
+}): Promise<CodexThreadContextRow | null> {
+  const rolloutPaths = await listCodexRolloutPaths(codexHome);
+  const title = conversationTitle?.trim();
+  const targetCreatedAtMs = parseTimestampMs(conversationCreatedAt);
+  let closestCreatedAtRow: { row: CodexThreadContextRow; distanceMs: number } | null = null;
+
+  for (const rolloutPath of rolloutPaths) {
+    let raw: string;
+    try {
+      raw = await readFile(rolloutPath, 'utf8');
+    } catch {
+      continue;
+    }
+
+    const meta = parseCodexRolloutMeta(raw);
+    if (!meta || meta.cwd !== cwd) continue;
+
+    const parsed = parseCodexRollout(raw, null);
+    const firstUserMessage = parsed.prompts[0]?.text ?? null;
+    const lastTurnContext = parsed.turnContexts.at(-1);
+    const row: CodexThreadContextRow = {
+      id: meta.id,
+      cwd: meta.cwd,
+      rolloutPath,
+      title: firstUserMessage ?? title ?? meta.id,
+      model: lastTurnContext?.model ?? null,
+      modelProvider: parsed.modelProvider ?? meta.modelProvider,
+      cliVersion: parsed.cliVersion ?? meta.cliVersion,
+      memoryMode: meta.memoryMode,
+      approvalMode: lastTurnContext?.approvalPolicy ?? null,
+      sandboxPolicy: lastTurnContext?.sandboxPolicy ?? null,
+      firstUserMessage,
+    };
+
+    if (row.id === conversationId) return row;
+    if (title && (row.title === title || row.firstUserMessage === title)) return row;
+
+    const rowCreatedAtMs = parseTimestampMs(meta.timestamp);
+    if (targetCreatedAtMs !== undefined && rowCreatedAtMs !== undefined) {
+      const distanceMs = Math.abs(rowCreatedAtMs - targetCreatedAtMs);
+      if (
+        distanceMs <= CODEX_CREATED_AT_MATCH_MAX_DISTANCE_MS &&
+        (!closestCreatedAtRow || distanceMs < closestCreatedAtRow.distanceMs)
+      ) {
+        closestCreatedAtRow = { row, distanceMs };
+      }
+    }
+  }
+
+  return closestCreatedAtRow?.row ?? null;
+}
+
+async function listCodexRolloutPaths(codexHome: string): Promise<string[]> {
+  const sessionsRoot = join(codexHome, 'sessions');
+  const out: string[] = [];
+
+  async function walk(dir: string): Promise<void> {
+    let entries: Dirent<string>[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    await Promise.all(
+      entries.map(async (entry) => {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(path);
+        } else if (
+          entry.isFile() &&
+          entry.name.startsWith('rollout-') &&
+          entry.name.endsWith('.jsonl')
+        ) {
+          out.push(path);
+        }
+      })
+    );
+  }
+
+  await walk(sessionsRoot);
+  return out.sort((a, b) => b.localeCompare(a)).slice(0, MAX_CODEX_ROLLOUT_SCAN_FILES);
+}
+
+function parseCodexRolloutMeta(raw: string): CodexRolloutMeta | null {
+  const firstLineEnd = raw.indexOf('\n');
+  const firstLine = raw.slice(0, firstLineEnd === -1 ? raw.length : firstLineEnd);
+  const parsed = firstLine ? safeParse(firstLine) : null;
+  if (!parsed || parsed.type !== 'session_meta') return null;
+  const payload = objectValue(parsed.payload);
+  if (!payload) return null;
+  const id = nullableString(payload.id);
+  const cwd = nullableString(payload.cwd);
+  if (!id || !cwd) return null;
+  return {
+    id,
+    cwd,
+    timestamp: nullableString(parsed.timestamp) ?? nullableString(payload.timestamp),
+    cliVersion: nullableString(payload.cli_version),
+    modelProvider: nullableString(payload.model_provider),
+    memoryMode: nullableString(payload.memory_mode),
+  };
+}
+
+function formatSkillListing(skills: Array<{ name: string; description: string }>): string {
+  return skills
+    .map((skill) =>
+      skill.description ? `- ${skill.name}: ${skill.description}` : `- ${skill.name}`
+    )
+    .join('\n');
 }
 
 function resolveCodexThread({
@@ -89,11 +273,13 @@ function resolveCodexThread({
   cwd,
   conversationId,
   conversationTitle,
+  conversationCreatedAt,
 }: {
   statePath: string;
   cwd: string;
   conversationId: string;
   conversationTitle?: string;
+  conversationCreatedAt?: string | null;
 }): CodexThreadContextRow | null {
   const claimedThreadId = getClaimedCodexThreadId(conversationId);
   if (claimedThreadId) {
@@ -108,6 +294,18 @@ function resolveCodexThread({
   if (title) {
     const byTitle = findCodexThreadByTitle(statePath, cwd, title);
     if (byTitle) return byTitle;
+  }
+
+  const createdAtMs = parseTimestampMs(conversationCreatedAt);
+  if (createdAtMs !== undefined) {
+    const byCreatedAt = findClosestCodexThreadTitleByCreatedAt({
+      statePath,
+      cwd,
+      targetCreatedAtMs: createdAtMs,
+      maxDistanceMs: CODEX_CREATED_AT_MATCH_MAX_DISTANCE_MS,
+      includeArchived: true,
+    });
+    if (byCreatedAt) return readCodexThreadContext(statePath, byCreatedAt.id);
   }
 
   return null;
@@ -258,10 +456,12 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
   let baseInstructions: string | null = null;
   let cliVersion: string | null = null;
   let modelProvider: string | null = null;
+  let dynamicTools: CodexDynamicTool[] = [];
   const developerMessages: ClaudeSessionPrompt[] = [];
   const eventPrompts: ClaudeSessionPrompt[] = [];
   const responseUserPrompts: ClaudeSessionPrompt[] = [];
   const turnContexts: CodexTurnContext[] = [];
+  let completedTurnCount = 0;
 
   for (const line of raw.split('\n')) {
     if (!line) continue;
@@ -276,6 +476,7 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
       modelProvider = nullableString(payload.model_provider) ?? modelProvider;
       const base = objectValue(payload.base_instructions);
       baseInstructions = nullableString(base?.text) ?? baseInstructions;
+      dynamicTools = parseSessionMetaDynamicTools(payload.dynamic_tools);
       continue;
     }
 
@@ -287,7 +488,12 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
 
     if (parsed.type === 'event_msg') {
       const payload = objectValue(parsed.payload);
-      if (!payload || payload.type !== 'user_message') continue;
+      if (!payload) continue;
+      if (payload.type === 'task_complete' || payload.type === 'turn_complete') {
+        completedTurnCount += 1;
+        continue;
+      }
+      if (payload.type !== 'user_message') continue;
       const text = nullableString(payload.message)?.trim();
       if (text) {
         eventPrompts.push({
@@ -334,6 +540,8 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
     developerMessages,
     prompts,
     turnContexts,
+    dynamicTools,
+    completedTurnCount,
     cliVersion,
     modelProvider,
   };
@@ -346,9 +554,41 @@ function parseTurnContext(value: unknown): CodexTurnContext | null {
     turnId: nullableString(ctx.turn_id),
     model: nullableString(ctx.model),
     approvalPolicy: nullableString(ctx.approval_policy),
-    sandboxPolicy: nullableString(ctx.sandbox_policy),
+    sandboxPolicy: formatCodexPolicy(ctx.sandbox_policy),
     effort: nullableString(ctx.effort),
   };
+}
+
+function parseSessionMetaDynamicTools(value: unknown): CodexDynamicTool[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const tool = parseDynamicToolLike(item);
+    return tool ? [tool] : [];
+  });
+}
+
+function parseDynamicToolLike(value: unknown): CodexDynamicTool | null {
+  const rec = objectValue(value);
+  if (!rec) return null;
+  const name = stringValue(rec.name);
+  if (!name) return null;
+  return {
+    name,
+    namespace: nullableString(rec.namespace),
+    description: stringValue(rec.description) ?? '',
+    inputSchema: stringValue(rec.input_schema) ?? stringValue(rec.inputSchema) ?? '',
+    deferLoading:
+      rec.defer_loading === 1 || rec.defer_loading === true || rec.deferLoading === true,
+  };
+}
+
+function formatCodexPolicy(value: unknown): string | null {
+  const str = nullableString(value);
+  if (str) return str;
+  const obj = objectValue(value);
+  const type = nullableString(obj?.type);
+  if (type) return type;
+  return null;
 }
 
 function extractContentText(content: unknown): string | null {
@@ -378,6 +618,8 @@ function emptyRollout(): ParsedCodexRollout {
     developerMessages: [],
     prompts: [],
     turnContexts: [],
+    dynamicTools: [],
+    completedTurnCount: 0,
     cliVersion: null,
     modelProvider: null,
   };
@@ -437,6 +679,13 @@ function isExpectedUnavailableCodexStateError(error: unknown): boolean {
     error.message.includes('no such table: thread_dynamic_tools') ||
     error.message.includes('unable to open database file')
   );
+}
+
+function parseTimestampMs(value: string | null | undefined): number | undefined {
+  if (!value) return undefined;
+  const normalized = SQLITE_TIMESTAMP_RE.test(value) ? `${value.replace(' ', 'T')}Z` : value;
+  const ms = Date.parse(normalized);
+  return Number.isNaN(ms) ? undefined : ms;
 }
 
 function objectValue(value: unknown): Record<string, unknown> | null {

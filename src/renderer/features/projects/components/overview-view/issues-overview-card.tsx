@@ -5,9 +5,9 @@ import type { Issue } from '@shared/tasks';
 import { useIssues } from '@renderer/features/integrations/use-issues';
 import { CreateIssueButton } from '@renderer/features/projects/components/issues-view/create-issue-button';
 import {
-  IssueLinkedSessions,
-  IssueSessionLinkPopover,
-} from '@renderer/features/projects/components/issues-view/issue-session-links';
+  IssueLinkedTasks,
+  IssueTaskLinkPopover,
+} from '@renderer/features/projects/components/issues-view/issue-task-links';
 import {
   asMounted,
   getProjectStore,
@@ -44,7 +44,7 @@ function IssueOverviewActions({
 
   return (
     <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover/issue:opacity-100">
-      <IssueSessionLinkPopover issue={issue} projectId={projectId} iconOnly />
+      <IssueTaskLinkPopover issue={issue} projectId={projectId} iconOnly />
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -89,8 +89,8 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
 
   const recentIssues = issues.slice(0, RECENT_LIMIT);
 
-  const goToIssues = () => {
-    if (project) project.view.setProjectView('issues' as ProjectView);
+  const goToTasks = () => {
+    if (project) project.view.setProjectView('tasks' as ProjectView);
   };
 
   return (
@@ -119,7 +119,7 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={goToIssues}
+                  onClick={goToTasks}
                   disabled={!repositoryUrl || !authenticated}
                   aria-label={t('projects.viewAll')}
                 >
@@ -160,14 +160,10 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
                       </span>
                     ) : null}
                   </button>
-                  <IssueOverviewActions
-                    issue={issue}
-                    projectId={projectId}
-                    onViewAll={goToIssues}
-                  />
+                  <IssueOverviewActions issue={issue} projectId={projectId} onViewAll={goToTasks} />
                 </div>
                 <div className="mt-1 flex min-w-0 items-center">
-                  <IssueLinkedSessions
+                  <IssueLinkedTasks
                     issue={issue}
                     projectId={projectId}
                     maxVisible={2}

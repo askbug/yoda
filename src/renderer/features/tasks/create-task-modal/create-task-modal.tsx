@@ -3,7 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getPrNumber, isForkPr, type PullRequest } from '@shared/pull-requests';
-import type { Issue } from '@shared/tasks';
+import type { CreateTaskParams, Issue } from '@shared/tasks';
 import {
   getProjectManagerStore,
   getRepositoryStore,
@@ -27,6 +27,7 @@ import {
 } from '@renderer/lib/ui/dialog';
 import { Switch } from '@renderer/lib/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
+import { log } from '@renderer/utils/logger';
 import {
   resolveBranchLikeTaskStrategy,
   resolvePullRequestTaskStrategy,
@@ -150,6 +151,15 @@ export const CreateTaskModal = observer(function CreateTaskModal({
           autoApprove: autoApproveDefaults.getDefault(initialConversation.provider),
         }
       : undefined;
+    const taskManager = projectStore.mountedProject!.taskManager;
+    const startCreateTask = (params: CreateTaskParams) => {
+      void taskManager.createTask(params).catch((error: unknown) => {
+        log.warn('CreateTaskModal: task creation failed after modal close', {
+          taskId: params.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    };
 
     switch (selectedStrategy) {
       case 'from-branch': {
@@ -160,7 +170,7 @@ export const CreateTaskModal = observer(function CreateTaskModal({
           taskBranch: fromBranch.taskName,
           pushBranch: fromBranch.pushBranch,
         });
-        void projectStore.mountedProject!.taskManager.createTask({
+        startCreateTask({
           id,
           projectId: selectedProjectId,
           name: fromBranch.taskName,
@@ -179,7 +189,7 @@ export const CreateTaskModal = observer(function CreateTaskModal({
           taskBranch: fromIssue.taskName,
           pushBranch: fromIssue.pushBranch,
         });
-        void projectStore.mountedProject!.taskManager.createTask({
+        startCreateTask({
           id,
           projectId: selectedProjectId,
           name: fromIssue.taskName,
@@ -203,7 +213,7 @@ export const CreateTaskModal = observer(function CreateTaskModal({
           taskBranch: fromPR.taskName,
           pushBranch: fromPR.branchSelection.pushBranch,
         });
-        void projectStore.mountedProject!.taskManager.createTask({
+        startCreateTask({
           id,
           projectId: selectedProjectId,
           name: fromPR.taskName,

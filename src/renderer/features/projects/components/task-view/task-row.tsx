@@ -1,10 +1,14 @@
 import { FileText } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { selectCurrentPr } from '@shared/pull-requests';
 import { type Task } from '@shared/tasks';
-import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
+import {
+  TaskIssueLinkPopover,
+  TaskLinkedIssues,
+  type TaskIssueLinkingState,
+} from '@renderer/features/projects/components/issues-view/task-issue-links';
 import { AgentStatusIndicator } from '@renderer/features/tasks/components/agent-status-indicator';
 import { TaskContextMenu } from '@renderer/features/tasks/components/task-context-menu';
 import { TaskGitDiffStats } from '@renderer/features/tasks/components/task-git-diff-stats';
@@ -14,21 +18,18 @@ import {
   resolveTaskMenuSessionFields,
   selectPreferredConversation,
 } from '@renderer/features/tasks/components/task-menu-session-info';
-import { runPreArchiveCommand } from '@renderer/features/tasks/run-pre-archive-command';
 import { type TaskStore } from '@renderer/features/tasks/stores/task';
 import {
   asProvisioned,
   getTaskManagerStore,
   taskAgentStatus,
 } from '@renderer/features/tasks/stores/task-selectors';
-import AgentLogo from '@renderer/lib/components/agent-logo';
 import { PrBadge } from '@renderer/lib/components/pr-badge';
 import { rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Checkbox } from '@renderer/lib/ui/checkbox';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
-import { agentConfig } from '@renderer/utils/agentConfig';
 import { cn } from '@renderer/utils/utils';
 
 export type ReadyTask = TaskStore & { data: Task };
@@ -36,31 +37,27 @@ export type ReadyTask = TaskStore & { data: Task };
 export const TaskRow = observer(function TaskRow({
   task,
   isSelected,
+  issueLinking,
   onToggleSelect,
 }: {
   task: ReadyTask;
   isSelected: boolean;
+  issueLinking: TaskIssueLinkingState;
   onToggleSelect: () => void;
 }) {
   const { t } = useTranslation();
   const { navigate } = useNavigate();
   const showRename = useShowModal('renameTaskModal');
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
-  const showEditPreArchive = useShowModal('editPreArchiveCommandModal');
   const showConfirm = useShowModal('confirmActionModal');
   const taskManager = getTaskManagerStore(task.data.projectId);
-  const { value: homeDraft } = useAppSettingsKey('homeDraft');
-  const preArchiveCommand = homeDraft?.preArchiveCommand ?? '';
   const [isArchiving, setIsArchiving] = useState(false);
 
-  const handleArchive = (options?: { skipPreCommand?: boolean }) => {
+  const handleArchive = () => {
     if (isArchiving) return;
     setIsArchiving(true);
     void (async () => {
       try {
-        if (!options?.skipPreCommand) {
-          await runPreArchiveCommand(task.data.projectId, task.data.id, preArchiveCommand);
-        }
         await taskManager?.archiveTask(task.data.id);
       } finally {
         setIsArchiving(false);
@@ -90,11 +87,6 @@ export const TaskRow = observer(function TaskRow({
     });
 
   const isArchived = Boolean(task.data.archivedAt);
-  const handleOpenDetails = () => {
-    if (isArchived) return;
-    handleProvision();
-    navigate('task', { projectId: task.data.projectId, taskId: task.data.id });
-  };
   const canPin = task.state !== 'unregistered';
   const agentAttention = taskAgentStatus(task);
   const currentPr = task.data.prs ? selectCurrentPr(task.data.prs) : undefined;
@@ -121,6 +113,28 @@ export const TaskRow = observer(function TaskRow({
         }
       : undefined;
 
+  const openPreferredConversationIfEmpty = () => {
+    if (!provisionedTask) return;
+    const { taskView } = provisionedTask;
+    if (taskView.tabManager.resolvedTabs.length > 0) return;
+    if (taskView.tabManager.openPreferredConversation()) {
+      taskView.setFocusedRegion('main');
+    }
+  };
+
+  const handleOpenDetails = () => {
+    if (isArchived) return;
+    handleProvision();
+    openPreferredConversationIfEmpty();
+    navigate('task', { projectId: task.data.projectId, taskId: task.data.id });
+  };
+  const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    handleOpenDetails();
+  };
+
   return (
     <TaskContextMenu
       projectId={task.data.projectId}
@@ -142,18 +156,20 @@ export const TaskRow = observer(function TaskRow({
       onMarkNeedsReview={() => void task.setNeedsReview(true)}
       onUnmarkNeedsReview={() => void task.setNeedsReview(false)}
       onRename={handleRename}
-      onArchive={() => handleArchive()}
-      onArchiveSkipPreCommand={
-        preArchiveCommand.trim() ? () => handleArchive({ skipPreCommand: true }) : undefined
-      }
+      onArchive={handleArchive}
       onArchiveWithNote={handleArchiveWithNote}
-      onConfigurePreArchive={() => showEditPreArchive({})}
       onRestore={handleRestore}
       onDelete={handleDelete}
     >
-      <button
+      <div
+        role={isArchived ? undefined : 'button'}
+        tabIndex={isArchived ? undefined : 0}
         onClick={handleOpenDetails}
-        className="group flex items-center gap-2 rounded-lg p-3  hover:bg-background-1 transition-colors w-full"
+        onKeyDown={isArchived ? undefined : handleRowKeyDown}
+        className={cn(
+          'group flex items-center gap-2 rounded-lg p-3 hover:bg-background-1 transition-colors w-full outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+          isArchived ? 'cursor-default' : 'cursor-pointer'
+        )}
       >
         <div
           onClick={(e) => e.stopPropagation()}
@@ -174,6 +190,7 @@ export const TaskRow = observer(function TaskRow({
             <TaskGitDiffStats task={task} className="text-xs shrink-0" />
             {currentPr && <PrBadge pr={currentPr} />}
           </div>
+          <TaskLinkedIssues task={task} className="min-w-0" />
           {task.data.archiveNote && (
             <div
               className="flex min-w-0 items-center gap-1 text-xs text-foreground-passive"
@@ -184,31 +201,11 @@ export const TaskRow = observer(function TaskRow({
             </div>
           )}
         </div>
-        <div className="flex items-center shrink-0 [&>span]:ring-2 [&>span]:ring-background [&>span:not(:first-child)]:-ml-1.5">
-          {Object.entries(task.conversationStats).map(([providerId, count]) => {
-            const config = agentConfig[providerId as keyof typeof agentConfig];
-            if (!config) return null;
-            return (
-              <span
-                key={providerId}
-                className="relative flex items-center justify-center h-5 w-5 rounded-sm bg-background-2 overflow-hidden"
-                title={`${config.name}: ${String(count)}`}
-              >
-                <AgentLogo
-                  logo={config.logo}
-                  alt={config.alt}
-                  isSvg={config.isSvg}
-                  invertInDark={config.invertInDark}
-                  className="h-3.5 w-3.5"
-                />
-                {count > 1 && (
-                  <span className="absolute -bottom-px -right-px text-[8px] leading-none font-semibold bg-background text-foreground-passive px-px rounded-tl">
-                    {count}
-                  </span>
-                )}
-              </span>
-            );
-          })}
+        <div
+          className="flex shrink-0 items-center opacity-70 transition-opacity group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TaskIssueLinkPopover task={task} issueLinking={issueLinking} />
         </div>
         <div
           className={cn(
@@ -226,7 +223,7 @@ export const TaskRow = observer(function TaskRow({
             />
           )}
         </div>
-      </button>
+      </div>
     </TaskContextMenu>
   );
 });

@@ -3,19 +3,30 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resolveCodexThreadIdForConversation } from './codex-session-id';
+import {
+  resolveAgentResumeSession,
+  resolveCodexThreadForConversation,
+  resolveCodexThreadIdForConversation,
+} from './codex-session-id';
 
 describe('resolveCodexThreadIdForConversation', () => {
+  const previousCodexHome = process.env.CODEX_HOME;
   let dir: string;
   let statePath: string;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'yoda-codex-session-id-'));
     statePath = join(dir, 'state_5.sqlite');
+    process.env.CODEX_HOME = dir;
     createStateDb(statePath);
   });
 
   afterEach(() => {
+    if (previousCodexHome === undefined) {
+      delete process.env.CODEX_HOME;
+    } else {
+      process.env.CODEX_HOME = previousCodexHome;
+    }
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -63,6 +74,44 @@ describe('resolveCodexThreadIdForConversation', () => {
         statePath,
       })
     ).toBe('codex-thread');
+    expect(
+      resolveCodexThreadForConversation({
+        conversationId: '9d72d411-e873-4215-a92a-ab3440436b74',
+        cwd: '/repo',
+        title: 'feat-src-renderer-features-tasks-components-task-context-menu',
+        createdAt: '2026-06-04 06:45:36',
+        statePath,
+      })
+    ).toEqual({ id: 'codex-thread', title: 'Codex renamed this session' });
+  });
+
+  it('returns the resolved Codex thread title with the resume session id', () => {
+    insertThread(statePath, {
+      id: 'codex-thread',
+      cwd: '/repo',
+      title: 'Actual Codex session title',
+      createdAtMs: Date.parse('2026-06-04T06:45:37.040Z'),
+      updatedAtMs: Date.parse('2026-06-04T06:56:25.777Z'),
+    });
+
+    const session = resolveAgentResumeSession(
+      {
+        id: 'conversation-1',
+        projectId: 'project-1',
+        taskId: 'task-1',
+        providerId: 'codex',
+        title: 'Stale Yoda conversation title',
+        createdAt: '2026-06-04 06:45:36',
+        lastInteractedAt: null,
+        isInitialConversation: true,
+      },
+      '/repo'
+    );
+
+    expect(session).toEqual({
+      sessionId: 'codex-thread',
+      sessionTitle: 'Actual Codex session title',
+    });
   });
 
   it('does not resolve a distant thread by creation time', () => {
@@ -83,6 +132,27 @@ describe('resolveCodexThreadIdForConversation', () => {
         statePath,
       })
     ).toBeUndefined();
+  });
+
+  it('resolves an archived Codex thread by closest creation time', () => {
+    insertThread(statePath, {
+      id: 'archived-codex-thread',
+      cwd: '/repo',
+      title: 'Archived Codex session',
+      createdAtMs: Date.parse('2026-06-04T06:45:37.040Z'),
+      updatedAtMs: Date.parse('2026-06-04T06:56:25.777Z'),
+      archived: 1,
+    });
+
+    expect(
+      resolveCodexThreadForConversation({
+        conversationId: 'conversation-1',
+        cwd: '/repo',
+        title: 'Stale Yoda conversation title',
+        createdAt: '2026-06-04 06:45:36',
+        statePath,
+      })
+    ).toEqual({ id: 'archived-codex-thread', title: 'Archived Codex session' });
   });
 });
 
@@ -116,6 +186,7 @@ function insertThread(
     title: string;
     createdAtMs: number;
     updatedAtMs: number;
+    archived?: number;
   }
 ): void {
   const db = new Database(statePath);
@@ -133,7 +204,7 @@ function insertThread(
           updated_at,
           created_at_ms,
           updated_at_ms
-        ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
     ).run(
       args.id,
@@ -141,6 +212,7 @@ function insertThread(
       args.title,
       args.title,
       args.title,
+      args.archived ?? 0,
       Math.floor(args.createdAtMs / 1000),
       Math.floor(args.updatedAtMs / 1000),
       args.createdAtMs,

@@ -1,4 +1,5 @@
 import { agentEventChannel } from '@shared/events/agentEvents';
+import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { events } from '@main/lib/events';
 import type { IDisposable, IInitializable } from '@main/lib/lifecycle';
 import { enrichEvent } from './event-enricher';
@@ -12,6 +13,7 @@ class AgentHookService implements IInitializable, IDisposable {
     await this.server.start(async (raw) => {
       const event = await enrichEvent(raw);
       event.source = 'hook';
+      agentSessionRuntimeStore.setFromAgentEvent(event);
       const appFocused = isAppFocused();
       await maybeShowNotification(event, appFocused);
       events.emit(agentEventChannel, { event, appFocused });

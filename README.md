@@ -60,6 +60,7 @@ Yoda 不绑定单一模型或厂商。Claude Code、Codex、OpenCode、Gemini、
 - **SSH 远程开发**：添加远程机器后，可以挂载远程项目，并用和本地一致的流程运行代理。
 - **从任务到会话**：Linear、Jira、GitHub Issues、GitLab、Forgejo、Plain 的 ticket 可以直接作为新会话提示词。
 - **CI/CD 可见**：在 diff 旁边查看 GitHub Actions 和构建状态，必要时直接重新派发代理。
+- **移动端协作**：通过默认开启且带 token 的桌面 gateway 和 Expo 移动端，在手机上查看项目/任务状态并发起新需求。
 - **审查与归档**：把任务标记为待审查，执行归档前命令，然后归档或合并。
 - **内置 MCP**：按项目配置 Model Context Protocol servers，供支持 MCP 的代理共享使用。
 - **本地优先**：应用状态保存在本地 SQLite 数据库中。Yoda 自身不会上传你的代码。
@@ -144,6 +145,7 @@ Yoda 是一个 Electron 桌面应用，主要分为三层：
 - **Main process** (`src/main/`)：管理 SQLite 存储、Drizzle schema、PTY/session 编排、git worktree、SSH 隧道和 provider registry，并向 renderer 暴露类型化 RPC。
 - **Renderer** (`src/renderer/`)：React + MobX UI，通过 React Query 读数据，通过 RPC 写数据，终端由 `node-pty` 和 xterm 前端协作呈现。
 - **Shared** (`src/shared/`)：两端共享的类型、IPC contract 和编码代理 provider registry。
+- **Mobile** (`apps/mobile/`)：Expo 应用，通过默认开启且带 token 的 desktop gateway 读取项目状态并提交新需求。
 
 完整主题地图见 [`AGENTS.md`](./AGENTS.md) 和 [`agents/`](./agents/)。
 
@@ -153,6 +155,7 @@ Yoda 是一个 Electron 桌面应用，主要分为三层：
 
 - **桌面框架**：Electron、electron-vite、electron-builder
 - **前端**：React、MobX、TanStack Query、Radix UI、xterm.js、Tailwind CSS
+- **移动端**：Expo、React Native
 - **主进程**：TypeScript、Drizzle ORM、SQLite、node-pty、ssh2
 - **集成**：GitHub、Linear、Jira、GitLab、Forgejo、Plain、MCP
 - **质量与发布**：Vitest、ESLint、Prettier、Changesets、GitHub Actions
