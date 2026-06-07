@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { app, Menu, shell } from 'electron';
 import {
   menuCheckForUpdatesChannel,
@@ -10,6 +11,18 @@ import { YODA_DOCS_URL, YODA_RELEASES_URL } from '@shared/urls';
 import { events } from '@main/lib/events';
 
 function restartApp(): void {
+  if (import.meta.env.DEV) {
+    const nodeExecPath = process.env.npm_node_execpath;
+    if (nodeExecPath) {
+      app.relaunch({
+        execPath: nodeExecPath,
+        args: ['--experimental-strip-types', join(process.cwd(), 'scripts/dev.ts')],
+      });
+      app.quit();
+      return;
+    }
+  }
+
   app.relaunch();
   app.quit();
 }
