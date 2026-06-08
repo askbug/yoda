@@ -26,7 +26,6 @@ import {
   RotateCcw,
   Server,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
   Users,
   X,
@@ -51,9 +50,11 @@ import {
   getAgentCommandSubmitDelayMs,
 } from '@shared/agent-command-prefix';
 import { AGENT_PROVIDER_IDS, type AgentProviderId } from '@shared/agent-provider-registry';
+import type { Agent } from '@shared/agents';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import type { CatalogIndex } from '@shared/skills/types';
 import { ensureUniqueTaskDisplayName, taskNameFromPrompt } from '@shared/task-name';
+import { useAgents } from '@renderer/features/agents-config/use-agents';
 import {
   asMounted,
   getProjectManagerStore,
@@ -148,6 +149,7 @@ const DEFAULT_TEAM_PROVIDERS: TeamProviderSelection = {
   operations: 'codex',
 };
 
+const NORMAL_PROMPT_KEY = 'normal:agent';
 const REVIEW_IMPLEMENTER_PROMPT_KEY = 'review:implementer';
 const REVIEW_REVIEWER_PROMPT_KEY = 'review:reviewer';
 const SPEC_PROMPT_KEY = 'brainstorm:agent';
@@ -278,14 +280,47 @@ function applySkillShortcut(
   };
 }
 
-function matchesSkillShortcutOption(item: SkillShortcutOption, query: string): boolean {
+// Returns a match score for `query` against `text`, or null when no match.
+// Higher is better. Exact > prefix > substring > subsequence (fuzzy).
+function fuzzyMatchScore(text: string, query: string): number | null {
+  if (text === query) return 1000;
+  if (text.startsWith(query)) return 900 - text.length;
+  const idx = text.indexOf(query);
+  if (idx >= 0) return 700 - idx - text.length;
+
+  // Subsequence match: every query char appears in order (e.g. "factch" -> "fact-check").
+  // Require at least 2 chars so a single letter doesn't fuzzy-match everything.
+  if (query.length < 2) return null;
+  let firstMatch = -1;
+  let ti = 0;
+  let gaps = 0;
+  let prevMatch = -1;
+  for (let qi = 0; qi < query.length; qi++) {
+    const ch = query[qi];
+    const found = text.indexOf(ch, ti);
+    if (found < 0) return null;
+    if (firstMatch < 0) firstMatch = found;
+    if (prevMatch >= 0) gaps += found - prevMatch - 1;
+    prevMatch = found;
+    ti = found + 1;
+  }
+  // Reject matches whose span is wildly larger than the query — those are coincidental.
+  const span = prevMatch - firstMatch + 1;
+  if (span > query.length * 3 + 2) return null;
+  return 400 - gaps - text.length;
+}
+
+function skillShortcutOptionScore(item: SkillShortcutOption, query: string): number | null {
   const q = query.toLowerCase();
-  return (
-    item.label.toLowerCase().includes(q) ||
-    item.value.toLowerCase().includes(q) ||
-    item.command.toLowerCase().includes(q) ||
-    item.description.toLowerCase().includes(q)
-  );
+  // Fuzzy (subsequence) only on the short identifiers — label/value/command.
+  // description is matched by substring only; subsequence over long prose matches almost anything.
+  const scores = [
+    fuzzyMatchScore(item.label.toLowerCase(), q),
+    fuzzyMatchScore(item.value.toLowerCase(), q),
+    fuzzyMatchScore(item.command.toLowerCase(), q),
+    item.description.toLowerCase().includes(q) ? 200 : null,
+  ].filter((s): s is number => s !== null);
+  return scores.length > 0 ? Math.max(...scores) : null;
 }
 
 function uniqueProviders(providers: AgentProviderId[]): AgentProviderId[] {
@@ -853,6 +888,17 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     },
     [agentSystemPrompts, updateDraft]
   );
+  const selectedAgentIdsByMode = useMemo<Record<string, string[]>>(
+    () => draft?.selectedAgentIds ?? {},
+    [draft?.selectedAgentIds]
+  );
+  const setSelectedAgentsForMode = useCallback(
+    (mode: HomeRunMode, ids: string[]) => {
+      updateDraft({ selectedAgentIds: { ...selectedAgentIdsByMode, [mode]: ids } });
+    },
+    [selectedAgentIdsByMode, updateDraft]
+  );
+  const { agents: userAgents } = useAgents();
   const autoApproveDefaults = useAgentAutoApproveDefaults();
   const {
     data: skillCatalog = null,
@@ -917,10 +963,14 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
   const filteredSkillShortcutOptions = useMemo(() => {
     if (!activeSkillShortcut) return [];
     const query = activeSkillShortcut.query.trim();
-    const items = query
-      ? skillShortcutOptions.filter((item) => matchesSkillShortcutOption(item, query))
-      : skillShortcutOptions;
-    return items.slice(0, 50);
+    if (!query) return skillShortcutOptions.slice(0, 50);
+    const scored = skillShortcutOptions
+      .map((item) => ({ item, score: skillShortcutOptionScore(item, query) }))
+      .filter(
+        (entry): entry is { item: SkillShortcutOption; score: number } => entry.score !== null
+      )
+      .sort((a, b) => b.score - a.score);
+    return scored.slice(0, 50).map((entry) => entry.item);
   }, [activeSkillShortcut, skillShortcutOptions]);
   const effectiveSkillShortcutIndex =
     filteredSkillShortcutOptions.length === 0
@@ -1178,13 +1228,16 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         const taskName = ensureUniqueTaskDisplayName(baseName, existingDraftNames);
         const taskId = crypto.randomUUID();
         const conversationId = crypto.randomUUID();
+        const normalSystemPrompt = getSystemPrompt(NORMAL_PROMPT_KEY, '').trim();
         const initialPrompt =
           runMode === 'brainstorm'
             ? buildSpecPrompt({
                 requirement: trimmed,
                 systemPrompt: getSystemPrompt(SPEC_PROMPT_KEY, defaultSpecSystemPrompt()),
               })
-            : trimmed || undefined;
+            : normalSystemPrompt
+              ? buildRequirementPrompt({ requirement: trimmed, systemPrompt: normalSystemPrompt })
+              : trimmed || undefined;
         void internalProject.taskManager
           .createTask({
             id: taskId,
@@ -1386,11 +1439,19 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         return;
       }
 
-      if (!providerId) return;
+      const normalAgent = userAgents.find((a) => a.id === (selectedAgentIdsByMode.normal ?? [])[0]);
+      const normalProvider = normalAgent?.preferredRuntimeProvider ?? providerId;
+      if (!normalProvider) return;
+      const normalSystemPrompt = (
+        normalAgent ? normalAgent.systemPrompt : getSystemPrompt(NORMAL_PROMPT_KEY, '')
+      ).trim();
       const task = createProjectTask({
-        provider: providerId,
+        provider: normalProvider,
         nameSeed: baseName,
-        initialPrompt: trimmed || undefined,
+        initialPrompt: normalSystemPrompt
+          ? buildRequirementPrompt({ requirement: trimmed, systemPrompt: normalSystemPrompt })
+          : trimmed || undefined,
+        titlePrompt: trimmed || undefined,
         strategyKind: effectiveStandardStrategyKind,
       });
       navigate('task', { projectId: mounted.data.id, taskId: task.taskId });
@@ -1416,6 +1477,8 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     reviewerProvider,
     teamProviders,
     agentSystemPrompts,
+    userAgents,
+    selectedAgentIdsByMode,
     autoApproveDefaults,
     navigate,
     projectManager,
@@ -1448,7 +1511,15 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       if (skillId) recordSkillInvocation(skillId);
       setPrompt(next.value);
       setPromptSelection({ start: next.caret, end: next.caret });
-      setDismissedSkillShortcutKey(null);
+      // Selecting an item must close the menu. If the inserted command still
+      // parses as an active shortcut at the new caret (e.g. no trailing space
+      // was added), dismiss that key so the menu doesn't immediately reopen.
+      const lingering = findActiveSkillShortcut(next.value, next.caret);
+      setDismissedSkillShortcutKey(
+        lingering
+          ? `${lingering.start}:${lingering.end}:${lingering.prefix}:${lingering.query}`
+          : null
+      );
       setActiveSkillShortcutIndex(0);
       requestAnimationFrame(() => {
         const textarea = promptTextareaRef.current;
@@ -1610,7 +1681,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-background text-foreground">
       <div className="mx-auto flex min-h-full w-full max-w-6xl flex-1 flex-col px-5 pb-8 pt-14 sm:px-8 lg:px-10">
-        <div className="flex flex-1 flex-col justify-center gap-6 py-4">
+        <div className="flex flex-1 flex-col justify-center gap-8 py-4">
           <div className="text-center">
             <div className="mb-4 flex items-center justify-center">
               <img
@@ -1629,224 +1700,213 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
           </div>
 
           <div className="mx-auto w-full max-w-4xl">
-            <div className="mb-2 px-1 text-xs font-medium text-foreground-muted">
-              {t('home.developmentParadigm')}
-            </div>
-            <RunModeBlinds
-              mode={runMode}
-              onChange={setRunMode}
-              renderConfiguration={(configurationMode) => (
-                <ModeConfigurationPanel
-                  mode={configurationMode}
-                  providerId={providerId}
-                  onProviderChange={setProviderOverride}
-                  compareProviders={compareProviders}
-                  onCompareProviderChange={setCompareProvider}
-                  onAddCompareProvider={addCompareProvider}
-                  onRemoveCompareProvider={removeCompareProvider}
-                  reviewerProvider={reviewerProvider}
-                  onReviewerProviderChange={setReviewerProvider}
-                  teamProviders={teamProviders}
-                  onTeamProviderChange={setTeamProvider}
-                  agentSystemPrompts={agentSystemPrompts}
-                  onAgentSystemPromptChange={setAgentSystemPrompt}
-                  connectionId={connectionId}
-                  className="mt-0 border-0 pt-0"
-                />
+            <div
+              className={cn(
+                'rounded-lg border shadow-sm transition-[background-color,border-color,box-shadow]',
+                promptInputChrome.containerClassName
               )}
-            />
-          </div>
-        </div>
-
-        <div className="mx-auto w-full max-w-4xl shrink-0">
-          <div
-            className={cn(
-              'rounded-lg border shadow-sm transition-[background-color,border-color,box-shadow]',
-              promptInputChrome.containerClassName
-            )}
-          >
-            <div className="flex flex-col">
-              <div className="relative">
-                {isNonStandardRunMode && (
-                  <div
-                    className={cn(
-                      'pointer-events-none absolute right-3 top-2 z-10 inline-flex h-6 max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium',
-                      promptInputChrome.badgeClassName
-                    )}
-                  >
-                    <PromptInputModeIcon className="size-3.5 shrink-0" />
-                    <span className="truncate">{t(promptInputChrome.labelKey)}</span>
-                  </div>
-                )}
-                <Textarea
-                  ref={promptTextareaRef}
-                  placeholder={t('home.promptPlaceholder')}
-                  value={prompt}
-                  onChange={(e) => {
-                    setPrompt(e.target.value);
-                    updatePromptSelection(e.target);
-                  }}
-                  onSelect={(e) => updatePromptSelection(e.currentTarget)}
-                  onClick={(e) => updatePromptSelection(e.currentTarget)}
-                  onFocus={(e) => {
-                    setPromptFocused(true);
-                    updatePromptSelection(e.currentTarget);
-                    if (activePathMention) setPathCompletionOpen(true);
-                  }}
-                  onKeyUp={(e) => updatePromptSelection(e.currentTarget)}
-                  onBlur={() => {
-                    setPromptFocused(false);
-                    setPathCompletionOpen(false);
-                  }}
-                  onKeyDown={handlePromptKeyDown}
-                  className={cn(
-                    'min-h-28 resize-none border-0 bg-transparent px-5 py-4 text-base placeholder:text-foreground-muted focus-visible:border-0 focus-visible:ring-0',
-                    isNonStandardRunMode && 'pt-10'
+            >
+              <div className="flex flex-col">
+                <div className="relative">
+                  {isNonStandardRunMode && (
+                    <div
+                      className={cn(
+                        'pointer-events-none absolute right-3 top-2 z-10 inline-flex h-6 max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium',
+                        promptInputChrome.badgeClassName
+                      )}
+                    >
+                      <PromptInputModeIcon className="size-3.5 shrink-0" />
+                      <span className="truncate">{t(promptInputChrome.labelKey)}</span>
+                    </div>
                   )}
-                />
-                {pathCompletionOpen && activePathMention && (
-                  <PathCompletionMenu
-                    items={pathCompletionItems}
-                    activeIndex={activePathCompletionIndex}
-                    loading={pathCompletionLoading}
-                    error={pathCompletionError}
-                    showEmpty={activePathMention.query.length > 0}
-                    labels={{
-                      loading: t('common.loading'),
-                      error: t('common.error'),
-                      noResults: t('common.noResults'),
+                  <Textarea
+                    ref={promptTextareaRef}
+                    placeholder={t('home.promptPlaceholder')}
+                    value={prompt}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      updatePromptSelection(e.target);
                     }}
-                    onActiveIndexChange={setActivePathCompletionIndex}
-                    onSelect={(item) => commitPathCompletion(item, activePathMention)}
-                  />
-                )}
-                {skillShortcutMenuOpen && activeSkillShortcut && (
-                  <SkillShortcutMenu
-                    items={filteredSkillShortcutOptions}
-                    activeIndex={effectiveSkillShortcutIndex}
-                    loading={skillsLoading}
-                    showEmpty={activeSkillShortcut.query.length > 0}
-                    labels={{
-                      loading: t('common.loading'),
-                      noResults: t('skills.noMatches'),
+                    onSelect={(e) => updatePromptSelection(e.currentTarget)}
+                    onClick={(e) => updatePromptSelection(e.currentTarget)}
+                    onFocus={(e) => {
+                      setPromptFocused(true);
+                      updatePromptSelection(e.currentTarget);
+                      if (activePathMention) setPathCompletionOpen(true);
                     }}
-                    onActiveIndexChange={setActiveSkillShortcutIndex}
-                    onSelect={(item) => commitSkillShortcut(item.command, activeSkillShortcut)}
-                  />
-                )}
-              </div>
-              <div className="flex items-center justify-between gap-2 px-2.5 py-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    aria-label={t('home.addAria')}
-                    onClick={() => showAddProjectModal({ strategy: 'local', mode: 'pick' })}
-                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
-                  >
-                    <Plus className="size-4" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <SkillShortcutSelector
-                    providerId={providerId}
-                    options={skillShortcutOptions}
-                    isLoading={skillsLoading}
-                    isError={skillsError}
-                    onInsert={commitSkillShortcut}
-                    className="h-8 gap-1.5 rounded-full border-0 bg-background-2/60 px-3 text-xs font-medium text-foreground transition-colors hover:bg-background-2"
-                  />
-                  <button
-                    type="button"
-                    aria-label={t('home.voiceAria')}
-                    aria-busy={voiceInputTriggering}
-                    title={t('home.voiceTooltip')}
-                    disabled={voiceInputTriggering}
-                    onClick={() => void handleVoiceInput()}
+                    onKeyUp={(e) => updatePromptSelection(e.currentTarget)}
+                    onBlur={() => {
+                      setPromptFocused(false);
+                      setPathCompletionOpen(false);
+                    }}
+                    onKeyDown={handlePromptKeyDown}
                     className={cn(
-                      'flex size-8 shrink-0 items-center justify-center rounded-full transition-colors',
-                      voiceInputTriggering
-                        ? 'bg-primary/10 text-primary hover:bg-primary/15'
-                        : 'text-foreground-muted hover:bg-background-2 hover:text-foreground'
+                      'min-h-28 resize-none border-0 bg-transparent px-5 py-4 text-base placeholder:text-foreground-muted focus-visible:border-0 focus-visible:ring-0',
+                      isNonStandardRunMode && 'pt-10'
                     )}
-                  >
-                    <Mic className={cn('size-4', voiceInputTriggering && 'animate-pulse')} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t('home.submitAria')}
-                    disabled={!canSubmit}
-                    onClick={() => void handleSubmit()}
-                    className={cn(
-                      'flex size-8 shrink-0 items-center justify-center rounded-full transition-all duration-150',
-                      canSubmit
-                        ? 'scale-100 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
-                        : 'scale-95 text-foreground-muted/60'
-                    )}
-                  >
-                    <ArrowUp
-                      className={cn('size-4 transition-transform', canSubmit && 'scale-110')}
+                  />
+                  {pathCompletionOpen && activePathMention && (
+                    <PathCompletionMenu
+                      items={pathCompletionItems}
+                      activeIndex={activePathCompletionIndex}
+                      loading={pathCompletionLoading}
+                      error={pathCompletionError}
+                      showEmpty={activePathMention.query.length > 0}
+                      labels={{
+                        loading: t('common.loading'),
+                        error: t('common.error'),
+                        noResults: t('common.noResults'),
+                      }}
+                      onActiveIndexChange={setActivePathCompletionIndex}
+                      onSelect={(item) => commitPathCompletion(item, activePathMention)}
                     />
-                  </button>
+                  )}
+                  {skillShortcutMenuOpen && activeSkillShortcut && (
+                    <SkillShortcutMenu
+                      items={filteredSkillShortcutOptions}
+                      activeIndex={effectiveSkillShortcutIndex}
+                      loading={skillsLoading}
+                      showEmpty={activeSkillShortcut.query.length > 0}
+                      labels={{
+                        loading: t('common.loading'),
+                        noResults: t('skills.noMatches'),
+                      }}
+                      onActiveIndexChange={setActiveSkillShortcutIndex}
+                      onSelect={(item) => commitSkillShortcut(item.command, activeSkillShortcut)}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 px-2.5 py-2">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label={t('home.addAria')}
+                      onClick={() => showAddProjectModal({ strategy: 'local', mode: 'pick' })}
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <SkillShortcutSelector
+                      providerId={providerId}
+                      options={skillShortcutOptions}
+                      isLoading={skillsLoading}
+                      isError={skillsError}
+                      onInsert={commitSkillShortcut}
+                      className="h-8 gap-1.5 rounded-full border-0 bg-background-2/60 px-3 text-xs font-medium text-foreground transition-colors hover:bg-background-2"
+                    />
+                    <button
+                      type="button"
+                      aria-label={t('home.voiceAria')}
+                      aria-busy={voiceInputTriggering}
+                      title={t('home.voiceTooltip')}
+                      disabled={voiceInputTriggering}
+                      onClick={() => void handleVoiceInput()}
+                      className={cn(
+                        'flex size-8 shrink-0 items-center justify-center rounded-full transition-colors',
+                        voiceInputTriggering
+                          ? 'bg-primary/10 text-primary hover:bg-primary/15'
+                          : 'text-foreground-muted hover:bg-background-2 hover:text-foreground'
+                      )}
+                    >
+                      <Mic className={cn('size-4', voiceInputTriggering && 'animate-pulse')} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t('home.submitAria')}
+                      disabled={!canSubmit}
+                      onClick={() => void handleSubmit()}
+                      className={cn(
+                        'flex size-8 shrink-0 items-center justify-center rounded-full transition-all duration-150',
+                        canSubmit
+                          ? 'scale-100 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
+                          : 'scale-95 text-foreground-muted/60'
+                      )}
+                    >
+                      <ArrowUp
+                        className={cn('size-4 transition-transform', canSubmit && 'scale-110')}
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-3 flex flex-col gap-2">
-            <div className="overflow-x-auto pb-1">
-              <div className="flex min-w-max flex-wrap items-center gap-2">
-                <ProjectSelector
-                  value={selectedProjectId}
-                  onChange={setSelectedProjectId}
-                  allowProjectless
-                  initializeGitRepositoryOnPick
-                  trigger={
-                    <ComboboxTrigger className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2">
-                      <FolderOpen className="size-3.5 text-foreground-muted" />
-                      <ComboboxValue placeholder={t('home.selectProjectPlaceholder')} />
-                    </ComboboxTrigger>
-                  }
-                />
-                <RunHostSelector kind={runHostKind} />
-                {runMode === 'normal' && (
-                  <div className="w-40 min-w-36">
-                    <AgentSelector
-                      value={providerId}
-                      onChange={setProviderOverride}
-                      connectionId={connectionId}
-                      className="h-7 rounded-md border border-border bg-background-1 px-2.5 text-xs transition-colors hover:bg-background-2"
+            <div className="mt-3 flex flex-col gap-2">
+              <div className="overflow-x-auto pb-1">
+                <div className="flex min-w-max flex-wrap items-center gap-2">
+                  <RunModeSelector
+                    mode={runMode}
+                    onChange={setRunMode}
+                    renderConfiguration={(configurationMode) => (
+                      <ModeConfigurationPanel
+                        mode={configurationMode}
+                        providerId={providerId}
+                        onProviderChange={setProviderOverride}
+                        compareProviders={compareProviders}
+                        onCompareProviderChange={setCompareProvider}
+                        onAddCompareProvider={addCompareProvider}
+                        onRemoveCompareProvider={removeCompareProvider}
+                        reviewerProvider={reviewerProvider}
+                        onReviewerProviderChange={setReviewerProvider}
+                        teamProviders={teamProviders}
+                        onTeamProviderChange={setTeamProvider}
+                        agentSystemPrompts={agentSystemPrompts}
+                        onAgentSystemPromptChange={setAgentSystemPrompt}
+                        selectedAgentIds={selectedAgentIdsByMode[configurationMode] ?? []}
+                        onSelectedAgentsChange={(ids) =>
+                          setSelectedAgentsForMode(configurationMode, ids)
+                        }
+                        multiAgent={configurationMode === 'team'}
+                        connectionId={connectionId}
+                        className="mt-2 border-t-0 pt-0"
+                      />
+                    )}
+                  />
+                  <ProjectSelector
+                    value={selectedProjectId}
+                    onChange={setSelectedProjectId}
+                    allowProjectless
+                    initializeGitRepositoryOnPick
+                    trigger={
+                      <ComboboxTrigger className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background-1 px-2.5 text-xs text-foreground transition-colors hover:bg-background-2">
+                        <FolderOpen className="size-3.5 text-foreground-muted" />
+                        <ComboboxValue placeholder={t('home.selectProjectPlaceholder')} />
+                      </ComboboxTrigger>
+                    }
+                  />
+                  <RunHostSelector kind={runHostKind} />
+                  {mounted && runMode === 'normal' && (
+                    <StrategyChip
+                      strategyKind={effectiveStandardStrategyKind}
+                      disabled={isUnborn}
+                      onChange={setStrategyKind}
+                      ariaLabel={t('home.strategyAria')}
+                      labels={strategyLabels}
                     />
-                  </div>
-                )}
-                {mounted && runMode === 'normal' && (
-                  <StrategyChip
-                    strategyKind={effectiveStandardStrategyKind}
-                    disabled={isUnborn}
-                    onChange={setStrategyKind}
-                    ariaLabel={t('home.strategyAria')}
-                    labels={strategyLabels}
-                  />
-                )}
-                {runMode === 'brainstorm' && (
-                  <Chip icon={Lightbulb}>{t('home.brainstormPolicy')}</Chip>
-                )}
-                {mounted && runMode === 'compare' && (
-                  <Chip icon={GitFork}>
-                    {t('home.compareBranchPolicy', { count: compareProviders.length })}
-                  </Chip>
-                )}
-                {mounted && runMode === 'review' && (
-                  <StrategyChip
-                    strategyKind={effectiveReviewStrategyKind}
-                    disabled={isUnborn}
-                    onChange={setReviewStrategyKind}
-                    ariaLabel={t('home.reviewStrategyAria')}
-                    labels={reviewStrategyLabels}
-                  />
-                )}
-                {mounted && runMode === 'team' && (
-                  <Chip icon={GitFork}>{t('home.teamBranchPolicy')}</Chip>
-                )}
+                  )}
+                  {runMode === 'brainstorm' && (
+                    <Chip icon={Lightbulb}>{t('home.brainstormPolicy')}</Chip>
+                  )}
+                  {mounted && runMode === 'compare' && (
+                    <Chip icon={GitFork}>
+                      {t('home.compareBranchPolicy', { count: compareProviders.length })}
+                    </Chip>
+                  )}
+                  {mounted && runMode === 'review' && (
+                    <StrategyChip
+                      strategyKind={effectiveReviewStrategyKind}
+                      disabled={isUnborn}
+                      onChange={setReviewStrategyKind}
+                      ariaLabel={t('home.reviewStrategyAria')}
+                      labels={reviewStrategyLabels}
+                    />
+                  )}
+                  {mounted && runMode === 'team' && (
+                    <Chip icon={GitFork}>{t('home.teamBranchPolicy')}</Chip>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1960,6 +2020,12 @@ function SkillShortcutMenu({
   onActiveIndexChange,
   onSelect,
 }: SkillShortcutMenuProps) {
+  const activeItemRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
+
   if (!loading && items.length === 0 && !showEmpty) return null;
 
   return (
@@ -1981,6 +2047,7 @@ function SkillShortcutMenu({
             return (
               <button
                 key={item.value}
+                ref={active ? activeItemRef : undefined}
                 type="button"
                 role="option"
                 aria-selected={active}
@@ -2128,140 +2195,108 @@ function SkillShortcutSelector({
   );
 }
 
-interface RunModeBlindsProps {
+const RUN_MODE_OPTIONS: Array<{
+  mode: HomeRunMode;
+  icon: ComponentType<{ className?: string }>;
+  labelKey: string;
+  descKey: string;
+}> = [
+  { mode: 'normal', icon: Bot, labelKey: 'home.modeNormal', descKey: 'home.modeNormalDesc' },
+  {
+    mode: 'brainstorm',
+    icon: Lightbulb,
+    labelKey: 'home.modeBrainstorm',
+    descKey: 'home.modeBrainstormDesc',
+  },
+  {
+    mode: 'compare',
+    icon: GitCompare,
+    labelKey: 'home.modeCompare',
+    descKey: 'home.modeCompareDesc',
+  },
+  { mode: 'review', icon: Repeat2, labelKey: 'home.modeReview', descKey: 'home.modeReviewDesc' },
+  { mode: 'team', icon: Users, labelKey: 'home.modeTeam', descKey: 'home.modeTeamDesc' },
+];
+
+interface RunModeSelectorProps {
   mode: HomeRunMode;
   onChange: (mode: HomeRunMode) => void;
   renderConfiguration: (mode: HomeRunMode) => ReactNode;
 }
 
-function RunModeBlinds({ mode, onChange, renderConfiguration }: RunModeBlindsProps) {
+function RunModeSelector({ mode, onChange, renderConfiguration }: RunModeSelectorProps) {
   const { t } = useTranslation();
-  const [configMode, setConfigMode] = useState<HomeRunMode | null>(null);
-  const options: Array<{
-    mode: HomeRunMode;
-    icon: ComponentType<{ className?: string }>;
-    label: string;
-    description: string;
-  }> = [
-    {
-      mode: 'normal',
-      icon: Bot,
-      label: t('home.modeNormal'),
-      description: t('home.modeNormalDesc'),
-    },
-    {
-      mode: 'brainstorm',
-      icon: Lightbulb,
-      label: t('home.modeBrainstorm'),
-      description: t('home.modeBrainstormDesc'),
-    },
-    {
-      mode: 'compare',
-      icon: GitCompare,
-      label: t('home.modeCompare'),
-      description: t('home.modeCompareDesc'),
-    },
-    {
-      mode: 'review',
-      icon: Repeat2,
-      label: t('home.modeReview'),
-      description: t('home.modeReviewDesc'),
-    },
-    {
-      mode: 'team',
-      icon: Users,
-      label: t('home.modeTeam'),
-      description: t('home.modeTeamDesc'),
-    },
-  ];
+  const [open, setOpen] = useState(false);
+  const current = RUN_MODE_OPTIONS.find((option) => option.mode === mode) ?? RUN_MODE_OPTIONS[0];
+  const CurrentIcon = current.icon;
+
   return (
-    <div
-      role="tablist"
-      aria-label={t('home.modeAria')}
-      aria-orientation="vertical"
-      className="overflow-hidden rounded-lg border border-border bg-background-1 shadow-sm"
-    >
-      {options.map((option) => {
-        const Icon = option.icon;
-        const active = option.mode === mode;
-        const configOpen = configMode === option.mode;
-        return (
-          <div
-            key={option.mode}
-            className={cn(
-              'group flex min-h-12 w-full min-w-0 items-stretch border-b border-border/60 transition-colors last:border-b-0 hover:bg-background-2/70 focus-within:bg-background-2/70',
-              active && 'bg-primary/5'
-            )}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label={t('home.modeAria')}
+            className="flex h-7 items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={active}
-              aria-label={`${option.label}: ${option.description}`}
-              onClick={() => onChange(option.mode)}
-              className="flex min-w-0 flex-1 items-center gap-3 px-3.5 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30"
-            >
-              <span
-                className={cn(
-                  'flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground-muted transition-colors',
-                  active && 'border-primary/30 bg-primary/10 text-primary'
-                )}
-              >
-                <Icon className="size-4" />
-              </span>
-              <span className="flex min-w-0 flex-1 items-baseline gap-3">
-                <span
+            <CurrentIcon className="size-3.5" />
+            <span>{t(current.labelKey)}</span>
+            <ChevronDown className="size-3 text-primary/70" />
+          </button>
+        }
+      />
+      <PopoverContent
+        align="start"
+        className="max-h-[min(70dvh,40rem)] w-[min(44rem,calc(100vw-2rem))] gap-0 overflow-hidden p-0"
+      >
+        <div className="flex min-h-0 max-h-[inherit] divide-x divide-border/60">
+          <div
+            role="tablist"
+            aria-label={t('home.modeAria')}
+            aria-orientation="vertical"
+            className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto bg-background-1/50 p-2"
+          >
+            {RUN_MODE_OPTIONS.map((option) => {
+              const Icon = option.icon;
+              const active = option.mode === mode;
+              return (
+                <button
+                  key={option.mode}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  title={t(option.descKey)}
+                  onClick={() => onChange(option.mode)}
                   className={cn(
-                    'w-28 shrink-0 truncate text-sm font-semibold text-foreground-muted',
-                    active && 'text-foreground'
+                    'flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
+                    active
+                      ? 'bg-primary/10 font-medium text-primary'
+                      : 'text-foreground-muted hover:bg-background-2 hover:text-foreground'
                   )}
                 >
-                  {option.label}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground-muted">
-                  {option.description}
-                </span>
-              </span>
-            </button>
-
-            <div className="flex shrink-0 items-center gap-1 pr-2">
-              {active && <Check className="size-4 shrink-0 text-primary" />}
-              <Popover
-                open={configOpen}
-                onOpenChange={(open) => setConfigMode(open ? option.mode : null)}
-              >
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={`${option.label} ${t('settings.title')}`}
-                      title={t('settings.title')}
-                      onClick={() => onChange(option.mode)}
-                      className={cn(
-                        'flex size-8 shrink-0 items-center justify-center rounded-md text-foreground-muted opacity-0 transition-[background-color,color,opacity] hover:bg-background-2 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 group-hover:opacity-100 group-focus-within:opacity-100',
-                        (active || configOpen) && 'opacity-100'
-                      )}
-                    >
-                      <SlidersHorizontal className="size-4" />
-                    </button>
-                  }
-                />
-                <PopoverContent
-                  side="bottom"
-                  align="end"
-                  className="max-h-[min(70dvh,38rem)] w-[min(44rem,calc(100vw-2rem))] gap-3 overflow-y-auto p-3"
-                >
-                  <PopoverHeader>
-                    <PopoverTitle>{option.label}</PopoverTitle>
-                  </PopoverHeader>
-                  {renderConfiguration(option.mode)}
-                </PopoverContent>
-              </Popover>
-            </div>
+                  <Icon
+                    className={cn(
+                      'size-4 shrink-0',
+                      active ? 'text-primary' : 'text-foreground-muted'
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{t(option.labelKey)}</span>
+                  {active && <Check className="size-3.5 shrink-0 text-primary" />}
+                </button>
+              );
+            })}
           </div>
-        );
-      })}
-    </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
+            <div className="flex items-center gap-2">
+              <CurrentIcon className="size-4 shrink-0 text-primary" />
+              <span className="text-sm font-semibold text-foreground">{t(current.labelKey)}</span>
+            </div>
+            <p className="text-xs text-foreground-muted">{t(current.descKey)}</p>
+            {renderConfiguration(mode)}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -2272,6 +2307,96 @@ interface StrategyChipLabels {
   newBranchDesc: string;
   noWorktreeTitle: string;
   noWorktreeDesc: string;
+}
+
+interface AgentCardPickerProps {
+  selectedAgentIds: string[];
+  onChange: (ids: string[]) => void;
+  multi: boolean;
+}
+
+function AgentCardPicker({ selectedAgentIds, onChange, multi }: AgentCardPickerProps) {
+  const { t } = useTranslation();
+  const { navigate } = useNavigate();
+  const { agents, isLoading } = useAgents();
+
+  const toggle = (agent: Agent) => {
+    if (multi) {
+      onChange(
+        selectedAgentIds.includes(agent.id)
+          ? selectedAgentIds.filter((id) => id !== agent.id)
+          : [...selectedAgentIds, agent.id]
+      );
+    } else {
+      onChange(selectedAgentIds.includes(agent.id) ? [] : [agent.id]);
+    }
+  };
+
+  if (isLoading) return null;
+
+  return (
+    <div className="mb-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-foreground-muted">
+          {multi ? t('home.pickAgents') : t('home.pickAgent')}
+        </span>
+        <button
+          type="button"
+          onClick={() => navigate('agentManager')}
+          className="text-[11px] text-primary transition-colors hover:underline"
+        >
+          {t('home.manageAgents')}
+        </button>
+      </div>
+      {agents.length === 0 ? (
+        <button
+          type="button"
+          onClick={() => navigate('agentManager')}
+          className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border bg-background-1 px-3 py-3 text-xs text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
+        >
+          <Plus className="size-3.5" />
+          {t('home.noAgentsCreate')}
+        </button>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {agents.map((agent) => {
+            const selected = selectedAgentIds.includes(agent.id);
+            return (
+              <button
+                key={agent.id}
+                type="button"
+                onClick={() => toggle(agent)}
+                className={cn(
+                  'flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-colors',
+                  selected
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border bg-background-1 hover:bg-background-2'
+                )}
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background-2 text-base">
+                  {agent.icon || '🤖'}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span
+                    className={cn(
+                      'flex items-center gap-1.5 truncate text-sm font-medium',
+                      selected ? 'text-primary' : 'text-foreground'
+                    )}
+                  >
+                    <span className="truncate">{agent.name}</span>
+                    {selected && <Check className="size-3.5 shrink-0" />}
+                  </span>
+                  <span className="line-clamp-1 text-xs text-foreground-muted">
+                    {agent.description || t('agentManager.noDescriptionShort')}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface ModeConfigurationPanelProps {
@@ -2288,6 +2413,9 @@ interface ModeConfigurationPanelProps {
   onTeamProviderChange: (roleId: TeamRoleId, provider: AgentProviderId) => void;
   agentSystemPrompts: AgentSystemPromptOverrides;
   onAgentSystemPromptChange: (key: string, prompt: string | null) => void;
+  selectedAgentIds: string[];
+  onSelectedAgentsChange: (ids: string[]) => void;
+  multiAgent?: boolean;
   connectionId?: string;
   className?: string;
 }
@@ -2306,6 +2434,9 @@ function ModeConfigurationPanel({
   onTeamProviderChange,
   agentSystemPrompts,
   onAgentSystemPromptChange,
+  selectedAgentIds,
+  onSelectedAgentsChange,
+  multiAgent = false,
   connectionId,
   className,
 }: ModeConfigurationPanelProps) {
@@ -2321,22 +2452,28 @@ function ModeConfigurationPanel({
     };
   };
 
+  const supportsAgentCards = mode === 'normal' || mode === 'team';
+
   return (
     <div className={cn('mt-3 border-t border-border/60 pt-3', className)}>
-      {mode === 'normal' && (
-        <div className="flex min-w-0 items-start gap-2 rounded-md border border-border/70 bg-background px-2 py-2">
-          <Bot className="mt-5 size-4 shrink-0 text-foreground-muted" />
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 truncate text-[11px] font-medium uppercase text-foreground-muted">
-              {t('home.modeNormal')}
-            </div>
-            <AgentSelector
-              value={providerId}
-              onChange={onProviderChange}
-              connectionId={connectionId}
-              className="h-8 border-0 bg-background-2/60 px-2 text-xs"
-            />
-          </div>
+      {supportsAgentCards && (
+        <AgentCardPicker
+          selectedAgentIds={selectedAgentIds}
+          onChange={onSelectedAgentsChange}
+          multi={multiAgent}
+        />
+      )}
+
+      {mode === 'normal' && selectedAgentIds.length === 0 && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <Agent
+            icon={Bot}
+            label={t('home.agentLabel')}
+            value={providerId}
+            onChange={onProviderChange}
+            connectionId={connectionId}
+            {...getPromptProps(NORMAL_PROMPT_KEY, '')}
+          />
         </div>
       )}
 
@@ -2350,7 +2487,7 @@ function ModeConfigurationPanel({
             connectionId={connectionId}
             {...getPromptProps(SPEC_PROMPT_KEY, defaultSpecSystemPrompt())}
           />
-          <div className="flex min-h-24 items-center rounded-md border border-border/70 bg-background px-3 py-2 text-xs leading-relaxed text-foreground-muted">
+          <div className="flex min-h-24 items-center rounded-lg border border-border/70 bg-background-1 p-3 text-xs leading-relaxed text-foreground-muted">
             {t('home.brainstormGuide')}
           </div>
         </div>
@@ -2485,29 +2622,34 @@ function Agent({
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border/70 bg-background px-2 py-2">
-      <div className="flex min-w-0 items-start gap-2">
-        <Icon className="mt-5 size-4 shrink-0 text-foreground-muted" />
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex min-w-0 items-center gap-2">
-            <span className="truncate text-[11px] font-medium uppercase text-foreground-muted">
-              {label}
-            </span>
-            <span className="shrink-0 rounded-sm bg-background-2 px-1.5 py-0.5 text-[10px] text-foreground-muted">
-              {hasCustomSystemPrompt
-                ? t('home.agentSystemPromptCustom')
-                : t('home.agentSystemPromptDefault')}
-            </span>
-          </div>
-          <AgentSelector
-            value={value}
-            onChange={onChange}
-            connectionId={connectionId}
-            className="h-8 border-0 bg-background-2/60 px-2 text-xs"
-          />
-        </div>
+    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border/70 bg-background-1 p-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-background-2 text-foreground-muted">
+          <Icon className="size-3.5" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[11px] font-medium uppercase tracking-wide text-foreground-muted">
+          {label}
+        </span>
+        <span
+          className={cn(
+            'shrink-0 rounded-sm px-1.5 py-0.5 text-[10px]',
+            hasCustomSystemPrompt
+              ? 'bg-primary/10 text-primary'
+              : 'bg-background-2 text-foreground-muted'
+          )}
+        >
+          {hasCustomSystemPrompt
+            ? t('home.agentSystemPromptCustom')
+            : t('home.agentSystemPromptDefault')}
+        </span>
         {action}
       </div>
+      <AgentSelector
+        value={value}
+        onChange={onChange}
+        connectionId={connectionId}
+        className="h-9 text-sm"
+      />
       <Popover open={promptOpen} onOpenChange={handlePromptOpenChange}>
         <PopoverTrigger
           render={
