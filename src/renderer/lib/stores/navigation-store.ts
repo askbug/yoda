@@ -28,6 +28,7 @@ export const viewEvents: Record<
   settings: 'settings_viewed',
   skills: 'skills_viewed',
   mcp: 'mcp_viewed',
+  agentManager: 'agents_viewed',
   agents: 'agents_viewed',
   maas: 'maas_viewed',
   automation: 'automation_viewed',

@@ -256,6 +256,10 @@ export const homeDraftSchema = z.object({
   reviewReviewerProvider: z.enum(AGENT_PROVIDER_IDS),
   teamProviders: teamProviderSelectionSchema,
   agentSystemPrompts: z.record(z.string(), z.string().nullable()),
+  /** Selected user-defined Agent ids per run mode. Keyed by HomeRunMode; the
+   *  value is an array (single-element for solo modes, multiple for team). An
+   *  empty/absent entry means "use the raw runtime", preserving native behavior. */
+  selectedAgentIds: z.record(z.string(), z.array(z.string())),
   /** When true, the sidebar "+" button creates a task immediately using the
    *  last home-draft agent runtime config instead of opening the home view. */
   expressMode: z.boolean(),

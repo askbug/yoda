@@ -97,6 +97,7 @@ export const SETTINGS_DEFAULTS = {
       operations: 'codex' as const,
     },
     agentSystemPrompts: {},
+    selectedAgentIds: {},
     expressMode: false,
     preArchiveCommand: '',
     defaultQuickActions: [{ id: 'release', label: 'Release', command: '/release-via-cicd' }],

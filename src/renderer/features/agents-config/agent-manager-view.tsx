@@ -1,0 +1,184 @@
+import { Copy, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { useMemo, useState, type PropsWithChildren } from 'react';
+import { useTranslation } from 'react-i18next';
+import { getProvider } from '@shared/agent-provider-registry';
+import type { Agent } from '@shared/agents';
+import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
+import { useShowModal } from '@renderer/lib/modal/modal-provider';
+import { Button } from '@renderer/lib/ui/button';
+import { Input } from '@renderer/lib/ui/input';
+import { cn } from '@renderer/utils/utils';
+import { useAgents } from './use-agents';
+
+function AgentCard({
+  agent,
+  onEdit,
+  onDuplicate,
+  onDelete,
+}: {
+  agent: Agent;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const runtime = agent.preferredRuntimeProvider
+    ? getProvider(agent.preferredRuntimeProvider)
+    : null;
+
+  return (
+    <div className="group flex flex-col gap-3 rounded-lg border border-border bg-background-1 p-4 transition-colors hover:border-primary/40">
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-background-2 text-xl">
+          {agent.icon || '🤖'}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-foreground">{agent.name}</div>
+          <p className="line-clamp-2 text-xs text-foreground-muted">
+            {agent.description || t('agentManager.noDescription')}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            type="button"
+            aria-label={t('common.edit')}
+            onClick={onEdit}
+            className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-background-2 hover:text-foreground"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={t('agentManager.duplicate')}
+            onClick={onDuplicate}
+            className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-background-2 hover:text-foreground"
+          >
+            <Copy className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={t('common.delete')}
+            onClick={onDelete}
+            className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="rounded-sm bg-background-2 px-1.5 py-0.5 text-[10px] text-foreground-muted">
+          {runtime ? runtime.name : t('agentManager.anyRuntime')}
+        </span>
+        {agent.model && (
+          <span className="rounded-sm bg-background-2 px-1.5 py-0.5 text-[10px] text-foreground-muted">
+            {agent.model}
+          </span>
+        )}
+        {agent.enabledSkillIds.length > 0 && (
+          <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+            {t('agentManager.skillsCount', { count: agent.enabledSkillIds.length })}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgentManagerView() {
+  const { t } = useTranslation();
+  const { agents, isLoading, remove, duplicate } = useAgents();
+  const showAgentModal = useShowModal('agentEditModal');
+  const showConfirm = useShowModal('confirmActionModal');
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return agents;
+    return agents.filter(
+      (a) => a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
+    );
+  }, [agents, query]);
+
+  const handleDelete = (agent: Agent) =>
+    showConfirm({
+      title: t('agentManager.deleteTitle'),
+      description: t('agentManager.deleteDescription', { name: agent.name }),
+      confirmLabel: t('common.delete'),
+      onSuccess: () => void remove(agent.id),
+    });
+
+  return (
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 pt-6 min-h-0">
+      <div className="flex shrink-0 flex-col gap-3 border-b border-border pb-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">{t('agentManager.title')}</h1>
+            <p className="text-xs text-foreground-muted">{t('agentManager.subtitle')}</p>
+          </div>
+          <Button size="sm" onClick={() => showAgentModal({})}>
+            <Plus className="size-4" />
+            {t('agentManager.newAgent')}
+          </Button>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-foreground-muted" />
+          <Input
+            placeholder={t('agentManager.searchPlaceholder')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="h-9 pl-8 text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-4">
+        {isLoading ? (
+          <p className="text-sm text-foreground-muted">{t('common.loading')}</p>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <span className="text-3xl">🤖</span>
+            <p className="text-sm text-foreground-muted">
+              {agents.length === 0 ? t('agentManager.empty') : t('agentManager.noResults')}
+            </p>
+            {agents.length === 0 && (
+              <Button size="sm" variant="outline" onClick={() => showAgentModal({})}>
+                <Plus className="size-4" />
+                {t('agentManager.createFirst')}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className={cn('grid gap-3 sm:grid-cols-2')}>
+            {filtered.map((agent) => (
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                onEdit={() => showAgentModal({ agent })}
+                onDuplicate={() => duplicate(agent.id)}
+                onDelete={() => handleDelete(agent)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function AgentManagerTitlebar() {
+  return <Titlebar />;
+}
+
+export function AgentManagerWrapView({ children }: PropsWithChildren) {
+  return <>{children}</>;
+}
+
+export function AgentManagerMainPanel() {
+  return <AgentManagerView />;
+}
+
+export const agentManagerView = {
+  WrapView: AgentManagerWrapView,
+  TitlebarSlot: AgentManagerTitlebar,
+  MainPanel: AgentManagerMainPanel,
+};
