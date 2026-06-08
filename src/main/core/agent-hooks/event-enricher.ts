@@ -6,13 +6,16 @@ import { conversations } from '@main/db/schema';
 import type { RawHookRequest } from './hook-server';
 
 function normalizePayload(body: Record<string, unknown>): AgentEvent['payload'] {
+  const toolName = (body.tool_name ?? body.toolName) as string | undefined;
   return {
     notificationType: (body.notification_type ??
       body.notificationType) as AgentEvent['payload']['notificationType'],
     lastAssistantMessage: (body.last_assistant_message ?? body.lastAssistantMessage) as
       | string
       | undefined,
-    title: body.title as string | undefined,
+    // For interactive-tool waits, surface the tool name so the UI can show
+    // "waiting on you: AskUserQuestion".
+    title: (body.title as string | undefined) ?? toolName,
     message: body.message as string | undefined,
   };
 }

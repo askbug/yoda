@@ -4,6 +4,7 @@ import { events } from '@main/lib/events';
 import type { IDisposable, IInitializable } from '@main/lib/lifecycle';
 import { enrichEvent } from './event-enricher';
 import { HookServer } from './hook-server';
+import { enrichHookExecEvent } from './inspect/hook-exec-enricher';
 import { isAppFocused, maybeShowNotification } from './notification';
 
 class AgentHookService implements IInitializable, IDisposable {
@@ -11,6 +12,10 @@ class AgentHookService implements IInitializable, IDisposable {
 
   async initialize(): Promise<void> {
     await this.server.start(async (raw) => {
+      if (raw.type === 'hook-exec') {
+        await enrichHookExecEvent(raw);
+        return;
+      }
       const event = await enrichEvent(raw);
       event.source = 'hook';
       agentSessionRuntimeStore.setFromAgentEvent(event);
