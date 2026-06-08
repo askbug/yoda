@@ -127,6 +127,13 @@ type TeamRoleId = 'ceo' | 'product' | 'engineering' | 'uiux' | 'operations';
 type TeamProviderSelection = Record<TeamRoleId, AgentProviderId>;
 type AgentSystemPromptOverrides = Record<string, string | null>;
 
+interface RunModeInputChrome {
+  icon: ComponentType<{ className?: string }>;
+  labelKey: string;
+  containerClassName: string;
+  badgeClassName: string;
+}
+
 const MIN_COMPARE_AGENTS = 2;
 const MAX_COMPARE_AGENTS = 6;
 const REVIEW_MAX_ROUNDS = 3;
@@ -144,6 +151,10 @@ const DEFAULT_TEAM_PROVIDERS: TeamProviderSelection = {
 const REVIEW_IMPLEMENTER_PROMPT_KEY = 'review:implementer';
 const REVIEW_REVIEWER_PROMPT_KEY = 'review:reviewer';
 const SPEC_PROMPT_KEY = 'brainstorm:agent';
+const ADVANCED_INPUT_CONTAINER_CLASS =
+  'border-border bg-background-1 ring-1 ring-sky-500/15 focus-within:border-sky-500/30 focus-within:ring-sky-500/25';
+const ADVANCED_INPUT_BADGE_CLASS =
+  'border-sky-500/25 bg-sky-500/10 text-sky-700 shadow-sm ydark:text-sky-300';
 
 const TEAM_ROLES = [
   {
@@ -300,6 +311,49 @@ function normalizeCompareProviders(
 
 function nextAvailableProvider(existing: AgentProviderId[]): AgentProviderId {
   return AGENT_PROVIDER_IDS.find((id) => !existing.includes(id)) ?? existing[0] ?? 'claude';
+}
+
+function getRunModeInputChrome(mode: HomeRunMode): RunModeInputChrome {
+  switch (mode) {
+    case 'brainstorm':
+      return {
+        icon: Lightbulb,
+        labelKey: 'home.modeBrainstorm',
+        containerClassName: ADVANCED_INPUT_CONTAINER_CLASS,
+        badgeClassName: ADVANCED_INPUT_BADGE_CLASS,
+      };
+    case 'compare':
+      return {
+        icon: GitCompare,
+        labelKey: 'home.modeCompare',
+        containerClassName: ADVANCED_INPUT_CONTAINER_CLASS,
+        badgeClassName: ADVANCED_INPUT_BADGE_CLASS,
+      };
+    case 'review':
+      return {
+        icon: ShieldCheck,
+        labelKey: 'home.modeReview',
+        containerClassName: ADVANCED_INPUT_CONTAINER_CLASS,
+        badgeClassName: ADVANCED_INPUT_BADGE_CLASS,
+      };
+    case 'team':
+      return {
+        icon: Users,
+        labelKey: 'home.modeTeam',
+        containerClassName: ADVANCED_INPUT_CONTAINER_CLASS,
+        badgeClassName: ADVANCED_INPUT_BADGE_CLASS,
+      };
+    case 'normal':
+      return {
+        icon: Bot,
+        labelKey: 'home.modeNormal',
+        containerClassName: 'border-border bg-background-1',
+        badgeClassName: 'border-border bg-background-2 text-foreground-muted',
+      };
+  }
+
+  const exhaustive: never = mode;
+  return exhaustive;
 }
 
 function comparePromptKey(index: number): string {
@@ -1549,6 +1603,10 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     ]
   );
 
+  const promptInputChrome = getRunModeInputChrome(runMode);
+  const PromptInputModeIcon = promptInputChrome.icon;
+  const isNonStandardRunMode = runMode !== 'normal';
+
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-background text-foreground">
       <div className="mx-auto flex min-h-full w-full max-w-6xl flex-1 flex-col px-5 pb-8 pt-14 sm:px-8 lg:px-10">
@@ -1601,9 +1659,25 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         </div>
 
         <div className="mx-auto w-full max-w-4xl shrink-0">
-          <div className="rounded-lg border border-border bg-background-1 shadow-sm">
+          <div
+            className={cn(
+              'rounded-lg border shadow-sm transition-[background-color,border-color,box-shadow]',
+              promptInputChrome.containerClassName
+            )}
+          >
             <div className="flex flex-col">
               <div className="relative">
+                {isNonStandardRunMode && (
+                  <div
+                    className={cn(
+                      'pointer-events-none absolute right-3 top-2 z-10 inline-flex h-6 max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium',
+                      promptInputChrome.badgeClassName
+                    )}
+                  >
+                    <PromptInputModeIcon className="size-3.5 shrink-0" />
+                    <span className="truncate">{t(promptInputChrome.labelKey)}</span>
+                  </div>
+                )}
                 <Textarea
                   ref={promptTextareaRef}
                   placeholder={t('home.promptPlaceholder')}
@@ -1625,7 +1699,10 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                     setPathCompletionOpen(false);
                   }}
                   onKeyDown={handlePromptKeyDown}
-                  className="min-h-28 resize-none border-0 bg-transparent px-5 py-4 text-base placeholder:text-foreground-muted focus-visible:border-0 focus-visible:ring-0"
+                  className={cn(
+                    'min-h-28 resize-none border-0 bg-transparent px-5 py-4 text-base placeholder:text-foreground-muted focus-visible:border-0 focus-visible:ring-0',
+                    isNonStandardRunMode && 'pt-10'
+                  )}
                 />
                 {pathCompletionOpen && activePathMention && (
                   <PathCompletionMenu
