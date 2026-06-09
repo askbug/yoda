@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import type BetterSqlite3 from 'better-sqlite3';
+import { BUILTIN_AGENT_PRESETS } from '@shared/builtin-agents';
 import { sqlite } from './client';
 import { runBundledMigrations } from './migrations';
 
@@ -38,6 +40,48 @@ function ensureSearchIndex(connection: BetterSqlite3.Database): void {
 }
 
 /**
+ * Seeds the built-in Agent presets into the `agents` table. Idempotent: each
+ * preset is keyed by its stable `slug`, so we only insert presets that are not
+ * already present. This both handles first run and lets users delete a preset
+ * without it reappearing on every launch (gated by the kv version below).
+ */
+function ensureBuiltinAgents(connection: BetterSqlite3.Database): void {
+  const BUILTIN_AGENTS_VERSION = '1';
+
+  const row = connection
+    .prepare(`SELECT value FROM kv WHERE key = 'builtin_agents_version'`)
+    .get() as { value: string } | undefined;
+  if (row?.value === BUILTIN_AGENTS_VERSION) return;
+
+  const existsStmt = connection.prepare(`SELECT 1 FROM agents WHERE slug = ? LIMIT 1`);
+  const insertStmt = connection.prepare(
+    `INSERT INTO agents (id, slug, name, description, icon, system_prompt, enabled_skill_ids, preferred_runtime_provider, model, source)
+     VALUES (@id, @slug, @name, @description, @icon, @systemPrompt, '[]', @preferredRuntimeProvider, NULL, 'local')`
+  );
+
+  const seed = connection.transaction(() => {
+    for (const preset of BUILTIN_AGENT_PRESETS) {
+      if (existsStmt.get(preset.key)) continue;
+      insertStmt.run({
+        id: randomUUID(),
+        slug: preset.key,
+        name: preset.name,
+        description: preset.description,
+        icon: preset.icon,
+        systemPrompt: preset.systemPrompt,
+        preferredRuntimeProvider: preset.preferredRuntimeProvider,
+      });
+    }
+    connection
+      .prepare(
+        `INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES ('builtin_agents_version', ?, unixepoch())`
+      )
+      .run(BUILTIN_AGENTS_VERSION);
+  });
+  seed();
+}
+
+/**
  * Runs all pending migrations against the shared SQLite connection and validates
  * the schema contract. Call this once in main.ts before any db queries run.
  *
@@ -49,5 +93,6 @@ function ensureSearchIndex(connection: BetterSqlite3.Database): void {
 export async function initializeDatabase(): Promise<BetterSqlite3.Database> {
   runBundledMigrations(sqlite);
   ensureSearchIndex(sqlite);
+  ensureBuiltinAgents(sqlite);
   return sqlite;
 }

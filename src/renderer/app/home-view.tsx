@@ -22,7 +22,6 @@ import {
   Palette,
   Plus,
   Repeat2,
-  RotateCcw,
   Server,
   ShieldCheck,
   Sparkles,
@@ -56,6 +55,7 @@ import {
   type AgentProviderId,
 } from '@shared/agent-provider-registry';
 import type { Agent } from '@shared/agents';
+import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import type { CatalogIndex } from '@shared/skills/types';
 import { ensureUniqueTaskDisplayName, taskNameFromPrompt } from '@shared/task-name';
@@ -73,10 +73,8 @@ import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use
 import { ProjectSelector } from '@renderer/features/tasks/create-task-modal/project-selector';
 import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
-import {
-  AgentSlotSelector,
-  type AgentSlotSelection,
-} from '@renderer/lib/components/agent-slot/agent-slot-selector';
+import { AgentSelector } from '@renderer/lib/components/agent-selector/agent-selector';
+import { AgentSlotSelector } from '@renderer/lib/components/agent-slot/agent-slot-selector';
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { useAccountSession } from '@renderer/lib/hooks/useAccount';
@@ -104,13 +102,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
-import {
-  Popover,
-  PopoverContent,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from '@renderer/lib/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@renderer/lib/ui/popover';
 import { Textarea } from '@renderer/lib/ui/textarea';
 import { cn } from '@renderer/utils/utils';
 import {
@@ -133,7 +125,6 @@ type RunHostKind = 'local' | 'ssh';
 type SkillShortcutPrefix = '/' | '$';
 type TeamRoleId = 'ceo' | 'product' | 'engineering' | 'uiux' | 'operations';
 type TeamProviderSelection = Record<TeamRoleId, AgentProviderId>;
-type AgentSystemPromptOverrides = Record<string, string | null>;
 
 /**
  * Humanize a model id for the run-mode chip, e.g. `claude-opus-4-8` → `Opus 4.8`.
@@ -179,6 +170,24 @@ const NORMAL_PROMPT_KEY = 'normal:agent';
 const REVIEW_IMPLEMENTER_PROMPT_KEY = 'review:implementer';
 const REVIEW_REVIEWER_PROMPT_KEY = 'review:reviewer';
 const SPEC_PROMPT_KEY = 'brainstorm:agent';
+
+/** The built-in Agent preset a slot defaults to when nothing is selected. */
+const SLOT_DEFAULT_BUILTIN_KEY: Record<string, string> = {
+  [NORMAL_PROMPT_KEY]: BUILTIN_AGENT_KEYS.general,
+  [SPEC_PROMPT_KEY]: BUILTIN_AGENT_KEYS.spec,
+  [REVIEW_IMPLEMENTER_PROMPT_KEY]: BUILTIN_AGENT_KEYS.reviewImplementer,
+  [REVIEW_REVIEWER_PROMPT_KEY]: BUILTIN_AGENT_KEYS.reviewReviewer,
+  'team:ceo': BUILTIN_AGENT_KEYS.teamCeo,
+  'team:product': BUILTIN_AGENT_KEYS.teamProduct,
+  'team:engineering': BUILTIN_AGENT_KEYS.teamEngineering,
+  'team:uiux': BUILTIN_AGENT_KEYS.teamUiux,
+  'team:operations': BUILTIN_AGENT_KEYS.teamOperations,
+};
+
+function defaultBuiltinKeyForSlot(slotKey: string): string | undefined {
+  if (slotKey.startsWith('compare:')) return BUILTIN_AGENT_KEYS.general;
+  return SLOT_DEFAULT_BUILTIN_KEY[slotKey];
+}
 const ADVANCED_INPUT_CONTAINER_CLASS =
   'border-border bg-background-1 ring-1 ring-sky-500/15 focus-within:border-sky-500/30 focus-within:ring-sky-500/25';
 const ADVANCED_INPUT_BADGE_CLASS =
@@ -188,53 +197,45 @@ const TEAM_ROLES = [
   {
     id: 'ceo',
     icon: Crown,
-    persona: 'Elon Musk',
     labelKey: 'home.teamRoleCeo',
     taskSuffix: 'ceo',
+    builtinKey: BUILTIN_AGENT_KEYS.teamCeo,
   },
   {
     id: 'product',
     icon: Briefcase,
-    persona: 'Steve Jobs',
     labelKey: 'home.teamRoleProduct',
     taskSuffix: 'product',
+    builtinKey: BUILTIN_AGENT_KEYS.teamProduct,
   },
   {
     id: 'engineering',
     icon: Code2,
-    persona: 'Linus Torvalds',
     labelKey: 'home.teamRoleEngineering',
     taskSuffix: 'engineering',
+    builtinKey: BUILTIN_AGENT_KEYS.teamEngineering,
   },
   {
     id: 'uiux',
     icon: Palette,
-    persona: 'Jony Ive',
     labelKey: 'home.teamRoleUiux',
     taskSuffix: 'uiux',
+    builtinKey: BUILTIN_AGENT_KEYS.teamUiux,
   },
   {
     id: 'operations',
     icon: Megaphone,
-    persona: 'Tim Cook',
     labelKey: 'home.teamRoleOperations',
     taskSuffix: 'operations',
+    builtinKey: BUILTIN_AGENT_KEYS.teamOperations,
   },
 ] as const satisfies ReadonlyArray<{
   id: TeamRoleId;
   icon: ComponentType<{ className?: string }>;
-  persona: string;
   labelKey: string;
   taskSuffix: string;
+  builtinKey: string;
 }>;
-
-const TEAM_ROLE_BRIEFS: Record<TeamRoleId, string> = {
-  ceo: 'Coordinate the team.',
-  product: 'Turn the requirement into product behavior, scope, acceptance criteria, and tradeoffs.',
-  engineering: 'Implement the code changes with engineering rigor and run the relevant validation.',
-  uiux: 'Shape the user experience and UI details, then implement UI changes when appropriate.',
-  operations: 'Review user-facing rollout, onboarding, communication, and operational risks.',
-};
 
 interface SkillShortcutOption {
   value: string;
@@ -426,87 +427,25 @@ function teamPromptKey(roleId: TeamRoleId): string {
 }
 
 /**
- * Resolve what a slot actually runs with. When the slot has a user-defined
- * Agent selected, that Agent's preferred runtime + system prompt win; otherwise
- * we fall back to the bare-runtime value and the per-slot prompt override.
+ * Resolve what a slot runs with. A slot is an Agent assignment: its system
+ * prompt is the Agent's prompt, and its runtime is the per-slot override (loose
+ * coupling) falling back to the Agent's preferred runtime. With no Agent the
+ * slot cannot run — provider is null and the caller must bail.
  */
 function resolveAgentSlot(args: {
   selectedAgentId: string | null;
   agents: Agent[];
-  fallbackProvider: AgentProviderId | null;
-  fallbackSystemPrompt: string;
+  runtimeOverride: AgentProviderId | null;
 }): { provider: AgentProviderId | null; systemPrompt: string; agent: Agent | null } {
   const agent = args.selectedAgentId
     ? (args.agents.find((a) => a.id === args.selectedAgentId) ?? null)
     : null;
-  if (agent) {
-    return {
-      provider: agent.preferredRuntimeProvider ?? args.fallbackProvider,
-      systemPrompt: agent.systemPrompt,
-      agent,
-    };
-  }
-  return { provider: args.fallbackProvider, systemPrompt: args.fallbackSystemPrompt, agent: null };
-}
-
-function defaultCompareSystemPrompt(index: number): string {
-  return [
-    `You are comparison agent ${index + 1}.`,
-    `Independently implement the user's requirement in your isolated branch/worktree.`,
-    `Prioritize correctness, minimal scope, and clear validation. Do not coordinate with other comparison agents.`,
-  ].join('\n');
-}
-
-function defaultReviewImplementerSystemPrompt(): string {
-  return [
-    `You are implementer agent A.`,
-    `Implement the user's requirement in the current worktree, then stop when the implementation round is complete.`,
-    `When reviewer feedback arrives, address it in the same worktree without restarting the direction unless the review requires it.`,
-  ].join('\n');
-}
-
-function defaultReviewReviewerSystemPrompt(): string {
-  return [
-    `You are reviewer agent B.`,
-    `Review the current worktree implementation against the original requirement.`,
-    `Focus on correctness, regressions, edge cases, missing tests, and whether the implementation actually satisfies the requirement.`,
-  ].join('\n');
-}
-
-function defaultSpecSystemPrompt(): string {
-  return [
-    `You are a spec-driven development agent.`,
-    `Use a spec-first workflow: clarify requirements, capture UI/UX expectations, outline technical design, break work into tasks, and define verification before implementation.`,
-    `Ask only concise, high-leverage questions when missing information materially changes scope, UX, data model, constraints, safety, or acceptance. Prefer explicit assumptions over low-impact questions.`,
-    `Do not implement, edit files, or start coding in this mode.`,
-    `Maintain a compact, itemized PRD as decisions settle: goals, users, workflows, requirements, UI/UX notes, acceptance criteria, edge cases, assumptions, and open questions.`,
-    `When the requirement is specific enough, produce a handoff package with PRD, design notes, implementation tasks, verification plan, and any unresolved decisions.`,
-  ].join('\n');
-}
-
-function defaultTeamSystemPrompt(role: (typeof TEAM_ROLES)[number]): string {
-  if (role.id === 'ceo') {
-    return [
-      `You are the CEO agent, role-playing ${role.persona} as a demanding technical CEO.`,
-      `Receive the user requirement, decompose it, and assign concrete work packages to product, engineering, UI/UX, and user operations agents.`,
-      `Do not edit files. Produce concise assignments with acceptance criteria and risks.`,
-    ].join('\n');
-  }
-
-  return [
-    `You are the ${role.id} agent, role-playing ${role.persona}.`,
-    TEAM_ROLE_BRIEFS[role.id],
-    `Work in your own branch/worktree. Make only the changes appropriate for your role and stop when your contribution is complete.`,
-  ].join('\n');
-}
-
-function resolveAgentSystemPrompt(
-  overrides: AgentSystemPromptOverrides,
-  key: string,
-  defaultPrompt: string
-): string {
-  const override = overrides[key];
-  return typeof override === 'string' ? override : defaultPrompt;
+  if (!agent) return { provider: null, systemPrompt: '', agent: null };
+  return {
+    provider: args.runtimeOverride ?? agent.preferredRuntimeProvider,
+    systemPrompt: agent.systemPrompt,
+    agent,
+  };
 }
 
 function withSystemPrompt(systemPrompt: string, body: string): string {
@@ -928,26 +867,24 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     },
     [teamProviders, updateDraft]
   );
-  const agentSystemPrompts = useMemo<AgentSystemPromptOverrides>(
-    () => draft?.agentSystemPrompts ?? {},
-    [draft?.agentSystemPrompts]
-  );
-  const setAgentSystemPrompt = useCallback(
-    (key: string, value: string | null) => {
-      updateDraft({ agentSystemPrompts: { ...agentSystemPrompts, [key]: value } });
-    },
-    [agentSystemPrompts, updateDraft]
-  );
+  const { agents: userAgents } = useAgents();
   const selectedAgentIdsByMode = useMemo<Record<string, string[]>>(
     () => draft?.selectedAgentIds ?? {},
     [draft?.selectedAgentIds]
   );
-  // Per-slot user-Agent selection. We reuse the persisted `selectedAgentIds`
-  // string→string[] map, keyed by each slot's prompt key (one selected agent id
-  // per slot, or empty when the slot runs a bare runtime).
+  // Per-slot Agent selection. We reuse the persisted `selectedAgentIds`
+  // string→string[] map, keyed by each slot's prompt key. When a slot has no
+  // explicit selection, it defaults to the built-in Agent seeded for that slot
+  // (matched by slug), so every mode works out of the box.
   const slotAgentId = useCallback(
-    (slotKey: string): string | null => selectedAgentIdsByMode[slotKey]?.[0] ?? null,
-    [selectedAgentIdsByMode]
+    (slotKey: string): string | null => {
+      const explicit = selectedAgentIdsByMode[slotKey]?.[0];
+      if (explicit) return explicit;
+      const builtinKey = defaultBuiltinKeyForSlot(slotKey);
+      if (!builtinKey) return null;
+      return userAgents.find((a) => a.slug === builtinKey)?.id ?? null;
+    },
+    [selectedAgentIdsByMode, userAgents]
   );
   const setSlotAgent = useCallback(
     (slotKey: string, agentId: string) => {
@@ -955,7 +892,6 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     },
     [selectedAgentIdsByMode, updateDraft]
   );
-  const { agents: userAgents } = useAgents();
   const autoApproveDefaults = useAgentAutoApproveDefaults();
   const runModeSummary = useMemo(() => {
     const providerName = (id: AgentProviderId | null) =>
@@ -971,35 +907,24 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       return t('home.modeSummaryAgentCount', { count: roleCount });
     }
 
-    // Single-provider modes (normal / brainstorm / review): provider · model.
-    let provider = providerId;
-    let model: string | null = null;
-    if (runMode === 'normal') {
-      const resolved = resolveAgentSlot({
-        selectedAgentId: selectedAgentIdsByMode[NORMAL_PROMPT_KEY]?.[0] ?? null,
-        agents: userAgents,
-        fallbackProvider: providerId,
-        fallbackSystemPrompt: '',
-      });
-      provider = resolved.provider;
-      model = resolved.agent?.model ?? null;
-    } else if (runMode === 'review') {
-      provider = reviewerProvider;
-    }
+    // Single-Agent modes (normal / brainstorm / review): the implementer slot's
+    // resolved runtime · model.
+    const slotKey =
+      runMode === 'brainstorm'
+        ? SPEC_PROMPT_KEY
+        : runMode === 'review'
+          ? REVIEW_IMPLEMENTER_PROMPT_KEY
+          : NORMAL_PROMPT_KEY;
+    const resolved = resolveAgentSlot({
+      selectedAgentId: slotAgentId(slotKey),
+      agents: userAgents,
+      runtimeOverride: providerId,
+    });
 
-    const name = providerName(provider);
+    const name = providerName(resolved.provider);
     if (!name) return null;
-    return `${name} · ${modelLabel(model)}`;
-  }, [
-    runMode,
-    providerId,
-    compareProviders.length,
-    teamProviders,
-    reviewerProvider,
-    userAgents,
-    selectedAgentIdsByMode,
-    t,
-  ]);
+    return `${name} · ${modelLabel(resolved.agent?.model ?? null)}`;
+  }, [runMode, providerId, compareProviders.length, teamProviders, slotAgentId, userAgents, t]);
   // Local project root, so the skill picker can surface project-local skills
   // alongside the global ones. SSH projects have no local path to scan.
   const skillProjectPath = projectData?.type === 'local' ? projectData.path : undefined;
@@ -1284,14 +1209,20 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     runMode === 'team' ||
     (runMode === 'review' && effectiveReviewStrategyKind === 'new-branch');
   const trimmed = prompt.trim();
+  // A slot can run only when it has an Agent assigned (the Agent supplies the
+  // runtime + prompt). Each mode requires all its slots filled.
+  const hasSlotAgent = (slotKey: string) => !!slotAgentId(slotKey);
   const modeHasAgents =
     runMode === 'compare'
-      ? compareProviders.length >= MIN_COMPARE_AGENTS
+      ? compareProviders.length >= MIN_COMPARE_AGENTS &&
+        compareProviders.every((_, index) => hasSlotAgent(comparePromptKey(index)))
       : runMode === 'review'
-        ? !!providerId && !!reviewerProvider
+        ? hasSlotAgent(REVIEW_IMPLEMENTER_PROMPT_KEY) && hasSlotAgent(REVIEW_REVIEWER_PROMPT_KEY)
         : runMode === 'team'
-          ? TEAM_ROLES.every((role) => !!teamProviders[role.id])
-          : !!providerId;
+          ? TEAM_ROLES.every((role) => hasSlotAgent(teamPromptKey(role.id)))
+          : runMode === 'brainstorm'
+            ? hasSlotAgent(SPEC_PROMPT_KEY)
+            : hasSlotAgent(NORMAL_PROMPT_KEY);
   const canSubmit =
     !submitting &&
     modeHasAgents &&
@@ -1316,25 +1247,22 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
           );
         }
       };
-      const getSystemPrompt = (key: string, defaultPrompt: string) =>
-        resolveAgentSystemPrompt(agentSystemPrompts, key, defaultPrompt);
-      // Resolve a slot honoring its selected user-Agent (if any), falling back
-      // to the bare runtime + per-slot prompt override.
-      const resolveSlot = (
-        slotKey: string,
-        fallbackProvider: AgentProviderId | null,
-        defaultPrompt: string
-      ) =>
+      // Resolve a slot to its Agent's prompt + runtime (per-slot runtime
+      // override wins over the Agent's preferred runtime).
+      const resolveSlot = (slotKey: string, runtimeOverride: AgentProviderId | null) =>
         resolveAgentSlot({
-          selectedAgentId: selectedAgentIdsByMode[slotKey]?.[0] ?? null,
+          selectedAgentId: slotAgentId(slotKey),
           agents: userAgents,
-          fallbackProvider,
-          fallbackSystemPrompt: getSystemPrompt(slotKey, defaultPrompt),
+          runtimeOverride,
         });
 
       if (!mounted) {
-        if (!providerId) return;
-        const normalSlot = resolveSlot(NORMAL_PROMPT_KEY, providerId, '');
+        const draftSlot = resolveSlot(
+          runMode === 'brainstorm' ? SPEC_PROMPT_KEY : NORMAL_PROMPT_KEY,
+          providerId
+        );
+        const draftProvider = draftSlot.provider;
+        if (!draftProvider) return;
         await projectManager.mountProject(INTERNAL_PROJECT_ID).catch(() => {});
         const internalProject = asMounted(projectManager.projects.get(INTERNAL_PROJECT_ID));
         if (!internalProject) {
@@ -1348,11 +1276,6 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         const taskName = ensureUniqueTaskDisplayName(baseName, existingDraftNames);
         const taskId = crypto.randomUUID();
         const conversationId = crypto.randomUUID();
-        const draftSlot =
-          runMode === 'brainstorm'
-            ? resolveSlot(SPEC_PROMPT_KEY, providerId, defaultSpecSystemPrompt())
-            : normalSlot;
-        const draftProvider = draftSlot.provider ?? providerId;
         const draftSystemPrompt = draftSlot.systemPrompt.trim();
         const initialPrompt =
           runMode === 'brainstorm'
@@ -1433,7 +1356,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       };
 
       if (runMode === 'brainstorm') {
-        const slot = resolveSlot(SPEC_PROMPT_KEY, providerId, defaultSpecSystemPrompt());
+        const slot = resolveSlot(SPEC_PROMPT_KEY, providerId);
         if (!slot.provider) return;
         const task = createProjectTask({
           provider: slot.provider,
@@ -1455,23 +1378,23 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       }
 
       if (runMode === 'compare') {
-        const launches = compareProviders.map((provider, index) => {
-          const slot = resolveSlot(
-            comparePromptKey(index),
-            provider,
-            defaultCompareSystemPrompt(index)
-          );
-          return createProjectTask({
-            provider: slot.provider ?? provider,
-            nameSeed: `${baseName}-agent-${index + 1}-${slot.provider ?? provider}`,
-            initialPrompt: buildRequirementPrompt({
-              requirement: trimmed,
-              systemPrompt: slot.systemPrompt,
+        const launches = compareProviders.flatMap((provider, index) => {
+          const slot = resolveSlot(comparePromptKey(index), provider);
+          if (!slot.provider) return [];
+          return [
+            createProjectTask({
+              provider: slot.provider,
+              nameSeed: `${baseName}-agent-${index + 1}-${slot.provider}`,
+              initialPrompt: buildRequirementPrompt({
+                requirement: trimmed,
+                systemPrompt: slot.systemPrompt,
+              }),
+              titlePrompt: trimmed || undefined,
+              strategyKind: 'new-branch',
             }),
-            titlePrompt: trimmed || undefined,
-            strategyKind: 'new-branch',
-          });
+          ];
         });
+        if (launches.length === 0) return;
         const first = launches[0];
         if (first) navigate('task', { projectId: mounted.data.id, taskId: first.taskId });
         void Promise.allSettled(launches.map((launch) => launch.promise)).then(reportFailures);
@@ -1481,17 +1404,9 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
       }
 
       if (runMode === 'review') {
-        const implementerSlot = resolveSlot(
-          REVIEW_IMPLEMENTER_PROMPT_KEY,
-          providerId,
-          defaultReviewImplementerSystemPrompt()
-        );
-        const reviewerSlot = resolveSlot(
-          REVIEW_REVIEWER_PROMPT_KEY,
-          reviewerProvider,
-          defaultReviewReviewerSystemPrompt()
-        );
-        if (!implementerSlot.provider) return;
+        const implementerSlot = resolveSlot(REVIEW_IMPLEMENTER_PROMPT_KEY, providerId);
+        const reviewerSlot = resolveSlot(REVIEW_REVIEWER_PROMPT_KEY, reviewerProvider);
+        if (!implementerSlot.provider || !reviewerSlot.provider) return;
         const implementation = createProjectTask({
           provider: implementerSlot.provider,
           nameSeed: `${baseName}-implement`,
@@ -1509,7 +1424,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
           implementationConversationId: implementation.conversationId,
           implementationReady: implementation.promise,
           requirement: trimmed,
-          reviewerProvider: reviewerSlot.provider ?? reviewerProvider,
+          reviewerProvider: reviewerSlot.provider,
           reviewerSystemPrompt: reviewerSlot.systemPrompt,
           getAutoApprove: autoApproveDefaults.getDefault,
         }).catch((error: unknown) => {
@@ -1522,13 +1437,11 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
 
       if (runMode === 'team') {
         const ceoRole = TEAM_ROLES[0];
-        const ceoSlot = resolveSlot(
-          teamPromptKey(ceoRole.id),
-          teamProviders.ceo,
-          defaultTeamSystemPrompt(ceoRole)
-        );
+        const ceoSlot = resolveSlot(teamPromptKey(ceoRole.id), teamProviders.ceo);
+        if (!ceoSlot.provider) return;
+        const ceoProvider = ceoSlot.provider;
         const ceo = createProjectTask({
-          provider: ceoSlot.provider ?? teamProviders.ceo,
+          provider: ceoProvider,
           nameSeed: `${baseName}-${ceoRole.taskSuffix}`,
           initialPrompt: buildTeamCeoPrompt({
             requirement: trimmed,
@@ -1545,23 +1458,22 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
             ceo.taskId,
             ceo.conversationId
           );
-          const workerLaunches = TEAM_ROLES.filter((role) => role.id !== 'ceo').map((role) => {
-            const slot = resolveSlot(
-              teamPromptKey(role.id),
-              teamProviders[role.id],
-              defaultTeamSystemPrompt(role)
-            );
-            return createProjectTask({
-              provider: slot.provider ?? teamProviders[role.id],
-              nameSeed: `${baseName}-${role.taskSuffix}`,
-              initialPrompt: buildTeamRolePrompt({
-                requirement: trimmed,
-                ceoPlan: ceoOutput || '(The CEO agent did not produce captured output.)',
-                systemPrompt: slot.systemPrompt,
+          const workerLaunches = TEAM_ROLES.filter((role) => role.id !== 'ceo').flatMap((role) => {
+            const slot = resolveSlot(teamPromptKey(role.id), teamProviders[role.id]);
+            if (!slot.provider) return [];
+            return [
+              createProjectTask({
+                provider: slot.provider,
+                nameSeed: `${baseName}-${role.taskSuffix}`,
+                initialPrompt: buildTeamRolePrompt({
+                  requirement: trimmed,
+                  ceoPlan: ceoOutput || '(The CEO agent did not produce captured output.)',
+                  systemPrompt: slot.systemPrompt,
+                }),
+                titlePrompt: trimmed || undefined,
+                strategyKind: 'new-branch',
               }),
-              titlePrompt: trimmed || undefined,
-              strategyKind: 'new-branch',
-            });
+            ];
           });
           reportFailures(await Promise.allSettled(workerLaunches.map((launch) => launch.promise)));
         })().catch((error: unknown) => {
@@ -1572,7 +1484,7 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
         return;
       }
 
-      const normalSlot = resolveSlot(NORMAL_PROMPT_KEY, providerId, '');
+      const normalSlot = resolveSlot(NORMAL_PROMPT_KEY, providerId);
       if (!normalSlot.provider) return;
       const normalSystemPrompt = normalSlot.systemPrompt.trim();
       const task = createProjectTask({
@@ -1606,9 +1518,8 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
     compareProviders,
     reviewerProvider,
     teamProviders,
-    agentSystemPrompts,
     userAgents,
-    selectedAgentIdsByMode,
+    slotAgentId,
     autoApproveDefaults,
     navigate,
     projectManager,
@@ -2026,8 +1937,6 @@ export const HomeMainPanel = observer(function HomeMainPanel() {
                         onReviewerProviderChange={setReviewerProvider}
                         teamProviders={teamProviders}
                         onTeamProviderChange={setTeamProvider}
-                        agentSystemPrompts={agentSystemPrompts}
-                        onAgentSystemPromptChange={setAgentSystemPrompt}
                         agents={userAgents}
                         slotAgentId={slotAgentId}
                         onSlotAgentChange={setSlotAgent}
@@ -2468,8 +2377,6 @@ interface ModeConfigurationPanelProps {
   onReviewerProviderChange: (provider: AgentProviderId) => void;
   teamProviders: TeamProviderSelection;
   onTeamProviderChange: (roleId: TeamRoleId, provider: AgentProviderId) => void;
-  agentSystemPrompts: AgentSystemPromptOverrides;
-  onAgentSystemPromptChange: (key: string, prompt: string | null) => void;
   agents: Agent[];
   slotAgentId: (slotKey: string) => string | null;
   onSlotAgentChange: (slotKey: string, agentId: string) => void;
@@ -2489,8 +2396,6 @@ function ModeConfigurationPanel({
   onReviewerProviderChange,
   teamProviders,
   onTeamProviderChange,
-  agentSystemPrompts,
-  onAgentSystemPromptChange,
   agents,
   slotAgentId,
   onSlotAgentChange,
@@ -2499,20 +2404,13 @@ function ModeConfigurationPanel({
 }: ModeConfigurationPanelProps) {
   const { t } = useTranslation();
 
-  // Everything a single slot card needs: its per-slot prompt override props
-  // plus its user-Agent selection. `key` is the slot's stable prompt key.
-  const slotProps = (key: string, defaultPrompt: string) => {
-    const savedPrompt = agentSystemPrompts[key];
-    return {
-      systemPrompt: typeof savedPrompt === 'string' ? savedPrompt : defaultPrompt,
-      hasCustomSystemPrompt: typeof savedPrompt === 'string',
-      onSystemPromptChange: (next: string) => onAgentSystemPromptChange(key, next),
-      onSystemPromptReset: () => onAgentSystemPromptChange(key, null),
-      agents,
-      selectedAgentId: slotAgentId(key),
-      onSelectAgent: (agentId: string) => onSlotAgentChange(key, agentId),
-    };
-  };
+  // A slot card needs its Agent selection. `key` is the slot's stable key (the
+  // mode's prompt key, reused purely to key the per-slot selection).
+  const slotProps = (key: string) => ({
+    agents,
+    selectedAgentId: slotAgentId(key),
+    onSelectAgent: (agentId: string) => onSlotAgentChange(key, agentId),
+  });
 
   return (
     <div className={cn('mt-3 border-t border-border/60 pt-3', className)}>
@@ -2524,7 +2422,7 @@ function ModeConfigurationPanel({
             value={providerId}
             onChange={onProviderChange}
             connectionId={connectionId}
-            {...slotProps(NORMAL_PROMPT_KEY, '')}
+            {...slotProps(NORMAL_PROMPT_KEY)}
           />
         </div>
       )}
@@ -2537,7 +2435,7 @@ function ModeConfigurationPanel({
             value={providerId}
             onChange={onProviderChange}
             connectionId={connectionId}
-            {...slotProps(SPEC_PROMPT_KEY, defaultSpecSystemPrompt())}
+            {...slotProps(SPEC_PROMPT_KEY)}
           />
         </div>
       )}
@@ -2552,7 +2450,7 @@ function ModeConfigurationPanel({
               value={agent}
               onChange={(provider) => onCompareProviderChange(index, provider)}
               connectionId={connectionId}
-              {...slotProps(comparePromptKey(index), defaultCompareSystemPrompt(index))}
+              {...slotProps(comparePromptKey(index))}
               action={
                 <button
                   type="button"
@@ -2587,7 +2485,7 @@ function ModeConfigurationPanel({
             value={providerId}
             onChange={onProviderChange}
             connectionId={connectionId}
-            {...slotProps(REVIEW_IMPLEMENTER_PROMPT_KEY, defaultReviewImplementerSystemPrompt())}
+            {...slotProps(REVIEW_IMPLEMENTER_PROMPT_KEY)}
           />
           <Agent
             icon={ShieldCheck}
@@ -2595,7 +2493,7 @@ function ModeConfigurationPanel({
             value={reviewerProvider}
             onChange={onReviewerProviderChange}
             connectionId={connectionId}
-            {...slotProps(REVIEW_REVIEWER_PROMPT_KEY, defaultReviewReviewerSystemPrompt())}
+            {...slotProps(REVIEW_REVIEWER_PROMPT_KEY)}
           />
           <div className="sm:col-span-2 text-xs text-foreground-muted">
             {t('home.reviewRoundLimit', { count: REVIEW_MAX_ROUNDS })}
@@ -2613,7 +2511,7 @@ function ModeConfigurationPanel({
               value={teamProviders[role.id]}
               onChange={(provider) => onTeamProviderChange(role.id, provider)}
               connectionId={connectionId}
-              {...slotProps(teamPromptKey(role.id), defaultTeamSystemPrompt(role))}
+              {...slotProps(teamPromptKey(role.id))}
             />
           ))}
         </div>
@@ -2625,17 +2523,14 @@ function ModeConfigurationPanel({
 interface AgentProps {
   icon: ComponentType<{ className?: string }>;
   label: string;
+  /** Per-slot runtime override. Loosely coupled to the Agent's preferred runtime. */
   value: AgentProviderId | null;
   onChange: (provider: AgentProviderId) => void;
-  systemPrompt: string;
-  hasCustomSystemPrompt: boolean;
-  onSystemPromptChange: (prompt: string) => void;
-  onSystemPromptReset: () => void;
   connectionId?: string;
   action?: ReactNode;
   /** User Agents this slot can pick from. */
   agents: Agent[];
-  /** Currently selected user-Agent id for this slot, or null for a bare runtime. */
+  /** Currently selected Agent id for this slot, or null when none chosen yet. */
   selectedAgentId: string | null;
   onSelectAgent: (agentId: string) => void;
 }
@@ -2645,42 +2540,22 @@ function Agent({
   label,
   value,
   onChange,
-  systemPrompt,
-  hasCustomSystemPrompt,
-  onSystemPromptChange,
-  onSystemPromptReset,
   connectionId,
   action,
   agents,
   selectedAgentId,
   onSelectAgent,
 }: AgentProps) {
-  const { t } = useTranslation();
   const { navigate } = useNavigate();
   const showAgentModal = useShowModal('agentEditModal');
-  const [promptOpen, setPromptOpen] = useState(false);
-  const [promptDraft, setPromptDraft] = useState(systemPrompt);
-  const promptPreview = systemPrompt.trim() || t('home.agentSystemPromptEmpty');
 
-  const selectedAgent = selectedAgentId ? agents.find((a) => a.id === selectedAgentId) : undefined;
-  const selection: AgentSlotSelection = selectedAgent
-    ? { kind: 'agent', agentId: selectedAgent.id }
-    : { kind: 'provider', provider: value ?? AGENT_PROVIDER_IDS[0] };
-
-  const handlePromptOpenChange = (open: boolean) => {
-    setPromptOpen(open);
-    if (open) setPromptDraft(systemPrompt);
-  };
-
-  const savePrompt = () => {
-    onSystemPromptChange(promptDraft);
-    setPromptOpen(false);
-  };
-
-  const resetPrompt = () => {
-    onSystemPromptReset();
-    setPromptOpen(false);
-  };
+  const selectedAgent = selectedAgentId
+    ? (agents.find((a) => a.id === selectedAgentId) ?? null)
+    : null;
+  // Runtime shown on the card: the per-slot override wins, else the Agent's
+  // preferred runtime. Editing it here sets the per-slot override (loose
+  // coupling — it does not mutate the Agent).
+  const runtime = value ?? selectedAgent?.preferredRuntimeProvider ?? null;
 
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border/70 bg-background-1 p-2.5">
@@ -2693,76 +2568,21 @@ function Agent({
         </span>
         {action}
       </div>
-      <div className="flex min-w-0 items-center gap-1.5">
-        <AgentSlotSelector
-          selection={selection}
-          agents={agents}
-          onSelectAgent={onSelectAgent}
-          onSelectProvider={onChange}
-          onCreateAgent={() =>
-            showAgentModal({ onSuccess: (created) => onSelectAgent(created.id) })
-          }
-          onManageAgents={() => navigate('agentManager')}
+      <AgentSlotSelector
+        selectedAgent={selectedAgent}
+        agents={agents}
+        onSelectAgent={onSelectAgent}
+        onCreateAgent={() => showAgentModal({ onSuccess: (created) => onSelectAgent(created.id) })}
+        onManageAgents={() => navigate('agentManager')}
+      />
+      {selectedAgent && (
+        <AgentSelector
+          value={runtime}
+          onChange={onChange}
           connectionId={connectionId}
-          className="flex-1"
+          className="h-9 text-sm"
         />
-        {!selectedAgent && (
-          <Popover open={promptOpen} onOpenChange={handlePromptOpenChange}>
-            <PopoverTrigger
-              render={
-                <button
-                  type="button"
-                  aria-label={t('home.agentSystemPromptAria', { label })}
-                  title={promptPreview}
-                  className={cn(
-                    'relative flex size-9 shrink-0 items-center justify-center rounded-md border border-border transition-colors hover:bg-background-2 hover:text-foreground',
-                    hasCustomSystemPrompt
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-transparent text-foreground-muted'
-                  )}
-                >
-                  <FileText className="size-4" />
-                  {hasCustomSystemPrompt && (
-                    <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" />
-                  )}
-                </button>
-              }
-            />
-            <PopoverContent
-              align="start"
-              className="max-h-(--available-height) w-96 max-w-[calc(100vw-2rem)] gap-3 overflow-y-auto overscroll-contain p-3"
-            >
-              <PopoverHeader>
-                <PopoverTitle>{t('home.agentSystemPromptTitle', { label })}</PopoverTitle>
-              </PopoverHeader>
-              <Textarea
-                value={promptDraft}
-                onChange={(event) => setPromptDraft(event.target.value)}
-                placeholder={t('home.agentSystemPromptPlaceholder')}
-                className="h-64 max-h-[40dvh] min-h-48 resize-y overflow-y-auto rounded-md border border-border bg-background px-3 py-2 font-mono text-xs field-sizing-fixed leading-relaxed focus-visible:ring-1"
-              />
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={resetPrompt}
-                  className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-foreground-muted transition-colors hover:bg-background-2 hover:text-foreground"
-                >
-                  <RotateCcw className="size-3.5" />
-                  <span>{t('home.agentSystemPromptReset')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={savePrompt}
-                  className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
-                >
-                  <Check className="size-3.5" />
-                  <span>{t('home.agentSystemPromptSave')}</span>
-                </button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
-      </div>
+      )}
     </div>
   );
 }
