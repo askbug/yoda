@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
 import type { ProviderCustomConfig } from '@shared/app-settings';
+import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
 import { taskNamingUpdatedChannel } from '@shared/events/taskEvents';
 import { deriveTaskSlug, normalizeTaskDisplayName } from '@shared/task-name';
 import {
@@ -14,6 +15,7 @@ import {
   type TaskNamingStatus,
 } from '@shared/task-naming';
 import type { CreateTaskParams } from '@shared/tasks';
+import { resolveUtilityAgent } from '@main/core/agents-config/builtin-agent-resolver';
 import { resolveProviderEnv } from '@main/core/conversations/impl/provider-env';
 import { projectManager } from '@main/core/projects/project-manager';
 import type { ProjectProvider } from '@main/core/projects/project-provider';
@@ -124,7 +126,11 @@ export async function generateTaskNames(
     recentTaskLimit: taskSettings.namingRecentTaskLimit,
     timeoutMs: taskSettings.namingRequestTimeoutMs,
   });
-  const providerId = input.params.initialConversation?.provider ?? defaultAgent;
+  // The Naming built-in Agent drives task naming: its runtime/model/prompt win
+  // when set. A null runtime means "follow the task's own provider".
+  const namingAgent = await resolveUtilityAgent(BUILTIN_AGENT_KEYS.naming);
+  const providerId =
+    namingAgent.providerId ?? input.params.initialConversation?.provider ?? defaultAgent;
   const providerConfig = await providerOverrideSettings.getItem(providerId);
   recordStage('providerConfig', Date.now() - startedAt, {
     providerId,
@@ -133,7 +139,7 @@ export async function generateTaskNames(
   });
   const agentNamingModel = normalizeTaskNamingModelForProvider(
     providerId,
-    providerConfig?.namingModel
+    namingAgent.model ?? providerConfig?.namingModel
   );
   const fallbackNamingModel = normalizeTaskNamingModelForProvider(
     providerId,

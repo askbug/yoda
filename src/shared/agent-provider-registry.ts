@@ -129,8 +129,7 @@ export const AGENT_PROVIDERS: AgentProviderDefinition[] = [
     sessionIdFlag: '--session-id',
     commandPrefix: '/',
     planActivateCommand: '/plan',
-    namingCommand:
-      'claude --print --model {model} --output-format text --no-session-persistence --permission-mode plan',
+    namingCommand: 'claude --print --model {model} --output-format text --no-session-persistence',
     icon: 'claude.png',
     alt: 'Claude Code',
     terminalOnly: true,

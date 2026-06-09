@@ -27,58 +27,59 @@ function AgentCard({
     : null;
 
   return (
-    <div className="group flex flex-col gap-3 rounded-lg border border-border bg-background-1 p-4 transition-colors hover:border-primary/40">
-      <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-background-2 text-xl">
-          {agent.icon || '🤖'}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-foreground">{agent.name}</div>
-          <p className="line-clamp-2 text-xs text-foreground-muted">
-            {agent.description || t('agentManager.noDescription')}
-          </p>
+    <div className="group flex items-start gap-3 rounded-lg border border-border bg-background-1 p-3 transition-colors hover:border-primary/40">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background-2 text-lg">
+        {agent.icon || '🤖'}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-foreground">{agent.name}</span>
+          <span
+            className={cn(
+              'shrink-0 truncate rounded-sm px-1.5 py-0.5 text-[10px] font-medium',
+              agent.model ? 'bg-primary/10 text-primary' : 'bg-background-2 text-foreground-muted'
+            )}
+          >
+            {agent.model || t('agentManager.modelDefault')}
+          </span>
+          <span className="shrink-0 rounded-sm bg-background-2 px-1.5 py-0.5 text-[10px] text-foreground-muted">
+            {runtime ? runtime.name : t('agentManager.anyRuntime')}
+          </span>
+          {agent.enabledSkillIds.length > 0 && (
+            <span className="shrink-0 rounded-sm bg-background-2 px-1.5 py-0.5 text-[10px] text-foreground-muted">
+              {t('agentManager.skillsCount', { count: agent.enabledSkillIds.length })}
+            </span>
+          )}
         </div>
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            type="button"
-            aria-label={t('common.edit')}
-            onClick={onEdit}
-            className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-background-2 hover:text-foreground"
-          >
-            <Pencil className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label={t('agentManager.duplicate')}
-            onClick={onDuplicate}
-            className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-background-2 hover:text-foreground"
-          >
-            <Copy className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label={t('common.delete')}
-            onClick={onDelete}
-            className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
+        <p className="line-clamp-1 text-xs text-foreground-muted">
+          {agent.description || t('agentManager.noDescription')}
+        </p>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="rounded-sm bg-background-2 px-1.5 py-0.5 text-[10px] text-foreground-muted">
-          {runtime ? runtime.name : t('agentManager.anyRuntime')}
-        </span>
-        {agent.model && (
-          <span className="rounded-sm bg-background-2 px-1.5 py-0.5 text-[10px] text-foreground-muted">
-            {agent.model}
-          </span>
-        )}
-        {agent.enabledSkillIds.length > 0 && (
-          <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-            {t('agentManager.skillsCount', { count: agent.enabledSkillIds.length })}
-          </span>
-        )}
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          aria-label={t('common.edit')}
+          onClick={onEdit}
+          className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-background-2 hover:text-foreground"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          aria-label={t('agentManager.duplicate')}
+          onClick={onDuplicate}
+          className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-background-2 hover:text-foreground"
+        >
+          <Copy className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          aria-label={t('common.delete')}
+          onClick={onDelete}
+          className="flex size-7 items-center justify-center rounded-md text-foreground-muted hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
       </div>
     </div>
   );

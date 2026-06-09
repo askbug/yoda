@@ -60,6 +60,12 @@ class AgentsConfigService {
     return row ? rowToAgent(row) : null;
   }
 
+  /** Look up an Agent by its stable slug (used to resolve built-in presets). */
+  async getBySlug(slug: string): Promise<Agent | null> {
+    const [row] = await db.select().from(agents).where(eq(agents.slug, slug)).execute();
+    return row ? rowToAgent(row) : null;
+  }
+
   private async uniqueSlug(base: string): Promise<string> {
     const root = slugify(base);
     const existing = new Set(

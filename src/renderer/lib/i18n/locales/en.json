@@ -1158,6 +1158,7 @@
     "preferredRuntimeHint": "Used when available; otherwise falls back to the mode default.",
     "model": "Model",
     "modelPlaceholder": "Runtime default",
+    "modelDefault": "Default model",
     "systemPrompt": "System prompt",
     "systemPromptPlaceholder": "Describe this agent's role, constraints and how it works.",
     "skills": "Skills",

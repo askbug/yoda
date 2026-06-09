@@ -29,6 +29,10 @@ export const BUILTIN_AGENT_KEYS = {
   teamEngineering: 'builtin:team-engineering',
   teamUiux: 'builtin:team-uiux',
   teamOperations: 'builtin:team-operations',
+  // Internal utility Agents — drive the app's own LLM helpers (no API client,
+  // so these run as one-shot provider CLI calls just like coding tasks).
+  naming: 'builtin:naming',
+  summary: 'builtin:summary',
 } as const;
 
 const SPEC_PROMPT = [
@@ -96,7 +100,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
     description: 'Reviews an implementation against the requirement.',
     icon: '🛡️',
     systemPrompt: REVIEW_REVIEWER_PROMPT,
-    preferredRuntimeProvider: 'claude',
+    preferredRuntimeProvider: 'codex',
   },
   {
     key: BUILTIN_AGENT_KEYS.teamCeo,
@@ -153,5 +157,23 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
       'Review user-facing rollout, onboarding, communication, and operational risks.'
     ),
     preferredRuntimeProvider: 'codex',
+  },
+  {
+    key: BUILTIN_AGENT_KEYS.naming,
+    name: 'Naming',
+    description: 'Generates concise task names and branch slugs.',
+    icon: '🏷️',
+    systemPrompt: 'You generate concise, action-oriented names for coding tasks.',
+    // null = follow the task's own runtime; pin one to always name via it.
+    preferredRuntimeProvider: null,
+  },
+  {
+    key: BUILTIN_AGENT_KEYS.summary,
+    name: 'Summary',
+    description: 'Summarizes a coding session from its messages.',
+    icon: '📝',
+    systemPrompt: 'You write short, faithful summaries of coding sessions.',
+    // null = summary always runs on the session's own runtime.
+    preferredRuntimeProvider: null,
   },
 ] as const;

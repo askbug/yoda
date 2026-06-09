@@ -1158,6 +1158,7 @@
     "preferredRuntimeHint": "可用时优先使用，否则回退到范式默认 runtime。",
     "model": "模型",
     "modelPlaceholder": "runtime 默认",
+    "modelDefault": "默认模型",
     "systemPrompt": "System prompt",
     "systemPromptPlaceholder": "描述这个 Agent 的角色、约束和工作方式。",
     "skills": "Skills",

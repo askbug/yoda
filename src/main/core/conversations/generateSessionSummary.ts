@@ -1,10 +1,12 @@
 import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
+import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
 import type {
   ClaudeSessionPrompt,
   SessionSummary,
   SessionSummaryScope,
 } from '@shared/conversations';
 import { extractAgentMessageText, runAgentCli } from '@main/core/agent-cli/run-agent-cli';
+import { resolveUtilityAgent } from '@main/core/agents-config/builtin-agent-resolver';
 import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { log } from '@main/lib/logger';
@@ -23,10 +25,10 @@ type SummaryCommand = { command: string; args: string[]; stdin: string };
  * runs the provider CLI non-interactively (one-shot print/exec mode) on the
  * conversation's user prompts.
  *
- * Unlike task naming, this deliberately does NOT use the configured
- * `namingCommand`: that runs Claude in `--permission-mode plan`, which makes it
- * explore the repo and emit planning preamble — slow (90s+) and noisy. A plain
- * `--print` run returns a clean summary in seconds.
+ * This uses its own read-only one-shot command rather than the configured
+ * `namingCommand`: summary is a pure text task over the messages below, so a
+ * plain `--print` (Claude) / `exec --sandbox read-only` (Codex) run is fast and
+ * never touches the repo.
  */
 export async function generateSessionSummary(
   providerId: AgentProviderId,
@@ -38,8 +40,15 @@ export async function generateSessionSummary(
   if (userPrompts.length === 0) return null;
 
   const taskSettings = await appSettingsService.get('tasks');
-  const prompt = buildSummaryPrompt(userPrompts, taskSettings.namingLanguage, scope);
-  const command = buildSummaryCommand(providerId, prompt);
+  // The Summary built-in Agent supplies the base framing + preferred model. Its
+  // runtime is NOT used here: a summary must run on the same provider that owns
+  // the session transcript we are summarizing.
+  const summaryAgent = await resolveUtilityAgent(BUILTIN_AGENT_KEYS.summary);
+  const basePrompt = buildSummaryPrompt(userPrompts, taskSettings.namingLanguage, scope);
+  const prompt = summaryAgent.systemPrompt.trim()
+    ? `${summaryAgent.systemPrompt.trim()}\n\n${basePrompt}`
+    : basePrompt;
+  const command = buildSummaryCommand(providerId, prompt, summaryAgent.model);
   if (!command) return null;
 
   const providerConfig = await providerOverrideSettings.getItem(providerId);
@@ -69,18 +78,33 @@ export async function generateSessionSummary(
  * Fast, read-only one-shot summary command per provider. Returns null for
  * providers without a non-interactive print mode.
  */
-function buildSummaryCommand(providerId: AgentProviderId, prompt: string): SummaryCommand | null {
+function buildSummaryCommand(
+  providerId: AgentProviderId,
+  prompt: string,
+  model: string | null
+): SummaryCommand | null {
+  const modelArgs = model?.trim() ? ['--model', model.trim()] : [];
   if (providerId === 'claude') {
     return {
       command: 'claude',
-      args: ['--print', '--output-format', 'text', '--no-session-persistence'],
+      args: ['--print', '--output-format', 'text', '--no-session-persistence', ...modelArgs],
       stdin: prompt,
     };
   }
   if (providerId === 'codex') {
     return {
       command: 'codex',
-      args: ['exec', '--ephemeral', '--sandbox', 'read-only', '--color', 'never', '--json', '-'],
+      args: [
+        'exec',
+        '--ephemeral',
+        '--sandbox',
+        'read-only',
+        '--color',
+        'never',
+        ...modelArgs,
+        '--json',
+        '-',
+      ],
       stdin: prompt,
     };
   }
