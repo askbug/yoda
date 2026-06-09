@@ -1,6 +1,6 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import type { MaasPlatformId } from '@shared/maas';
 import type { OpenInAppId } from '@shared/openInApps';
+import type { RuntimeId } from '@shared/runtime-registry';
 import type { TaskLifecycleStatus } from '@shared/tasks';
 
 type EmptyProps = Record<string, never>;
@@ -10,13 +10,15 @@ export type FocusView =
   | 'project'
   | 'projectless'
   | 'task'
+  | 'file'
   | 'settings'
   | 'skills'
   | 'mcp'
   | 'agentManager'
   | 'agents'
   | 'maas'
-  | 'automation';
+  | 'automation'
+  | 'mobile';
 export type FocusMainPanel = 'agents' | 'editor' | 'diff';
 export type FocusedRegion = 'main' | 'bottom';
 
@@ -56,12 +58,14 @@ export type TelemetryEventProperties = {
   project_viewed: { from_view: FocusView | null };
   projectless_viewed: { from_view: FocusView | null };
   task_viewed: { from_view: FocusView | null };
+  file_viewed: { from_view: FocusView | null };
   settings_viewed: { from_view: FocusView | null };
   skills_viewed: { from_view: FocusView | null };
   mcp_viewed: { from_view: FocusView | null };
   agents_viewed: { from_view: FocusView | null };
   maas_viewed: { from_view: FocusView | null };
   automation_viewed: { from_view: FocusView | null };
+  mobile_viewed: { from_view: FocusView | null };
 
   project_added: { type: 'local' | 'ssh'; strategy: 'open' | 'create' | 'clone'; success: boolean };
   project_deleted: EmptyProps;
@@ -72,18 +76,19 @@ export type TelemetryEventProperties = {
     strategy: 'blank' | 'branch' | 'issue' | 'pr';
     has_initial_prompt: boolean;
     has_issue: 'github' | 'linear' | 'jira' | 'gitlab' | 'plain' | 'forgejo' | 'none';
-    provider: AgentProviderId | null;
+    provider: RuntimeId | null;
   };
   task_provisioned: EmptyProps;
   task_archived: EmptyProps;
   task_status_changed: { from_status: TaskLifecycleStatus; to_status: TaskLifecycleStatus };
   task_deleted: EmptyProps;
 
-  conversation_created: { provider: AgentProviderId; is_first_in_task: boolean };
+  conversation_created: { provider: RuntimeId; is_first_in_task: boolean };
   conversation_archived: EmptyProps;
+  conversation_unarchived: EmptyProps;
   conversation_deleted: EmptyProps;
-  agent_run_started: { provider: AgentProviderId };
-  agent_run_finished: { provider: AgentProviderId; exit_code: number };
+  agent_run_started: { provider: RuntimeId };
+  agent_run_finished: { provider: RuntimeId; exit_code: number };
 
   terminal_created: { terminal_id: string };
   terminal_deleted: { terminal_id: string };

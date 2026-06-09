@@ -27,3 +27,13 @@ export function sshWorkspaceId(projectId: string, taskBranch: string | undefined
 export function remoteTaskWorkspaceId(remoteId: string): string {
   return `remote:${remoteId}`;
 }
+
+/**
+ * Project-view workspace: backs project-level file tabs (viewing/editing files
+ * at the project root outside any task). Deliberately distinct from the
+ * `:root` task workspace so it never shares refcounts or lifecycle scripts
+ * with tasks provisioned on the project root.
+ */
+export function projectViewWorkspaceId(kind: 'local' | 'ssh', projectId: string): string {
+  return `${kind}:${projectId}:project-view`;
+}

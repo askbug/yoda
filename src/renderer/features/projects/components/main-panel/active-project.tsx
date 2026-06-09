@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react-lite';
-import { useTranslation } from 'react-i18next';
+import { HarnessPanel } from '@renderer/features/projects/components/harness-view/harness-panel';
 import { OverviewPanel } from '@renderer/features/projects/components/overview-view/overview-panel';
 import { ProjectSessionsPanel } from '@renderer/features/projects/components/sessions-view/project-sessions-panel';
 import { SettingsPanel } from '@renderer/features/projects/components/settings-view/settings-panel';
@@ -7,49 +7,28 @@ import { TaskList } from '@renderer/features/projects/components/task-view/task-
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import type { ProjectView } from '@renderer/features/projects/stores/project-view';
 import { useParams } from '@renderer/lib/layout/navigation-provider';
-import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 
+/**
+ * Project pages are top-level tabs (the app tab strip in the titlebar) —
+ * the route's `view` param selects which page renders here.
+ */
 export const ActiveProject = observer(function ActiveProject() {
-  const { t } = useTranslation();
   const {
-    params: { projectId },
+    params: { projectId, view },
   } = useParams('project');
   const store = asMounted(getProjectStore(projectId));
 
   if (!store) return null;
 
-  const activeView = store.view.activeView;
+  const activeView = (view ?? 'overview') as ProjectView;
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
-      <div className="border-b border-border px-4 py-2 shrink-0 flex justify-center">
-        <ToggleGroup
-          variant="outline"
-          size="sm"
-          value={[activeView]}
-          className="rounded-lg overflow-hidden shadow-none h-7 border border-border"
-          onValueChange={([value]) => {
-            if (value) store.view.setProjectView(value as ProjectView);
-          }}
-        >
-          <ToggleGroupItem value="overview" size="sm">
-            {t('projects.overview')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="tasks" size="sm">
-            {t('projects.sessions')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="sessions" size="sm">
-            {t('tasks.conversations.sessions')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="settings" size="sm">
-            {t('common.settings')}
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
       <div className="flex-1 min-h-0">
         {activeView === 'overview' && <OverviewPanel />}
         {activeView === 'tasks' && <TaskList />}
         {activeView === 'sessions' && <ProjectSessionsPanel />}
+        {activeView === 'harness' && <HarnessPanel />}
         {activeView === 'settings' && <SettingsPanel />}
       </div>
     </div>

@@ -43,12 +43,13 @@ export class ConversationManagerStore {
     });
     if (preloaded && preloaded.length > 0) {
       this._loaded = true;
-      for (const conversation of preloaded) {
+      const owned = preloaded.filter((conversation) => this._belongsHere(conversation));
+      for (const conversation of owned) {
         const store = new ConversationStore(conversation);
         this.conversations.set(conversation.id, store);
         void store.session.connect();
       }
-      void this.hydrateRuntimeStatuses(preloaded.map((conversation) => conversation.id));
+      void this.hydrateRuntimeStatuses(owned.map((conversation) => conversation.id));
     }
     onBecomeObserved(this, 'conversations', () => {
       if (this._loaded) return;
@@ -176,6 +177,11 @@ export class ConversationManagerStore {
       .then(async (conversations) => {
         runInAction(() => {
           this.mergeConversations(conversations);
+          // Sweep any pre-existing foreign entries (pollution that predates
+          // the ownership guards, e.g. surviving a hot reload).
+          for (const [id, store] of this.conversations) {
+            if (!this._belongsHere(store.data)) this.conversations.delete(id);
+          }
         });
         await this.hydrateRuntimeStatuses(conversations.map((conversation) => conversation.id));
       })
@@ -189,11 +195,35 @@ export class ConversationManagerStore {
     return this._loadPromise;
   }
 
+  /** Ownership guard: conversations from other tasks must never enter this store. */
+  private _belongsHere(conversation: Conversation): boolean {
+    const owned = conversation.taskId === this.taskId && conversation.projectId === this.projectId;
+    if (!owned) {
+      console.warn('[conversations] dropping foreign conversation from store', {
+        managerProjectId: this.projectId,
+        managerTaskId: this.taskId,
+        conversation: {
+          id: conversation.id,
+          projectId: conversation.projectId,
+          taskId: conversation.taskId,
+        },
+      });
+    }
+    return owned;
+  }
+
   async ensureConversation(conversationId: string): Promise<boolean> {
     if (!this._loaded || this._loadPromise) {
       await this.load();
     }
-    if (this.conversations.has(conversationId)) return true;
+    const cached = this.conversations.get(conversationId);
+    if (cached) {
+      // Self-heal: a polluted entry from another task is evicted instead of
+      // being "successfully" opened against the wrong workspace.
+      if (this._belongsHere(cached.data)) return true;
+      this.conversations.delete(conversationId);
+      return false;
+    }
 
     const conversations = await rpc.conversations.getConversationsForTask(
       this.projectId,
@@ -209,6 +239,7 @@ export class ConversationManagerStore {
 
   private mergeConversations(conversations: Conversation[]): void {
     for (const conversation of conversations) {
+      if (!this._belongsHere(conversation)) continue;
       const nextConversation = this.consumePendingConversationTitle(conversation);
       const existing = this.conversations.get(conversation.id);
       if (existing) {

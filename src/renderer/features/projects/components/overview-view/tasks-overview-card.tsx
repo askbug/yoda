@@ -2,10 +2,9 @@ import { ArrowRight, ListTodo } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslation } from 'react-i18next';
 import type { ReadyTask } from '@renderer/features/projects/components/task-view/task-row';
-import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
-import type { ProjectView } from '@renderer/features/projects/stores/project-view';
 import { getTaskManagerStore } from '@renderer/features/tasks/stores/task-selectors';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
+import { appState } from '@renderer/lib/stores/app-state';
 import { Button } from '@renderer/lib/ui/button';
 import { RelativeTime } from '@renderer/lib/ui/relative-time';
 
@@ -18,7 +17,6 @@ export const TasksOverviewCard = observer(function TasksOverviewCard({
 }) {
   const { t } = useTranslation();
   const { navigate } = useNavigate();
-  const project = asMounted(getProjectStore(projectId));
   const taskManager = getTaskManagerStore(projectId);
 
   const allTasks: ReadyTask[] = taskManager
@@ -38,7 +36,7 @@ export const TasksOverviewCard = observer(function TasksOverviewCard({
     .slice(0, RECENT_LIMIT);
 
   const goToTasks = () => {
-    if (project) project.view.setProjectView('tasks' as ProjectView);
+    appState.appTabs.openTab('project', { projectId, view: 'tasks' });
   };
 
   return (

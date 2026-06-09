@@ -5,6 +5,7 @@ import { planEventChannel } from '@shared/events/appEvents';
 import { fsWatchEventChannel } from '@shared/events/fsEvents';
 import { createRPCController } from '@shared/ipc/rpc';
 import { err, ok } from '@shared/result';
+import { LocalFileSystem } from '@main/core/fs/impl/local-fs';
 import { SshFileSystem } from '@main/core/fs/impl/ssh-fs';
 import { getProjectById } from '@main/core/projects/operations/getProjects';
 import { projectManager } from '@main/core/projects/project-manager';
@@ -194,6 +195,29 @@ export const filesController = createRPCController({
           ...listOptions,
         })
       );
+    } catch (e) {
+      return err({ type: 'fs_error' as const, message: String(e) });
+    }
+  },
+
+  // Reads a file relative to the project root without requiring a mounted workspace.
+  // Used by project-level views (e.g. harness) that inspect config files directly.
+  readProjectFile: async (projectId: string, filePath: string, maxBytes?: number) => {
+    try {
+      const projectData = await getProjectById(projectId);
+      if (!projectData) {
+        return err({ type: 'not_found' as const, entity: 'project' as const, detail: undefined });
+      }
+
+      const projectFs =
+        projectData.type === 'ssh'
+          ? new SshFileSystem(
+              await sshConnectionManager.connect(projectData.connectionId),
+              projectData.path
+            )
+          : new LocalFileSystem(projectData.path);
+
+      return ok(await projectFs.read(filePath, maxBytes));
     } catch (e) {
       return err({ type: 'fs_error' as const, message: String(e) });
     }

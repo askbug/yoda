@@ -1,7 +1,8 @@
 import { computed, makeObservable, observable, reaction, runInAction } from 'mobx';
 import { HEAD_REF } from '@shared/git';
 import type { EditorViewSnapshot } from '@shared/view-state';
-import type { TabManagerStore } from '@renderer/features/tasks/tabs/tab-manager-store';
+import type { FileTabStore } from '@renderer/features/tasks/tabs/file-tab-store';
+import type { FileRendererData } from '@renderer/features/tasks/types';
 import { getFileKind } from '@renderer/lib/editor/fileKind';
 import { rpc } from '@renderer/lib/ipc';
 import { modelRegistry } from '@renderer/lib/monaco/monaco-model-registry';
@@ -9,6 +10,18 @@ import { buildMonacoModelPath } from '@renderer/lib/monaco/monacoModelPath';
 import type { Snapshottable } from '@renderer/lib/stores/snapshottable';
 import { getMonacoLanguageId } from '@renderer/utils/diffUtils';
 import { log } from '@renderer/utils/logger';
+
+/**
+ * The slice of a tab manager that the model lifecycle needs. Structural so the
+ * store works for both the task TabManagerStore and project-level file tabs.
+ */
+export interface FileTabsHost {
+  readonly openFilePaths: string[];
+  readonly activeFileEntry: FileTabStore | null | undefined;
+  setImageContent(filePath: string, content: string): void;
+  updateRenderer(filePath: string, updater: (prev: FileRendererData) => FileRendererData): void;
+  setFileTotalSize(filePath: string, size: number): void;
+}
 
 /**
  * Owns Monaco model lifecycle (register/unregister) and file persistence (save, conflict).
@@ -35,10 +48,10 @@ export class FileModelLifecycleStore implements Snapshottable<EditorViewSnapshot
 
   private readonly projectId: string;
   private readonly workspaceId: string;
-  private readonly tabManager: TabManagerStore;
+  private readonly tabManager: FileTabsHost;
   private readonly disposers: (() => void)[] = [];
 
-  constructor(tabManager: TabManagerStore, projectId: string, workspaceId: string) {
+  constructor(tabManager: FileTabsHost, projectId: string, workspaceId: string) {
     this.tabManager = tabManager;
     this.projectId = projectId;
     this.workspaceId = workspaceId;

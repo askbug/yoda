@@ -4,7 +4,12 @@ import { ErrorBoundary } from './lib/components/error-boundary';
 import './lib/i18n';
 import './index.css';
 import 'devicon/devicon.min.css';
-import type { NavigationSnapshot, SidebarSnapshot } from '@shared/view-state';
+import type {
+  AppSidePaneSnapshot,
+  AppTabsSnapshot,
+  NavigationSnapshot,
+  SidebarSnapshot,
+} from '@shared/view-state';
 import { setupAppCommandProvider } from '@renderer/lib/commands/app-commands';
 import { setupViewCommandProvider } from '@renderer/lib/commands/registry';
 import { wireCommitHistoryInvalidation } from '@renderer/lib/commit-history-invalidation';
@@ -16,11 +21,21 @@ import { modelRegistry } from '@renderer/lib/monaco/monaco-model-registry';
 import { wirePrCacheInvalidation } from '@renderer/lib/pr-cache-invalidation';
 import type { AgentRuntimeSnapshot } from '@renderer/lib/stores/agent-runtime-store';
 import { viewStateCache } from '@renderer/lib/stores/view-state-cache';
+import { getTaskWindowLaunchTarget } from '@renderer/lib/task-window-launch-target';
 import { log } from '@renderer/utils/logger';
 import { initSoundPlayer } from '@renderer/utils/soundPlayer';
 import { appState } from './lib/stores/app-state';
 
+// [boot-timing] Captured as early as the module evaluates so we can measure the
+// full cold-start of a detached task window. Remove with the other [boot-timing]
+// logs once profiling is done.
+const BOOT_T0 = performance.now();
+const bootLog = (label: string) => {
+  console.log(`[boot-timing] renderer: ${label} @ +${Math.round(performance.now() - BOOT_T0)}ms`);
+};
+
 async function bootstrap() {
+  bootLog('bootstrap() start (bundle evaluated)');
   // Wire invalidation bridges so FS and git events flow into the model registry.
   wireModelRegistryInvalidation(modelRegistry);
   wirePrCacheInvalidation();
@@ -29,22 +44,28 @@ async function bootstrap() {
   appState.update.start();
   initSoundPlayer();
 
-  // Initialize Monaco and load app data in parallel. Awaiting Monaco here
-  // guarantees __monaco is set before React renders, so StickyDiffEditor can
-  // create editors synchronously on mount without any async coordination.
-  const [, , navResult, sidebarResult, allViewState] = await Promise.all([
+  // Warm Monaco in the background WITHOUT blocking first paint — `loader.init()`
+  // costs ~1s and a window may not even show a code/diff tab. Editor consumers
+  // (useMonacoLease, StickyDiffEditor) await the pool on demand, so deferring is
+  // safe and lets the window paint ~1s sooner.
+  const monacoInit = Promise.all([
     codeEditorPool.init(0).catch((error: unknown) => {
       log.warn('[monaco-code-pool] init failed:', error);
     }),
     diffEditorPool.init(0).catch((error: unknown) => {
       log.warn('[monaco-diff-pool] init failed:', error);
     }),
+  ]).then(() => bootLog('monaco pools ready'));
+
+  const [navResult, sidebarResult, allViewState] = await Promise.all([
     rpc.viewState.get('navigation') as Promise<NavigationSnapshot> | null,
     rpc.viewState.get('sidebar'),
     rpc.viewState.getAll(),
     appState.projects.load(),
     appState.workspaces.load(),
   ]);
+  bootLog('bootstrap await done (viewState + projects/workspaces, monaco deferred)');
+  void monacoInit;
 
   viewStateCache.populate(allViewState as Record<string, unknown>);
 
@@ -53,7 +74,33 @@ async function bootstrap() {
     appState.agentRuntime.restoreSnapshot(agentRuntimeResult as Partial<AgentRuntimeSnapshot>);
   }
 
-  if (navResult) appState.navigation.restoreSnapshot(navResult);
+  const launchTarget = getTaskWindowLaunchTarget();
+  if (launchTarget) {
+    appState.navigation.restoreSnapshot({
+      currentViewId: 'task',
+      viewParams: {
+        ...(navResult?.viewParams ?? {}),
+        task: {
+          projectId: launchTarget.projectId,
+          taskId: launchTarget.taskId,
+        },
+      },
+    });
+  } else if (navResult) {
+    appState.navigation.restoreSnapshot(navResult);
+  }
+  // Detached task windows are single-route surfaces — no tab restoration there.
+  if (!launchTarget) {
+    const appTabsResult = (allViewState as Record<string, unknown>)?.appTabs;
+    if (appTabsResult) {
+      appState.appTabs.restoreSnapshot(appTabsResult as Partial<AppTabsSnapshot>);
+    }
+    const sidePaneResult = (allViewState as Record<string, unknown>)?.appSidePane;
+    if (sidePaneResult) {
+      appState.sidePane.restoreSnapshot(sidePaneResult as Partial<AppSidePaneSnapshot>);
+    }
+  }
+  appState.appTabs.start();
   setupAppCommandProvider();
   setupViewCommandProvider();
   if (sidebarResult) {
@@ -62,6 +109,7 @@ async function bootstrap() {
     appState.sidebar.expandAllProjects();
   }
 
+  bootLog('React render() called');
   // Avoid double-mount in dev which can duplicate PTY sessions
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <ErrorBoundary>

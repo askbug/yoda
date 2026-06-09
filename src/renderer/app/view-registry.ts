@@ -5,6 +5,8 @@ import { agentsView } from '@renderer/features/agents/agents-view';
 import { automationView } from '@renderer/features/automation/automation-view';
 import { maasView } from '@renderer/features/maas/maas-view';
 import { mcpView } from '@renderer/features/mcp/mcp-view';
+import { mobileView } from '@renderer/features/mobile/mobile-view';
+import { projectFileView } from '@renderer/features/project-file/view';
 import { projectView } from '@renderer/features/projects/view';
 import { settingsView } from '@renderer/features/settings/settings-view';
 import { skillsView } from '@renderer/features/skills/skills-view';
@@ -20,8 +22,10 @@ export const views = {
   maas: maasView,
   skills: skillsView,
   mcp: mcpView,
+  mobile: mobileView,
   project: projectView,
   task: taskView,
+  file: projectFileView,
   settings: settingsView,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } satisfies Record<string, ViewDefinition<any>>;

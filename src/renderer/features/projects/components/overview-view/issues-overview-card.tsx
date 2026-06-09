@@ -8,15 +8,11 @@ import {
   IssueLinkedTasks,
   IssueTaskLinkPopover,
 } from '@renderer/features/projects/components/issues-view/issue-task-links';
-import {
-  asMounted,
-  getProjectStore,
-  getRepositoryStore,
-} from '@renderer/features/projects/stores/project-selectors';
-import type { ProjectView } from '@renderer/features/projects/stores/project-view';
+import { getRepositoryStore } from '@renderer/features/projects/stores/project-selectors';
 import { IssueIdentifier } from '@renderer/features/tasks/components/issue-selector/issue-selector';
 import { rpc } from '@renderer/lib/ipc';
 import { useGithubContext } from '@renderer/lib/providers/github-context-provider';
+import { appState } from '@renderer/lib/stores/app-state';
 import { Button } from '@renderer/lib/ui/button';
 import {
   DropdownMenu,
@@ -75,7 +71,6 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
   projectId: string;
 }) {
   const { t } = useTranslation();
-  const project = asMounted(getProjectStore(projectId));
   const repo = getRepositoryStore(projectId);
   const repositoryUrl = repo?.repositoryUrl ?? null;
   const { authenticated, isInitialized } = useGithubContext();
@@ -90,7 +85,7 @@ export const IssuesOverviewCard = observer(function IssuesOverviewCard({
   const recentIssues = issues.slice(0, RECENT_LIMIT);
 
   const goToTasks = () => {
-    if (project) project.view.setProjectView('tasks' as ProjectView);
+    appState.appTabs.openTab('project', { projectId, view: 'tasks' });
   };
 
   return (

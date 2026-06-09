@@ -1,144 +1,17 @@
-import { ChevronDown, Ellipsis, ExternalLink, GithubIcon, Globe, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useTranslation } from 'react-i18next';
-import { parseGitHubRepository } from '@shared/github-repository';
 import {
   asMounted,
-  getProjectManagerStore,
   getProjectStore,
-  getRepositoryStore,
-  projectDisplayName,
   projectViewKind,
 } from '@renderer/features/projects/stores/project-selectors';
 import { OpenInMenu } from '@renderer/lib/components/titlebar/open-in-menu';
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
-import { rpc } from '@renderer/lib/ipc';
-import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
-import { useShowModal } from '@renderer/lib/modal/modal-provider';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@renderer/lib/ui/dropdown-menu';
-import { Separator } from '@renderer/lib/ui/separator';
+import { useParams } from '@renderer/lib/layout/navigation-provider';
 
-function browsableRemoteUrl(
-  remoteUrl: string | undefined,
-  repositoryUrl: string | null
-): string | null {
-  if (repositoryUrl) return repositoryUrl;
-
-  const trimmed = remoteUrl?.trim();
-  if (!trimmed) return null;
-
-  return /^https?:\/\//i.test(trimmed) ? trimmed : null;
-}
-
-const MountedProjectTitlebarLeft = observer(function ProjectTitlebarLeft({
-  projectId,
-}: {
-  projectId: string;
-}) {
-  const { t } = useTranslation();
-  const { navigate } = useNavigate();
-  const store = getProjectStore(projectId);
-  const displayName = projectDisplayName(store);
-  const showConfirmDeleteProject = useShowModal('confirmActionModal');
-
-  const repo = getRepositoryStore(projectId);
-  const configuredRemote = repo?.configuredRemote;
-  const remoteUrl = configuredRemote?.url;
-  const repositoryUrl = repo?.repositoryUrl ?? null;
-  const remoteExternalUrl = browsableRemoteUrl(remoteUrl, repositoryUrl);
-  const repository = parseGitHubRepository(repositoryUrl);
-
-  const isGithubUrl = Boolean(repository);
-  const repoLabel = repository?.nameWithOwner ?? remoteUrl?.replace(/^https?:\/\//, '');
-
-  return (
-    <div className="flex items-center px-2 gap-2 h-full">
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button className="flex items-center gap-1.5 text-foreground-muted text-sm hover:text-foreground group">
-              <span className="text-sm">{displayName}</span>
-              <ChevronDown className="size-3.5" />
-            </button>
-          }
-        >
-          <Ellipsis className="size-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="min-w-40">
-          <DropdownMenuItem
-            className="flex items-center gap-2 text-foreground-destructive"
-            onClick={() => {
-              showConfirmDeleteProject({
-                title: t('projects.deleteProjectTitle'),
-                description: t('projects.deleteProjectDescription', { name: displayName }),
-                confirmLabel: t('projects.removeProject'),
-                onSuccess: () => {
-                  void getProjectManagerStore().deleteProject(projectId);
-                  navigate('home');
-                },
-              });
-            }}
-          >
-            <Trash2 className="size-4 " />
-            {t('projects.removeProject')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {remoteUrl && (
-        <>
-          <Separator
-            orientation="vertical"
-            className="h-4 data-[orientation=vertical]:self-center"
-          />
-          {remoteExternalUrl ? (
-            <button
-              type="button"
-              className="flex items-center gap-1.5 text-foreground-muted text-sm hover:text-foreground group transition-colors"
-              title={remoteExternalUrl}
-              onClick={() => void rpc.app.openExternal(remoteExternalUrl)}
-            >
-              <div className="text-sm flex items-center gap-1">
-                {isGithubUrl ? <GithubIcon className="size-3.5" /> : <Globe className="size-3.5" />}
-                <span className="truncate">{repoLabel}</span>
-              </div>
-              <ExternalLink className="size-3.5 shrink-0 opacity-0 group-hover:opacity-100 text-foreground-muted hover:text-foreground transition-opacity" />
-            </button>
-          ) : (
-            <div
-              className="flex items-center gap-1.5 text-foreground-muted text-sm"
-              title={remoteUrl}
-            >
-              <div className="text-sm flex items-center gap-1">
-                {isGithubUrl ? <GithubIcon className="size-3.5" /> : <Globe className="size-3.5" />}
-                <span className="truncate">{repoLabel}</span>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-});
-
-const ProjectTitlebarLeft = observer(function ProjectTitlebarLeft({
-  projectId,
-}: {
-  projectId: string;
-}) {
-  const store = getProjectStore(projectId);
-  const displayName = projectDisplayName(store);
-  return (
-    <div className="flex items-center px-2 gap-2">
-      <span className="text-sm text-foreground-muted">{displayName}</span>
-    </div>
-  );
-});
-
+/**
+ * Project titlebar: the project identity lives in the sidebar and the scope's
+ * Overview index tab — no breadcrumb here. Only the right-side controls remain.
+ */
 export const ProjectTitlebar = observer(function ProjectTitlebar() {
   const {
     params: { projectId },
@@ -147,17 +20,16 @@ export const ProjectTitlebar = observer(function ProjectTitlebar() {
   const kind = projectViewKind(store);
 
   if (kind !== 'ready') {
-    return <Titlebar leftSlot={<ProjectTitlebarLeft projectId={projectId} />} />;
+    return <Titlebar />;
   }
 
   const mounted = asMounted(store);
-  if (!mounted) return <Titlebar leftSlot={<ProjectTitlebarLeft projectId={projectId} />} />;
+  if (!mounted) return <Titlebar />;
 
   const isRemote = mounted.data.type === 'ssh';
 
   return (
     <Titlebar
-      leftSlot={<MountedProjectTitlebarLeft projectId={projectId} />}
       rightSlot={
         !isRemote ? (
           <div className="flex items-center gap-2 mr-2">

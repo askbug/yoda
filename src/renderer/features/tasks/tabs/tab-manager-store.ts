@@ -1,5 +1,6 @@
 import { action, autorun, computed, makeObservable, observable, reaction } from 'mobx';
 import type { GitChangeStatus, GitObjectRef } from '@shared/git';
+import type { TaskWindowTabTarget } from '@shared/task-window';
 import type { ActiveFile, TabDescriptor, TabManagerSnapshot } from '@shared/view-state';
 import type {
   ConversationManagerStore,
@@ -126,6 +127,22 @@ function conversationTime(value: string | null | undefined): number {
   return Number.isNaN(ts) ? Number.NEGATIVE_INFINITY : ts;
 }
 
+/** ActiveFile → serializable top-level diff tab target. */
+function diffTabTarget(
+  activeFile: ActiveFile,
+  status?: GitChangeStatus
+): Extract<TaskWindowTabTarget, { kind: 'diff' }> {
+  return {
+    kind: 'diff',
+    path: activeFile.path,
+    diffGroup: activeFile.group,
+    originalRef: activeFile.originalRef,
+    modifiedRef: activeFile.modifiedRef,
+    prNumber: activeFile.prNumber,
+    status,
+  };
+}
+
 function compareConversationOpenPriority(a: ConversationStore, b: ConversationStore): number {
   const at = conversationTime(a.data.lastInteractedAt);
   const bt = conversationTime(b.data.lastInteractedAt);
@@ -153,13 +170,40 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   tabOrder: string[] = [];
   activeTabId: string | undefined = undefined;
   isVisible = false;
+  /**
+   * Tab pinned into the right side pane. The entry stays in `entries` but is
+   * removed from `tabOrder`, so a tab lives in exactly one place at a time
+   * (move semantics — never duplicated across panes).
+   */
+  sidePaneTabId: string | undefined = undefined;
+  /** True while a tab dragged from the strip hovers the side pane drop zone. */
+  sidePaneDropHover = false;
 
   /** Used by resolvedTabs and FileModelLifecycleStore to build buffer URIs. */
   readonly modelRootPath: string;
 
+  /**
+   * Phase 2 top-level tab bridge, injected by the task view layer. When set,
+   * open/activate intents are forwarded to the top-level app tab strip instead
+   * of mutating internal order — the route replay then re-enters with
+   * `applyingKey` set to the target identity and runs the internal logic.
+   *
+   * `applyingKey` (instead of a boolean) keeps rapid interactions correct: a
+   * NEW target arriving while a replay is awaiting still forwards — only the
+   * replay's own re-entry runs internally.
+   */
+  topLevelBridge: {
+    applyingKey: string | null;
+    open: (target: TaskWindowTabTarget) => void;
+  } | null = null;
+
   private readonly conversations: ConversationManagerStore;
   private readonly disposers: (() => void)[] = [];
   private lastClosedConversationId: string | undefined = undefined;
+  /** Reveal options stashed while an openFile intent round-trips the top level. */
+  private readonly _pendingRevealByPath = new Map<string, OpenFileOptions>();
+  /** Open intent recorded before the top-level bridge mounted. */
+  private pendingTopLevelTarget: TaskWindowTabTarget | null = null;
 
   constructor(conversations: ConversationManagerStore, workspaceId: string) {
     this.conversations = conversations;
@@ -169,6 +213,11 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       tabOrder: observable,
       activeTabId: observable,
       isVisible: observable,
+      sidePaneTabId: observable,
+      sidePaneDropHover: observable,
+      sidePaneEntry: computed,
+      sidePaneTab: computed,
+      sidePaneConversation: computed,
       resolvedActiveTabId: computed,
       activeDescriptor: computed,
       activeConversation: computed,
@@ -199,6 +248,9 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       setNextTabActive: action,
       setPreviousTabActive: action,
       setTabActiveIndex: action,
+      moveTabToSidePane: action,
+      moveSidePaneTabBack: action,
+      setSidePaneDropHover: action,
       setVisible: action,
       updateRenderer: action,
       setImageContent: action,
@@ -237,6 +289,15 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       })
     );
 
+    // The side pane conversation is always visible alongside the active tab.
+    this.disposers.push(
+      autorun(() => {
+        if (this.isVisible && this.sidePaneConversation && !this.sidePaneConversation.seen) {
+          this.sidePaneConversation.markSeen();
+        }
+      })
+    );
+
     // Update telemetry scope when the active conversation changes.
     this.disposers.push(
       reaction(
@@ -260,10 +321,29 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
    * "tabs exist → one is active" hold even when the stored value is stale or absent.
    */
   get resolvedActiveTabId(): string | undefined {
-    if (this.activeTabId && this.entries.has(this.activeTabId)) {
+    if (
+      this.activeTabId &&
+      this.activeTabId !== this.sidePaneTabId &&
+      this.entries.has(this.activeTabId)
+    ) {
       return this.activeTabId;
     }
     return this.tabOrder[0];
+  }
+
+  get sidePaneEntry(): TabEntry | undefined {
+    return this.sidePaneTabId ? this.entries.get(this.sidePaneTabId) : undefined;
+  }
+
+  get sidePaneTab(): ResolvedTab | undefined {
+    const entry = this.sidePaneEntry;
+    return entry ? this._resolveTab(entry, false) : undefined;
+  }
+
+  get sidePaneConversation(): ConversationStore | undefined {
+    const entry = this.sidePaneEntry;
+    if (entry?.kind !== 'conversation') return undefined;
+    return this.conversations.conversations.get(entry.conversationId);
   }
 
   get activeDescriptor(): TabEntry | undefined {
@@ -320,7 +400,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
    */
   get openFilePaths(): string[] {
     const paths: string[] = [];
-    for (const id of this.tabOrder) {
+    for (const id of this._allTabIds()) {
       const entry = this.entries.get(id);
       if (entry?.kind === 'file') paths.push(entry.path);
     }
@@ -333,50 +413,8 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     for (const id of this.tabOrder) {
       const entry = this.entries.get(id);
       if (!entry) continue;
-
-      if (entry.kind === 'overview') {
-        result.push({
-          kind: 'overview',
-          tabId: entry.tabId,
-          isPreview: false,
-          isActive: effectiveActiveId === entry.tabId,
-        });
-      } else if (entry.kind === 'conversation') {
-        const store = this.conversations.conversations.get(entry.conversationId);
-        if (!store) continue;
-        result.push({
-          kind: 'conversation',
-          tabId: entry.tabId,
-          conversationId: entry.conversationId,
-          store,
-          isPreview: entry.isPreview,
-          isActive: effectiveActiveId === entry.tabId,
-        });
-      } else if (entry.kind === 'diff') {
-        result.push({
-          kind: 'diff',
-          tabId: entry.tabId,
-          path: entry.path,
-          diffGroup: entry.diffGroup,
-          originalRef: entry.originalRef,
-          modifiedRef: entry.modifiedRef,
-          prNumber: entry.prNumber,
-          status: entry.status,
-          isPreview: entry.isPreview,
-          isActive: effectiveActiveId === entry.tabId,
-        });
-      } else {
-        const bufferUri = buildMonacoModelPath(this.modelRootPath, entry.path);
-        result.push({
-          kind: 'file',
-          tabId: entry.tabId,
-          path: entry.path,
-          isPreview: entry.isPreview,
-          isDirty: modelRegistry.dirtyUris.has(bufferUri),
-          bufferUri,
-          isActive: effectiveActiveId === entry.tabId,
-        });
-      }
+      const resolved = this._resolveTab(entry, effectiveActiveId === entry.tabId);
+      if (resolved) result.push(resolved);
     }
     return result;
   }
@@ -386,48 +424,64 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     for (const id of this.tabOrder) {
       const entry = this.entries.get(id);
       if (!entry) continue;
-      // The overview tab is synthesized fresh on each mount, never persisted.
-      if (entry.kind === 'overview') continue;
-      if (entry.kind === 'conversation') {
-        tabs.push({
-          kind: 'conversation',
-          tabId: entry.tabId,
-          conversationId: entry.conversationId,
-          isPreview: entry.isPreview,
-        });
-      } else if (entry.kind === 'diff') {
-        tabs.push({
-          kind: 'diff',
-          tabId: entry.tabId,
-          path: entry.path,
-          diffGroup: entry.diffGroup,
-          originalRef: entry.originalRef,
-          modifiedRef: entry.modifiedRef,
-          prNumber: entry.prNumber,
-          status: entry.status,
-          isPreview: entry.isPreview,
-        });
-      } else {
-        tabs.push({
-          kind: 'file',
-          tabId: entry.tabId,
-          path: entry.path,
-          isPreview: entry.isPreview,
-        });
-      }
+      const descriptor = this._describeTab(entry);
+      if (descriptor) tabs.push(descriptor);
     }
-    return { tabs, activeTabId: this.activeTabId };
+    const sideEntry = this.sidePaneEntry;
+    const sidePaneTab = sideEntry ? this._describeTab(sideEntry) : undefined;
+    return { tabs, activeTabId: this.activeTabId, sidePaneTab };
   }
 
   // ---------------------------------------------------------------------------
   // Actions — opening conversation tabs
   // ---------------------------------------------------------------------------
 
+  /**
+   * Forwards an open/activate intent to the top-level tab strip when the
+   * bridge is wired and this task is the active view. Returns true when
+   * forwarded (callers should bail); the top-level route replay re-enters
+   * with `applying` set and runs the internal logic.
+   *
+   * Intents that arrive before the bridge mounts (e.g. initializeDefault
+   * opening the initial conversation during provisioning) are remembered and
+   * flushed by the view layer once the bridge is injected — so a fresh task
+   * lands on its session tab, not the overview.
+   */
+  private _forwardToTopLevel(target: TaskWindowTabTarget): boolean {
+    const bridge = this.topLevelBridge;
+    if (!bridge) {
+      console.info('[tab-sync] forward: no bridge yet, stashing intent', target);
+      this.pendingTopLevelTarget = target;
+      return false;
+    }
+    if (!this.isVisible) {
+      console.info('[tab-sync] forward: not visible, running internally', target);
+      return false;
+    }
+    // Replay re-entry for the same target runs internally; anything else is a
+    // fresh user intent and surfaces as a top-level tab.
+    if (bridge.applyingKey === JSON.stringify(target)) {
+      console.info('[tab-sync] forward: replay re-entry, running internally', target);
+      return false;
+    }
+    console.info('[tab-sync] forward: surfacing as top-level tab', target);
+    bridge.open(target);
+    return true;
+  }
+
+  /** Returns (and clears) an open intent that predates the bridge injection. */
+  flushPendingTopLevelTarget(): TaskWindowTabTarget | null {
+    const target = this.pendingTopLevelTarget;
+    this.pendingTopLevelTarget = null;
+    return target;
+  }
+
   openConversation(conversationId: string): void {
+    if (this._forwardToTopLevel({ kind: 'conversation', conversationId })) return;
     const existing = this._findConversationEntry(conversationId);
     if (existing) {
       existing.isPreview = false;
-      this.activeTabId = existing.tabId;
+      this._activateExisting(existing.tabId);
       return;
     }
     const entry = new ConversationTabEntry(conversationId, false);
@@ -437,10 +491,12 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   }
 
   openConversationPreview(conversationId: string): void {
+    // Top level has no preview semantics yet (Phase 2b) — open as a full tab.
+    if (this._forwardToTopLevel({ kind: 'conversation', conversationId })) return;
     const existing = this._findConversationEntry(conversationId);
     if (existing) {
       // Already open (stable or preview) — just activate; never demote stable → preview.
-      this.activeTabId = existing.tabId;
+      this._activateExisting(existing.tabId);
       return;
     }
     const previewEntry = this._findConversationPreviewEntry();
@@ -461,24 +517,35 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   // ---------------------------------------------------------------------------
 
   openFile(path: string, options?: OpenFileOptions): void {
+    if (this._forwardToTopLevel({ kind: 'file', path })) {
+      // Reveal targets are not part of the route — stash them for the replay.
+      if (options) this._pendingRevealByPath.set(path, options);
+      return;
+    }
+    const pendingReveal = this._pendingRevealByPath.get(path);
+    this._pendingRevealByPath.delete(path);
+    const reveal = options ?? pendingReveal;
+
     const existing = this._findFileEntryByPath(path);
     if (existing) {
       existing.isPreview = false;
-      existing.revealLocation(options?.line, options?.column);
-      this.activeTabId = existing.tabId;
+      existing.revealLocation(reveal?.line, reveal?.column);
+      this._activateExisting(existing.tabId);
       return;
     }
     const tab = new FileTabStore(path, false);
-    tab.revealLocation(options?.line, options?.column);
+    tab.revealLocation(reveal?.line, reveal?.column);
     this.entries.set(tab.tabId, tab);
     addTabId(this, tab.tabId);
     this.activeTabId = tab.tabId;
   }
 
   openFilePreview(path: string): void {
+    // Top level has no preview semantics yet (Phase 2b) — open as a full tab.
+    if (this._forwardToTopLevel({ kind: 'file', path })) return;
     const existing = this._findFileEntryByPath(path);
     if (existing) {
-      this.activeTabId = existing.tabId;
+      this._activateExisting(existing.tabId);
       return;
     }
 
@@ -507,11 +574,12 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   // ---------------------------------------------------------------------------
 
   openDiff(activeFile: ActiveFile, status?: GitChangeStatus): void {
+    if (this._forwardToTopLevel(diffTabTarget(activeFile, status))) return;
     const existing = this._findDiffEntryByKey(activeFile.path, activeFile.group);
     if (existing) {
       existing.isPreview = false;
       if (status !== undefined) existing.status = status;
-      this.activeTabId = existing.tabId;
+      this._activateExisting(existing.tabId);
       return;
     }
     const tab = new DiffTabStore(activeFile, false, undefined, status);
@@ -521,9 +589,11 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   }
 
   openDiffPreview(activeFile: ActiveFile, status?: GitChangeStatus): void {
+    // Top level has no preview semantics yet (Phase 2b) — open as a full tab.
+    if (this._forwardToTopLevel(diffTabTarget(activeFile, status))) return;
     const existing = this._findDiffEntryByKey(activeFile.path, activeFile.group);
     if (existing) {
-      this.activeTabId = existing.tabId;
+      this._activateExisting(existing.tabId);
       return;
     }
 
@@ -626,6 +696,9 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   }
 
   setActiveTab(id: string): void {
+    // Overview activation surfaces as a top-level tab; other ids are internal
+    // mechanics (close-reassign, restore) and stay below the bridge.
+    if (id === OVERVIEW_TAB_ID && this._forwardToTopLevel({ kind: 'overview' })) return;
     this.activeTabId = id;
     const entry = this.activeDescriptor;
     if (entry?.kind === 'conversation' && this.isVisible) {
@@ -657,6 +730,44 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   pinTab(tabId: string): void {
     const entry = this.entries.get(tabId);
     if (entry && entry.kind !== 'overview') entry.isPreview = false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Actions — side pane
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Move a tab from the strip into the right side pane. The side pane holds a
+   * single tab; if it is already occupied, the previous occupant returns to the
+   * strip in the departing tab's slot (swap, never lost).
+   */
+  moveTabToSidePane(tabId: string): void {
+    const entry = this.entries.get(tabId);
+    if (!entry || entry.kind === 'overview' || this.sidePaneTabId === tabId) return;
+    // Pinning aside is a deliberate act — never keep preview semantics.
+    entry.isPreview = false;
+    const idx = this.tabOrder.indexOf(tabId);
+    const prev = this.sidePaneTabId;
+    removeTabId(this, tabId);
+    if (prev && this.entries.has(prev)) {
+      const insertAt = idx === -1 ? this.tabOrder.length : Math.min(idx, this.tabOrder.length);
+      this.tabOrder.splice(insertAt, 0, prev);
+    }
+    this.sidePaneTabId = tabId;
+  }
+
+  /** Move the side pane tab back to the end of the strip and activate it. */
+  moveSidePaneTabBack(): void {
+    const id = this.sidePaneTabId;
+    if (!id) return;
+    this.sidePaneTabId = undefined;
+    if (!this.entries.has(id)) return;
+    addTabId(this, id);
+    this.activeTabId = id;
+  }
+
+  setSidePaneDropHover(hovering: boolean): void {
+    this.sidePaneDropHover = hovering;
   }
 
   // ---------------------------------------------------------------------------
@@ -709,32 +820,16 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     if (snapshot.tabs) {
       this.entries.clear();
       this.tabOrder = [];
+      this.sidePaneTabId = undefined;
       for (const t of snapshot.tabs) {
-        if (t.kind === 'conversation') {
-          const entry = new ConversationTabEntry(t.conversationId, t.isPreview, t.tabId);
-          this.entries.set(entry.tabId, entry);
-          this.tabOrder.push(entry.tabId);
-        } else if (t.kind === 'diff') {
-          const tab = new DiffTabStore(
-            {
-              path: t.path,
-              type: t.diffGroup === 'disk' ? 'disk' : 'git',
-              group: t.diffGroup,
-              originalRef: t.originalRef,
-              modifiedRef: t.modifiedRef,
-              prNumber: t.prNumber,
-            },
-            t.isPreview,
-            t.tabId,
-            t.status
-          );
-          this.entries.set(tab.tabId, tab);
-          this.tabOrder.push(tab.tabId);
-        } else {
-          const tab = new FileTabStore(t.path, t.isPreview, t.tabId);
-          this.entries.set(tab.tabId, tab);
-          this.tabOrder.push(tab.tabId);
-        }
+        const entry = this._entryFromDescriptor(t);
+        this.entries.set(entry.tabId, entry);
+        this.tabOrder.push(entry.tabId);
+      }
+      if (snapshot.sidePaneTab) {
+        const entry = this._entryFromDescriptor(snapshot.sidePaneTab);
+        this.entries.set(entry.tabId, entry);
+        this.sidePaneTabId = entry.tabId;
       }
     }
     this._ensureOverviewTab();
@@ -771,8 +866,122 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   // Private helpers
   // ---------------------------------------------------------------------------
 
+  /** All tab ids that hold a live entry: the strip order plus the side pane tab. */
+  private *_allTabIds(): Iterable<string> {
+    yield* this.tabOrder;
+    if (this.sidePaneTabId) yield this.sidePaneTabId;
+  }
+
+  /**
+   * Activate an already-open tab found by an open* dedupe lookup. A tab living
+   * in the side pane is already visible — activating it in the strip would
+   * render it twice, so the active tab is left untouched in that case.
+   */
+  private _activateExisting(tabId: string): void {
+    if (tabId === this.sidePaneTabId) {
+      // The entry lives in the side pane slot. Activating it (list click /
+      // top-level route replay) means "show it in the MAIN area" — reclaim it,
+      // otherwise resolvedActiveTabId skips it and silently falls back to the
+      // overview while every upstream step looks successful.
+      this.sidePaneTabId = undefined;
+      addTabId(this, tabId);
+    }
+    this.activeTabId = tabId;
+  }
+
+  private _resolveTab(entry: TabEntry, isActive: boolean): ResolvedTab | undefined {
+    if (entry.kind === 'overview') {
+      return { kind: 'overview', tabId: entry.tabId, isPreview: false, isActive };
+    }
+    if (entry.kind === 'conversation') {
+      const store = this.conversations.conversations.get(entry.conversationId);
+      if (!store) return undefined;
+      return {
+        kind: 'conversation',
+        tabId: entry.tabId,
+        conversationId: entry.conversationId,
+        store,
+        isPreview: entry.isPreview,
+        isActive,
+      };
+    }
+    if (entry.kind === 'diff') {
+      return {
+        kind: 'diff',
+        tabId: entry.tabId,
+        path: entry.path,
+        diffGroup: entry.diffGroup,
+        originalRef: entry.originalRef,
+        modifiedRef: entry.modifiedRef,
+        prNumber: entry.prNumber,
+        status: entry.status,
+        isPreview: entry.isPreview,
+        isActive,
+      };
+    }
+    const bufferUri = buildMonacoModelPath(this.modelRootPath, entry.path);
+    return {
+      kind: 'file',
+      tabId: entry.tabId,
+      path: entry.path,
+      isPreview: entry.isPreview,
+      isDirty: modelRegistry.dirtyUris.has(bufferUri),
+      bufferUri,
+      isActive,
+    };
+  }
+
+  /** Serialize an entry to its persisted descriptor. Overview is never persisted. */
+  private _describeTab(entry: TabEntry): TabDescriptor | undefined {
+    if (entry.kind === 'overview') return undefined;
+    if (entry.kind === 'conversation') {
+      return {
+        kind: 'conversation',
+        tabId: entry.tabId,
+        conversationId: entry.conversationId,
+        isPreview: entry.isPreview,
+      };
+    }
+    if (entry.kind === 'diff') {
+      return {
+        kind: 'diff',
+        tabId: entry.tabId,
+        path: entry.path,
+        diffGroup: entry.diffGroup,
+        originalRef: entry.originalRef,
+        modifiedRef: entry.modifiedRef,
+        prNumber: entry.prNumber,
+        status: entry.status,
+        isPreview: entry.isPreview,
+      };
+    }
+    return { kind: 'file', tabId: entry.tabId, path: entry.path, isPreview: entry.isPreview };
+  }
+
+  private _entryFromDescriptor(t: TabDescriptor): TabEntry {
+    if (t.kind === 'conversation') {
+      return new ConversationTabEntry(t.conversationId, t.isPreview, t.tabId);
+    }
+    if (t.kind === 'diff') {
+      return new DiffTabStore(
+        {
+          path: t.path,
+          type: t.diffGroup === 'disk' ? 'disk' : 'git',
+          group: t.diffGroup,
+          originalRef: t.originalRef,
+          modifiedRef: t.modifiedRef,
+          prNumber: t.prNumber,
+        },
+        t.isPreview,
+        t.tabId,
+        t.status
+      );
+    }
+    return new FileTabStore(t.path, t.isPreview, t.tabId);
+  }
+
   private _findConversationEntry(conversationId: string): ConversationTabEntry | undefined {
-    for (const id of this.tabOrder) {
+    for (const id of this._allTabIds()) {
       const entry = this.entries.get(id);
       if (entry?.kind === 'conversation' && entry.conversationId === conversationId) {
         return entry;
@@ -790,7 +999,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   }
 
   private _findFileEntryByPath(path: string): FileTabStore | undefined {
-    for (const id of this.tabOrder) {
+    for (const id of this._allTabIds()) {
       const entry = this.entries.get(id);
       if (entry?.kind === 'file' && entry.path === path) return entry;
     }
@@ -798,7 +1007,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
   }
 
   private _findDiffEntryByKey(path: string, group: string): DiffTabStore | undefined {
-    for (const id of this.tabOrder) {
+    for (const id of this._allTabIds()) {
       const entry = this.entries.get(id);
       if (entry?.kind === 'diff' && entry.path === path && entry.diffGroup === group) return entry;
     }
@@ -832,6 +1041,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     if (entry.kind === 'conversation') {
       this.lastClosedConversationId = entry.conversationId;
     }
+    if (this.sidePaneTabId === id) this.sidePaneTabId = undefined;
     this.entries.delete(id);
     removeTabId(this, id);
   }

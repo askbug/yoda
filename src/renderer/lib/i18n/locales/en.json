@@ -1,9 +1,26 @@
 {
+  "appTabs": {
+    "closeTab": "Close tab",
+    "overview": "Overview",
+    "home": "Home",
+    "project": "Project",
+    "task": "Task",
+    "file": "File",
+    "views": {
+      "settings": "Settings",
+      "skills": "Skills",
+      "mcp": "MCP",
+      "agentManager": "Agents",
+      "agents": "Agents",
+      "maas": "MaaS",
+      "automation": "Automation",
+      "mobile": "Mobile"
+    }
+  },
   "fileActions": {
     "label": "File actions",
     "openInYoda": "Open in Yoda",
     "openInApp": "Open in {{app}}",
-    "contentTruncated": "Content truncated — open the file to see everything.",
     "openFile": "Open file",
     "revealInFolder": "Reveal in folder",
     "openInTerminal": "Open in terminal",
@@ -99,7 +116,9 @@
       "signInPrompt": "Sign in",
       "signInHint": "Connect your Yoda account",
       "showNav": "Show sidebar navigation",
-      "hideNav": "Hide sidebar navigation"
+      "hideNav": "Hide sidebar navigation",
+      "noActivityToday": "No activity today",
+      "todayTitle": "Today: {{tasks}} tasks done · +{{added}} -{{deleted}} lines · {{tokens}} tokens"
     },
     "dropToAddProject": "Drop to add project",
     "projects": "Projects",
@@ -266,9 +285,9 @@
       "signOutConfirmLabel": "Sign Out"
     },
     "agentsTab": {
-      "description": "Manage CLI agents and model configurations.",
+      "description": "Manage runtimes and model configurations.",
       "reviewPrompt": "Review Prompt",
-      "cliAgents": "CLI agents",
+      "cliAgents": "Runtimes",
       "agentInstalled": "Agent installed",
       "agentInstalledDescription": "{{name}} is ready.",
       "installFailed": "Install failed",
@@ -421,11 +440,11 @@
       "namingConfigTitle": "Naming",
       "namingConfigDescription": "Model, target language, and the context sources used to name tasks.",
       "summaryConfigTitle": "Session summary",
-      "summaryConfigDescription": "The agent used to generate session summaries. Runs on its own provider and model, independent of each session's runtime.",
+      "summaryConfigDescription": "The agent used to generate session summaries. Runs on its own runtime and model, independent of each session's runtime.",
       "namingAgentLabel": "Naming agent",
       "namingAgentHint": "The agent that names tasks. It binds both the runtime and model, since naming must run inside an agent environment.",
       "summaryAgentLabel": "Summary agent",
-      "summaryAgentHint": "The agent that generates session summaries. It runs entirely on its own provider and model, so summaries keep working even if the session's own runtime is unavailable.",
+      "summaryAgentHint": "The agent that generates session summaries. It runs entirely on its own runtime and model, so summaries keep working even if the session's own runtime is unavailable.",
       "summaryLanguageLabel": "Summary language",
       "statusBarSourceLabel": "Status bar",
       "statusBarSourceHint": "What the strip below the terminal shows. Choose \"Hidden\" to hide it.",
@@ -488,8 +507,8 @@
       "noFontsFound": "No fonts found."
     },
     "defaultAgent": {
-      "title": "Default agent",
-      "description": "The agent that will be selected by default when creating a new task."
+      "title": "Default runtime",
+      "description": "The runtime that will be selected by default when creating a new task."
     },
     "resetToDefaultWithLabel": "Reset to default: {{label}}",
     "serverUnavailable": "{{product}} server is currently unavailable. Please try again later.",
@@ -699,6 +718,7 @@
       "pin": "Pin tab",
       "copyPath": "Copy path",
       "copyYodaLink": "Copy session Yoda link",
+      "openInSidePane": "Open in side panel",
       "openInWindow": "Open in separate window",
       "openInWindowFailed": "Failed to open separate window",
       "returnFromWindowFailed": "Failed to return tab",
@@ -713,7 +733,17 @@
       "sessions": "Sessions ({{count}})",
       "noSessions": "No sessions yet",
       "archivedSessions": "Archived ({{count}})",
-      "unarchiveFailed": "Failed to unarchive conversation"
+      "unarchiveFailed": "Failed to unarchive conversation",
+      "stats": {
+        "linesTitle": "Lines changed by this task (committed + working tree)",
+        "tokens": "{{value}} tokens",
+        "tokenBreakdown": "Input {{input}} · Output {{output}} · Cache {{cache}}",
+        "authProvider": {
+          "official-subscription": "Subscription",
+          "official-api": "API Key",
+          "yoda-maas": "MaaS"
+        }
+      }
     },
     "files": "Files",
     "toggleTerminal": "Toggle terminal",
@@ -769,7 +799,7 @@
     "hooks": {
       "title": "Hooks",
       "unsupported": "Hooks not supported",
-      "unsupportedDescription": "This provider does not expose configurable hooks.",
+      "unsupportedDescription": "This runtime does not expose configurable hooks.",
       "none": "No hooks configured",
       "noneDescription": "No hooks were found in the active settings for this session.",
       "sourceEmpty": "No hooks at this layer",
@@ -939,7 +969,7 @@
       "emptyHint": "Select or create a conversation.",
       "noActiveConversation": "No active conversation",
       "claudeOnly": "Available for Claude conversations only.",
-      "contextUnsupported": "Context inspection is not available for this provider yet.",
+      "contextUnsupported": "Context inspection is not available for this runtime yet.",
       "context": "Context",
       "renameContext": "Rename context",
       "renameContextHint": "Context sent to the naming model",
@@ -948,7 +978,7 @@
       "regenerateName": "Regenerate",
       "renameContextRegenerateFailed": "Failed to regenerate task name",
       "truncated": "truncated",
-      "provider": "Provider",
+      "provider": "Runtime",
       "model": "Model",
       "approvalMode": "Approval",
       "sandboxPolicy": "Sandbox",
@@ -1027,7 +1057,7 @@
       "copyYodaLink": "Copy Yoda link",
       "yodaLinkCopied": "Yoda link copied",
       "taskInfo": {
-        "provider": "Provider",
+        "provider": "Runtime",
         "project": "Project",
         "projectPath": "Project path",
         "task": "Task",
@@ -1072,6 +1102,9 @@
       "summaryFailedDescription": "Summary generation failed. It will retry after the next reply.",
       "summaryFromCompaction": "From the agent's compaction summary",
       "summaryGenerated": "Generated from the conversation"
+    },
+    "sidePane": {
+      "moveBack": "Move back to tab strip"
     }
   },
   "commandPalette": {
@@ -1101,7 +1134,7 @@
     "title": "MCP",
     "subtitle": "Connect your agents with external data sources and tools",
     "searchPlaceholder": "Search servers…",
-    "refreshAria": "Refresh providers",
+    "refreshAria": "Refresh runtimes",
     "customMcp": "Custom MCP",
     "added": "Added",
     "recommended": "Recommended",
@@ -1352,7 +1385,6 @@
       "officialSubscriptionDescription": "{{name}} keeps official login and subscription credentials in its own CLI or local config.",
       "officialApi": "Official API",
       "officialApiDescription": "API keys and base URLs forwarded to {{name}} when Yoda launches runtime sessions.",
-      "configureApi": "Configure env",
       "maasSource": "Yoda MaaS",
       "maasDescription": "Use configured model platforms for shared routing, observability, and billing when available.",
       "manageMaas": "Manage MaaS",
@@ -1380,13 +1412,29 @@
       "testOk": "Connection OK",
       "testFailed": "Connection failed",
       "loadingAccountStatus": "Loading account status...",
-      "noKnownApiEnvVars": "No known provider API environment variables are registered for this runtime.",
+      "noKnownApiEnvVars": "No known API environment variables are registered for this runtime.",
       "envSourceCustom": "Custom",
       "envSourceInherited": "System env",
       "envSourceUnset": "Not set",
+      "envSet": "Set",
+      "envEdit": "Edit",
+      "envOverride": "Override",
+      "envClear": "Clear",
+      "envSave": "Save",
+      "envCancel": "Cancel",
+      "envValuePlaceholder": "Paste value, e.g. sk-...",
+      "localUsageTitle": "Local usage",
+      "localUsageMeta": "Last {{days}} days · {{count}} sessions",
+      "localUsageCost": "Est. cost",
+      "localUsageUnpriced": "No pricing for: {{models}} (excluded from cost)",
+      "localUsageInput": "Input",
+      "localUsageOutput": "Output",
+      "localUsageCacheRead": "Cache read",
+      "localUsageCacheWrite": "Cache write",
+      "localUsageLoading": "Crunching local usage...",
+      "localUsageError": "Could not read local usage",
       "noMaasConnections": "No MaaS platform is connected yet.",
       "usageTitle": "Usage",
-      "usageDescription": "Real usage statistics from the ZenMux Management API.",
       "usageRefresh": "Refresh",
       "usageNoMaas": "Connect ZenMux in the MaaS view to show real usage statistics.",
       "usageLoading": "Loading usage...",

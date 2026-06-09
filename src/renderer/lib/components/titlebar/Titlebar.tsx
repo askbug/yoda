@@ -1,6 +1,7 @@
 import { PanelLeft } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppTabStrip } from '@renderer/app/app-tab-strip';
 import { NavButtons, NavIconButton } from '@renderer/lib/components/nav-buttons';
 import { useWorkspaceLayoutContext } from '@renderer/lib/layout/layout-provider';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
@@ -19,8 +20,8 @@ export function Titlebar({ leftSlot, rightSlot }: { leftSlot?: ReactNode; rightS
     >
       <div className="pointer-events-auto flex w-full items-center gap-1">
         {!isLeftOpen && <div className="[-webkit-app-region:no-drag]"></div>}
-        <div className="flex w-full items-center justify-between">
-          <div className="flex items-center justify-start [-webkit-app-region:no-drag]">
+        <div className="flex w-full min-w-0 items-center">
+          <div className="flex shrink-0 items-center justify-start [-webkit-app-region:no-drag]">
             {!isLeftOpen && (
               <>
                 <TooltipProvider delay={300}>
@@ -46,7 +47,11 @@ export function Titlebar({ leftSlot, rightSlot }: { leftSlot?: ReactNode; rightS
             )}
             {leftSlot}
           </div>
-          <div className="flex items-center justify-end [-webkit-app-region:no-drag]">
+          {/* App tabs share the titlebar row (browser model); blank space stays draggable. */}
+          <div className="min-w-0 flex-1 px-2">
+            <AppTabStrip />
+          </div>
+          <div className="flex shrink-0 items-center justify-end [-webkit-app-region:no-drag]">
             {rightSlot}
           </div>
         </div>

@@ -1,15 +1,11 @@
-import {
-  Copy,
-  ExternalLink,
-  FileText,
-  FolderOpen,
-  MoreHorizontal,
-  PanelRightOpen,
-} from 'lucide-react';
+import { FileText, PanelRightOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useProvisionedTask } from '@renderer/features/tasks/task-view-context';
-import { toast } from '@renderer/lib/hooks/use-toast';
-import { rpc } from '@renderer/lib/ipc';
+import {
+  FilePathActionsDropdown,
+  FilePathMenuItems,
+  type FilePathTarget,
+} from '@renderer/lib/components/file-path-actions';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,26 +13,23 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@renderer/lib/ui/context-menu';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@renderer/lib/ui/dropdown-menu';
-import { cn } from '@renderer/utils/utils';
+import { DropdownMenuItem } from '@renderer/lib/ui/dropdown-menu';
 
 /**
- * Shared file-action surface for any panel that references a file on disk
- * (context panel, hooks panel, …). Resolves the workspace-relative path and
- * exposes open-in-editor / reveal-in-tree / open-in-finder / copy-path actions,
- * plus a dropdown trigger and a right-click context-menu wrapper.
+ * Task-scoped file-action surface: composes the context-free path actions
+ * (lib/components/file-path-actions) with workspace-bound extras —
+ * open-in-editor and reveal-in-file-tree.
  */
 export function useFileActions(sourcePath: string) {
   const { t } = useTranslation();
   const provisioned = useProvisionedTask();
   const relativePath = toWorkspaceRelativePath(sourcePath, provisioned.path);
-  const isRemote = !!provisioned.workspace.sshConnectionId;
+
+  const target: FilePathTarget = {
+    absolutePath: sourcePath,
+    relativePath,
+    sshConnectionId: provisioned.workspace.sshConnectionId ?? null,
+  };
 
   const openInEditor = () => {
     if (!relativePath) return;
@@ -54,16 +47,7 @@ export function useFileActions(sourcePath: string) {
     );
   };
 
-  return {
-    t,
-    relativePath,
-    isRemote,
-    openInEditor,
-    revealInFileTree,
-    openFile: () => void openFileInFinder(sourcePath, t),
-    revealFile: () => void revealFileInFinder(sourcePath, t),
-    copyPath: () => void copyFilePathToClipboard(sourcePath, t),
-  };
+  return { t, relativePath, target, openInEditor, revealInFileTree };
 }
 
 export function FileActionsDropdown({
@@ -73,91 +57,33 @@ export function FileActionsDropdown({
   sourcePath: string;
   className?: string;
 }) {
-  const {
-    t,
-    relativePath,
-    isRemote,
-    openInEditor,
-    revealInFileTree,
-    openFile,
-    revealFile,
-    copyPath,
-  } = useFileActions(sourcePath);
+  const { t, relativePath, target, openInEditor, revealInFileTree } = useFileActions(sourcePath);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <button
-            type="button"
-            className={cn(
-              'flex size-5 items-center justify-center rounded-sm text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border',
-              className
-            )}
-            aria-label={t('tasks.panel.fileActions')}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
+    <FilePathActionsDropdown target={target} className={className}>
+      {relativePath ? (
+        <>
+          <DropdownMenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              openInEditor();
+            }}
           >
-            <MoreHorizontal className="size-3.5" />
-          </button>
-        }
-      />
-      <DropdownMenuContent align="end" className="w-48">
-        {relativePath ? (
-          <>
-            <DropdownMenuItem
-              onClick={(event) => {
-                event.stopPropagation();
-                openInEditor();
-              }}
-            >
-              <FileText className="size-4" />
-              {t('tasks.panel.openInEditor')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={(event) => {
-                event.stopPropagation();
-                revealInFileTree();
-              }}
-            >
-              <PanelRightOpen className="size-4" />
-              {t('tasks.panel.revealInFileTree')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
-        <DropdownMenuItem
-          disabled={isRemote}
-          onClick={(event) => {
-            event.stopPropagation();
-            openFile();
-          }}
-        >
-          <ExternalLink className="size-4" />
-          {t('tasks.panel.openFile')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={isRemote}
-          onClick={(event) => {
-            event.stopPropagation();
-            revealFile();
-          }}
-        >
-          <FolderOpen className="size-4" />
-          {t('tasks.panel.revealInFolder')}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={(event) => {
-            event.stopPropagation();
-            copyPath();
-          }}
-        >
-          <Copy className="size-4" />
-          {t('tasks.panel.copyFilePath')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <FileText className="size-4" />
+            {t('fileActions.openInYoda')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              revealInFileTree();
+            }}
+          >
+            <PanelRightOpen className="size-4" />
+            {t('tasks.panel.revealInFileTree')}
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </FilePathActionsDropdown>
   );
 }
 
@@ -178,17 +104,6 @@ export function FileActionsContextMenu({
   mergeTrigger?: boolean;
   children: React.ReactNode;
 }) {
-  const {
-    t,
-    relativePath,
-    isRemote,
-    openInEditor,
-    revealInFileTree,
-    openFile,
-    revealFile,
-    copyPath,
-  } = useFileActions(sourcePath);
-
   return (
     <ContextMenu>
       {mergeTrigger ? (
@@ -196,18 +111,8 @@ export function FileActionsContextMenu({
       ) : (
         <ContextMenuTrigger>{children}</ContextMenuTrigger>
       )}
-      <ContextMenuContent className="w-48">
-        <FileActionsMenuItems
-          t={t}
-          relativePath={relativePath}
-          isRemote={isRemote}
-          kind={kind}
-          openInEditor={openInEditor}
-          revealInFileTree={revealInFileTree}
-          openFile={openFile}
-          revealFile={revealFile}
-          copyPath={copyPath}
-        />
+      <ContextMenuContent className="w-52">
+        <FileActionsMenuItems sourcePath={sourcePath} kind={kind} />
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -216,30 +121,17 @@ export function FileActionsContextMenu({
 /**
  * The file-action items rendered inside a `ContextMenuContent`. Exposed so other
  * context menus (e.g. the tab strip) can append the same actions to their own
- * menu instead of nesting a second `ContextMenu`. Drive it with the values
- * returned by {@link useFileActions}.
+ * menu instead of nesting a second `ContextMenu`.
  */
 export function FileActionsMenuItems({
-  t,
-  relativePath,
-  isRemote,
+  sourcePath,
   kind = 'file',
-  openInEditor,
-  revealInFileTree,
-  openFile,
-  revealFile,
-  copyPath,
 }: {
-  t: (key: string) => string;
-  relativePath: string | null;
-  isRemote: boolean;
+  sourcePath: string;
   kind?: 'file' | 'directory';
-  openInEditor: () => void;
-  revealInFileTree: () => void;
-  openFile: () => void;
-  revealFile: () => void;
-  copyPath: () => void;
 }) {
+  const { t, relativePath, target, openInEditor, revealInFileTree } = useFileActions(sourcePath);
+
   return (
     <>
       {relativePath ? (
@@ -247,7 +139,7 @@ export function FileActionsMenuItems({
           {kind === 'file' ? (
             <ContextMenuItem className="whitespace-nowrap" onClick={openInEditor}>
               <FileText className="size-4" />
-              {t('tasks.panel.openInEditor')}
+              {t('fileActions.openInYoda')}
             </ContextMenuItem>
           ) : null}
           <ContextMenuItem className="whitespace-nowrap" onClick={revealInFileTree}>
@@ -257,19 +149,10 @@ export function FileActionsMenuItems({
           <ContextMenuSeparator />
         </>
       ) : null}
-      <ContextMenuItem className="whitespace-nowrap" onClick={openFile} disabled={isRemote}>
-        <ExternalLink className="size-4" />
-        {t('tasks.panel.openFile')}
-      </ContextMenuItem>
-      <ContextMenuItem className="whitespace-nowrap" onClick={revealFile} disabled={isRemote}>
-        <FolderOpen className="size-4" />
-        {t('tasks.panel.revealInFolder')}
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem className="whitespace-nowrap" onClick={copyPath}>
-        <Copy className="size-4" />
-        {t('tasks.panel.copyFilePath')}
-      </ContextMenuItem>
+      <FilePathMenuItems
+        target={target}
+        components={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }}
+      />
     </>
   );
 }
@@ -299,51 +182,4 @@ function normalizePathForCompare(path: string | null | undefined): string {
 
 function sourcePathHasDriveLetter(path: string): boolean {
   return /^[a-z]:\//i.test(path);
-}
-
-async function openFileInFinder(path: string, t: (key: string) => string): Promise<void> {
-  try {
-    const res = await rpc.app.openIn({ app: 'finder', path });
-    if (!res?.success) {
-      showFileActionFailure(t('tasks.panel.openFileFailed'), res?.error);
-    }
-  } catch (error) {
-    showFileActionFailure(t('tasks.panel.openFileFailed'), stringifyError(error));
-  }
-}
-
-async function revealFileInFinder(path: string, t: (key: string) => string): Promise<void> {
-  try {
-    const res = await rpc.app.openIn({ app: 'finder', path, reveal: true });
-    if (!res?.success) {
-      showFileActionFailure(t('tasks.panel.revealFileFailed'), res?.error);
-    }
-  } catch (error) {
-    showFileActionFailure(t('tasks.panel.revealFileFailed'), stringifyError(error));
-  }
-}
-
-async function copyFilePathToClipboard(path: string, t: (key: string) => string): Promise<void> {
-  try {
-    const res = await rpc.app.clipboardWriteText(path);
-    if (res?.success) {
-      toast({ title: t('tasks.panel.filePathCopied') });
-      return;
-    }
-  } catch {
-    // handled below
-  }
-  toast({
-    title: t('common.copyFailed'),
-    description: t('tasks.panel.copyFilePathFailed'),
-    variant: 'destructive',
-  });
-}
-
-function showFileActionFailure(title: string, description?: string): void {
-  toast({ title, description, variant: 'destructive' });
-}
-
-function stringifyError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

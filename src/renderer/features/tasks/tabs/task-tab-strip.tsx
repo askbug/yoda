@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Loader2,
   MessageSquare,
+  PanelRight,
   Pin,
   Plus,
   RefreshCw,
@@ -99,17 +100,37 @@ export const TaskTabStrip = observer(function TaskTabStrip() {
     );
   };
 
+  // When the side pane is open, releasing a torn tab over it docks the tab
+  // there (move) instead of detaching into a separate window.
+  const isPointOverSidePane = (point: { x: number; y: number }): boolean => {
+    const sidePane = stripRef.current
+      ?.closest('[data-side-pane-scope]')
+      ?.querySelector('[data-task-side-pane]');
+    if (!sidePane) return false;
+    const rect = sidePane.getBoundingClientRect();
+    return (
+      point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
+    );
+  };
+
   const handleTabDrag = (tabId: string, point: { x: number; y: number }) => {
     const tab = tabsById.get(tabId);
     if (!tab || tab.kind === 'overview') return;
-    setDetachDrag({ tabId, point, torn: isPointTornOut(tab, point) });
+    const torn = isPointTornOut(tab, point);
+    setDetachDrag({ tabId, point, torn });
+    tabManager.setSidePaneDropHover(torn && isPointOverSidePane(point));
   };
 
   const handleTabDragEnd = (tabId: string, point: { x: number; y: number }) => {
     setDetachDrag(null);
+    tabManager.setSidePaneDropHover(false);
     const tab = tabsById.get(tabId);
     if (!tab || tab.kind === 'overview') return;
     if (!isPointTornOut(tab, point)) return;
+    if (isPointOverSidePane(point)) {
+      tabManager.moveTabToSidePane(tab.tabId);
+      return;
+    }
     void openTaskTabInWindow(buildTaskWindowTarget(projectId, taskId, tab), point).then(
       (opened) => {
         if (opened) tabManager.closeTab(tab.tabId);
@@ -279,6 +300,11 @@ export const TaskTabStrip = observer(function TaskTabStrip() {
                         });
                       }
                 }
+                onOpenInSidePane={
+                  tab.kind === 'overview'
+                    ? undefined
+                    : () => tabManager.moveTabToSidePane(tab.tabId)
+                }
                 onReloadConversation={
                   tab.kind === 'conversation'
                     ? () => void provisioned.conversations.restartConversation(tab.conversationId)
@@ -375,6 +401,7 @@ const TaskTab = observer(function TaskTab({
   onCloseToRight,
   onCloseAll,
   onOpenInWindow,
+  onOpenInSidePane,
   onReloadConversation,
   onArchiveConversation,
   onCopyYodaLink,
@@ -398,6 +425,7 @@ const TaskTab = observer(function TaskTab({
   onCloseToRight?: () => void;
   onCloseAll?: () => void;
   onOpenInWindow?: () => void;
+  onOpenInSidePane?: () => void;
   onReloadConversation?: () => void;
   onArchiveConversation?: (options?: { skipPreCommand?: boolean }) => void;
   onCopyYodaLink?: () => void;
@@ -497,14 +525,24 @@ const TaskTab = observer(function TaskTab({
     });
   }
 
-  if (onOpenInWindow) {
+  if (onOpenInWindow || onOpenInSidePane) {
     menuGroups.push({
-      key: 'open-in-window',
+      key: 'open-in',
       content: (
-        <ContextMenuItem className="whitespace-nowrap" onClick={onOpenInWindow}>
-          <AppWindow className="size-4" />
-          {i18n.t('tasks.tabs.openInWindow')}
-        </ContextMenuItem>
+        <>
+          {onOpenInSidePane && (
+            <ContextMenuItem className="whitespace-nowrap" onClick={onOpenInSidePane}>
+              <PanelRight className="size-4" />
+              {i18n.t('tasks.tabs.openInSidePane')}
+            </ContextMenuItem>
+          )}
+          {onOpenInWindow && (
+            <ContextMenuItem className="whitespace-nowrap" onClick={onOpenInWindow}>
+              <AppWindow className="size-4" />
+              {i18n.t('tasks.tabs.openInWindow')}
+            </ContextMenuItem>
+          )}
+        </>
       ),
     });
   }
@@ -625,7 +663,7 @@ const TaskTab = observer(function TaskTab({
   );
 });
 
-function getTabMeta(tab: ResolvedTab): {
+export function getTabMeta(tab: ResolvedTab): {
   icon: ReactNode;
   label: string;
   detail?: string;
@@ -637,12 +675,12 @@ function getTabMeta(tab: ResolvedTab): {
   }
 
   if (tab.kind === 'conversation') {
-    const providerId = tab.store.data.providerId;
-    const config = agentConfig[providerId];
+    const runtimeId = tab.store.data.runtimeId;
+    const config = agentConfig[runtimeId];
     const label =
-      formatConversationTitleForDisplay(providerId, tab.store.data.title).trim() ||
+      formatConversationTitleForDisplay(runtimeId, tab.store.data.title).trim() ||
       config?.name ||
-      providerId;
+      runtimeId;
     return {
       icon: config ? (
         <AgentLogo
@@ -695,7 +733,7 @@ function diffGroupLabel(group: ResolvedDiffTab['diffGroup']): string {
   }
 }
 
-function buildTaskWindowTarget(
+export function buildTaskWindowTarget(
   projectId: string,
   taskId: string,
   tab: ResolvedTab
@@ -724,7 +762,7 @@ function buildTaskWindowTarget(
   }
 }
 
-async function openTaskTabInWindow(
+export async function openTaskTabInWindow(
   target: TaskWindowTarget,
   origin?: { x: number; y: number }
 ): Promise<boolean> {

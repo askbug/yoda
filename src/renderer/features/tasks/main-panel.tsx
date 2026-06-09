@@ -11,7 +11,6 @@ import {
 } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { usePersistentPanelLayout } from '@renderer/lib/hooks/use-persistent-panel-layout';
-import { useTabShortcuts } from '@renderer/lib/hooks/useTabShortcuts';
 import { panelDragStore } from '@renderer/lib/layout/panel-drag-store';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
@@ -22,8 +21,6 @@ import { DiffView } from './diff-view/main-panel/diff-view';
 import { EditorMainPanel } from './editor/editor-main-panel';
 import { useEditorContext } from './editor/editor-provider';
 import { MarkdownEditorPanel } from './editor/markdown-editor-panel';
-import { useIsActiveTask } from './hooks/use-is-active-task';
-import { TaskTabStrip } from './tabs/task-tab-strip';
 import { TerminalsPanel } from './terminals/terminal-panel';
 import { OverviewPanel } from './view/overview-panel';
 import { TaskSidebar } from './view/task-sidebar';
@@ -211,7 +208,7 @@ const ReadyTaskMainPanel = observer(function ReadyTaskMainPanel() {
         className="min-h-0 min-w-0 overflow-hidden bg-background text-foreground"
         data-yoda-animate={isHandleDragging ? 'false' : 'true'}
       >
-        <TaskMainColumn />
+        <TaskMainAreaSplit />
       </ResizablePanel>
       <ResizableHandle
         onPointerDown={() => setIsHandleDragging(true)}
@@ -238,6 +235,24 @@ const ReadyTaskMainPanel = observer(function ReadyTaskMainPanel() {
         <TaskSidebar />
       </ResizablePanel>
     </ResizablePanelGroup>
+  );
+});
+
+/**
+ * Splits the main area horizontally between the tab strip column and the
+ * optional right side pane (a tab pinned aside via "open in side panel").
+ * The panel group stays mounted regardless, so toggling the side pane never
+ * remounts the main column (which would tear down terminals).
+ */
+/**
+ * The side pane is a shell-level workspace column now (see app/app-side-pane)
+ * so it survives main-area navigation — this split just hosts the main column.
+ */
+const TaskMainAreaSplit = observer(function TaskMainAreaSplit() {
+  return (
+    <div className="h-full w-full min-h-0 min-w-0" data-side-pane-scope>
+      <TaskMainColumn />
+    </div>
   );
 });
 
@@ -321,15 +336,25 @@ const TaskMainColumn = observer(function TaskMainColumn() {
 });
 
 const UnifiedMainContent = observer(function UnifiedMainContent() {
-  const { taskId } = useTaskViewContext();
+  const { taskView } = useProvisionedTask();
+
+  return (
+    <div
+      className="flex h-full flex-col overflow-hidden bg-background text-foreground"
+      onFocus={() => taskView.setFocusedRegion('main')}
+      onPointerDown={() => taskView.setFocusedRegion('main')}
+    >
+      {/* Phase 2: tabs live in the top-level app strip (titlebar row). */}
+      <TaskActiveTabContent />
+    </div>
+  );
+});
+
+export const TaskActiveTabContent = observer(function TaskActiveTabContent() {
   const { taskView } = useProvisionedTask();
   const { setEditorHost, triggerLayout } = useEditorContext();
-  const isActive = useIsActiveTask(taskId);
 
   const renderer = taskView.activeRenderer;
-  useTabShortcuts(taskView.tabManager, {
-    focused: isActive && taskView.focusedRegion === 'main',
-  });
 
   // Re-run Monaco layout whenever the Monaco slot becomes visible so the editor
   // fills the host after transitioning from hidden to flex.
@@ -338,42 +363,35 @@ const UnifiedMainContent = observer(function UnifiedMainContent() {
   }, [renderer, triggerLayout]);
 
   return (
-    <div
-      className="flex h-full flex-col overflow-hidden bg-background text-foreground"
-      onFocus={() => taskView.setFocusedRegion('main')}
-      onPointerDown={() => taskView.setFocusedRegion('main')}
-    >
-      <TaskTabStrip />
-      <div className="relative min-h-0 flex-1">
-        {/*
-         * Persistent Monaco host — always in the DOM, never inside an Activity.
-         * CSS display controls visibility so Monaco is never measured at 0×0.
-         * triggerLayout() is called above whenever this transitions to visible.
-         */}
-        <div
-          ref={setEditorHost}
-          className="absolute inset-0"
-          style={{ display: renderer === 'monaco' ? 'flex' : 'none' }}
-        />
-        {/* SVG source toggle — floats over the Monaco host when editing an SVG file */}
-        {renderer === 'monaco' && <SvgSourceToggleOverlay />}
+    <div className="relative h-full min-h-0 flex-1" data-task-active-tab-content>
+      {/*
+       * Persistent Monaco host — always in the DOM, never inside an Activity.
+       * CSS display controls visibility so Monaco is never measured at 0×0.
+       * triggerLayout() is called above whenever this transitions to visible.
+       */}
+      <div
+        ref={setEditorHost}
+        className="absolute inset-0"
+        style={{ display: renderer === 'monaco' ? 'flex' : 'none' }}
+      />
+      {/* SVG source toggle — floats over the Monaco host when editing an SVG file */}
+      {renderer === 'monaco' && <SvgSourceToggleOverlay />}
 
-        <Activity mode={renderer === 'overview' ? 'visible' : 'hidden'}>
-          <OverviewPanel />
-        </Activity>
-        <Activity mode={renderer === 'markdown' ? 'visible' : 'hidden'}>
-          <MarkdownEditorPanel />
-        </Activity>
-        <Activity mode={renderer === 'diff' ? 'visible' : 'hidden'}>
-          <DiffView />
-        </Activity>
-        <Activity mode={renderer === 'agents' ? 'visible' : 'hidden'}>
-          <ConversationsPanel />
-        </Activity>
-        <Activity mode={renderer === 'other-file' ? 'visible' : 'hidden'}>
-          <EditorMainPanel />
-        </Activity>
-      </div>
+      <Activity mode={renderer === 'overview' ? 'visible' : 'hidden'}>
+        <OverviewPanel />
+      </Activity>
+      <Activity mode={renderer === 'markdown' ? 'visible' : 'hidden'}>
+        <MarkdownEditorPanel />
+      </Activity>
+      <Activity mode={renderer === 'diff' ? 'visible' : 'hidden'}>
+        <DiffView />
+      </Activity>
+      <Activity mode={renderer === 'agents' ? 'visible' : 'hidden'}>
+        <ConversationsPanel />
+      </Activity>
+      <Activity mode={renderer === 'other-file' ? 'visible' : 'hidden'}>
+        <EditorMainPanel />
+      </Activity>
     </div>
   );
 });

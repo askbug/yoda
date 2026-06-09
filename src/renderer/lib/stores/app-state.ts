@@ -2,6 +2,8 @@ import { ProjectManagerStore } from '@renderer/features/projects/stores/project-
 import { SidebarStore } from '@renderer/features/sidebar/sidebar-store';
 import { WorkspaceStore } from '@renderer/features/workspaces/workspace-store';
 import { AgentRuntimeStore } from './agent-runtime-store';
+import { AppSidePaneStore } from './app-side-pane-store';
+import { AppTabsStore } from './app-tabs-store';
 import { DependenciesStore } from './dependencies-store';
 import { NavigationHistoryStore } from './navigation-history-store';
 import { NavigationStore } from './navigation-store';
@@ -17,6 +19,8 @@ class AppState {
   readonly snapshots: SnapshotRegistry;
   readonly history: NavigationHistoryStore;
   readonly navigation: NavigationStore;
+  readonly appTabs: AppTabsStore;
+  readonly sidePane: AppSidePaneStore;
   readonly dependencies: DependenciesStore;
   readonly sshConnections: SshConnectionStore;
   readonly agentRuntime: AgentRuntimeStore;
@@ -29,12 +33,16 @@ class AppState {
     this.sidebar = new SidebarStore(this.projects, this.workspaces);
     this.history = new NavigationHistoryStore();
     this.navigation = new NavigationStore();
+    this.appTabs = new AppTabsStore(this.navigation);
+    this.sidePane = new AppSidePaneStore();
     this.dependencies = new DependenciesStore();
     this.sshConnections = new SshConnectionStore({
       onConnectionReady: (connectionId) => void this.dependencies.refreshAgents(connectionId),
     });
     this.agentRuntime = new AgentRuntimeStore();
     snapshotRegistry.register('navigation', () => this.navigation.snapshot);
+    snapshotRegistry.register('appTabs', () => this.appTabs.snapshot);
+    snapshotRegistry.register('appSidePane', () => this.sidePane.snapshot);
     snapshotRegistry.register('sidebar', () => this.sidebar.snapshot);
     snapshotRegistry.register('agentRuntime', () => this.agentRuntime.snapshot);
     this.dependencies.start();

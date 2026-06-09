@@ -1,8 +1,22 @@
 import { when } from 'mobx';
 import type { DeepLinkTarget } from '@shared/deep-links';
+import type { TaskWindowTabTarget, TaskWindowTarget } from '@shared/task-window';
+import type { ActiveFile } from '@shared/view-state';
+import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
+import { OVERVIEW_TAB_ID } from '@renderer/features/tasks/tabs/tab-manager-store';
 import type { NavigateFnTyped } from '@renderer/lib/layout/navigation-provider';
+import { appState } from '@renderer/lib/stores/app-state';
 import { log } from '@renderer/utils/logger';
+
+/**
+ * Opens (or focuses — routes are deduplicated) a top-level app tab for an
+ * internal task tab target. The task view's TopLevelTabSync replays the target
+ * onto the internal TabManagerStore once the route applies.
+ */
+export function openTaskTopTab(projectId: string, taskId: string, tab: TaskWindowTabTarget): void {
+  appState.appTabs.openTab('task', { projectId, taskId, tab });
+}
 
 export type OpenTaskTarget = Pick<
   DeepLinkTarget,
@@ -12,7 +26,8 @@ export type OpenTaskTarget = Pick<
 export function openTaskTarget(
   target: OpenTaskTarget,
   navigate: NavigateFnTyped,
-  disposers?: Set<() => void>
+  disposers?: Set<() => void>,
+  tabTarget?: TaskWindowTabTarget
 ): void {
   const { projectId, taskId, conversationId, promptId, promptIndex } = target;
   if (!taskId) {
@@ -20,7 +35,9 @@ export function openTaskTarget(
     return;
   }
   navigate('task', { projectId, taskId });
-  if (!conversationId) return;
+  const targetTab: TaskWindowTabTarget | null =
+    tabTarget ?? (conversationId ? { kind: 'conversation', conversationId } : null);
+  if (!targetTab) return;
 
   const dispose = when(
     () => Boolean(asProvisioned(getTaskStore(projectId, taskId))),
@@ -29,25 +46,21 @@ export function openTaskTarget(
       const provisioned = asProvisioned(getTaskStore(projectId, taskId));
       if (!provisioned) return;
 
-      void provisioned.conversations
-        .ensureConversation(conversationId)
+      void openProvisionedTaskTab(provisioned, targetTab)
         .then((found) => {
           if (!found) return;
 
-          provisioned.taskView.tabManager.openConversation(conversationId);
-          provisioned.taskView.setFocusedRegion('main');
-
-          if (promptId || promptIndex) {
+          if (targetTab.kind === 'conversation' && (promptId || promptIndex)) {
             // Prompts now live in the dedicated Conversation chapter; open it.
             provisioned.taskView.setSidebarCollapsed(false);
             provisioned.taskView.setSidebarTab('conversations');
           }
         })
         .catch((error: unknown) => {
-          log.warn('openTaskTarget: failed to open conversation target', {
+          log.warn('openTaskTarget: failed to open tab target', {
             projectId,
             taskId,
-            conversationId,
+            tabTarget: targetTab,
             error,
           });
         });
@@ -55,4 +68,61 @@ export function openTaskTarget(
     { timeout: 10_000 }
   );
   disposers?.add(dispose);
+}
+
+export function openTaskWindowTarget(
+  target: TaskWindowTarget,
+  navigate: NavigateFnTyped,
+  disposers?: Set<() => void>
+): void {
+  openTaskTarget(
+    {
+      projectId: target.projectId,
+      taskId: target.taskId,
+      conversationId: target.tab.kind === 'conversation' ? target.tab.conversationId : undefined,
+    },
+    navigate,
+    disposers,
+    target.tab
+  );
+}
+
+export async function openProvisionedTaskTab(
+  provisioned: ProvisionedTask,
+  tabTarget: TaskWindowTabTarget
+): Promise<boolean> {
+  switch (tabTarget.kind) {
+    case 'overview':
+      provisioned.taskView.tabManager.setActiveTab(OVERVIEW_TAB_ID);
+      provisioned.taskView.setFocusedRegion('main');
+      return true;
+    case 'conversation': {
+      const found = await provisioned.conversations.ensureConversation(tabTarget.conversationId);
+      if (!found) return false;
+      provisioned.taskView.tabManager.openConversation(tabTarget.conversationId);
+      provisioned.taskView.setFocusedRegion('main');
+      return true;
+    }
+    case 'file':
+      provisioned.taskView.tabManager.openFile(tabTarget.path);
+      provisioned.taskView.setFocusedRegion('main');
+      return true;
+    case 'diff':
+      provisioned.taskView.tabManager.openDiff(diffTargetToActiveFile(tabTarget), tabTarget.status);
+      provisioned.taskView.setFocusedRegion('main');
+      return true;
+  }
+}
+
+function diffTargetToActiveFile(
+  tabTarget: Extract<TaskWindowTabTarget, { kind: 'diff' }>
+): ActiveFile {
+  return {
+    path: tabTarget.path,
+    type: tabTarget.diffGroup === 'disk' ? 'disk' : 'git',
+    group: tabTarget.diffGroup,
+    originalRef: tabTarget.originalRef,
+    modifiedRef: tabTarget.modifiedRef,
+    prNumber: tabTarget.prNumber,
+  };
 }

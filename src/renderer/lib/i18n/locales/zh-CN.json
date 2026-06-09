@@ -1,9 +1,26 @@
 {
+  "appTabs": {
+    "closeTab": "关闭标签页",
+    "overview": "概览",
+    "home": "主页",
+    "project": "项目",
+    "task": "任务",
+    "file": "文件",
+    "views": {
+      "settings": "设置",
+      "skills": "Skills",
+      "mcp": "MCP",
+      "agentManager": "Agents",
+      "agents": "Agents",
+      "maas": "MaaS",
+      "automation": "自动化",
+      "mobile": "移动端"
+    }
+  },
   "fileActions": {
     "label": "文件操作",
     "openInYoda": "在 Yoda 中打开",
     "openInApp": "在 {{app}} 中打开",
-    "contentTruncated": "内容已截断——打开文件查看完整内容。",
     "openFile": "打开文件",
     "revealInFolder": "在文件夹中显示",
     "openInTerminal": "在终端中打开",
@@ -99,7 +116,9 @@
       "signInPrompt": "登录",
       "signInHint": "连接你的 Yoda 账户",
       "showNav": "显示侧边栏导航",
-      "hideNav": "隐藏侧边栏导航"
+      "hideNav": "隐藏侧边栏导航",
+      "noActivityToday": "今日暂无活动",
+      "todayTitle": "今日：完成 {{tasks}} 个任务 · +{{added}} -{{deleted}} 行 · {{tokens}} tokens"
     },
     "dropToAddProject": "拖入以添加项目",
     "projects": "项目",
@@ -268,7 +287,7 @@
     "agentsTab": {
       "description": "管理 CLI 代理与模型配置。",
       "reviewPrompt": "审查 Prompt",
-      "cliAgents": "CLI 代理",
+      "cliAgents": "Runtime",
       "agentInstalled": "已安装代理",
       "agentInstalledDescription": "{{name}} 已就绪。",
       "installFailed": "安装失败",
@@ -421,11 +440,11 @@
       "namingConfigTitle": "命名",
       "namingConfigDescription": "用于命名任务的模型、目标语言和上下文来源。",
       "summaryConfigTitle": "会话摘要",
-      "summaryConfigDescription": "用于生成会话摘要的 Agent。使用其自身的 provider 与模型运行，独立于各会话的运行时。",
+      "summaryConfigDescription": "用于生成会话摘要的 Agent。使用其自身的 Runtime 与模型运行，独立于各会话的运行时。",
       "namingAgentLabel": "命名 Agent",
       "namingAgentHint": "负责命名任务的 Agent，同时绑定其运行时与模型——命名必须在 Agent 环境中执行。",
       "summaryAgentLabel": "摘要 Agent",
-      "summaryAgentHint": "负责生成会话摘要的 Agent，完全使用其自身的 provider 与模型运行；即使当前会话的运行时已不可用，摘要仍可正常生成。",
+      "summaryAgentHint": "负责生成会话摘要的 Agent，完全使用其自身的 Runtime 与模型运行；即使当前会话的运行时已不可用，摘要仍可正常生成。",
       "summaryLanguageLabel": "摘要语言",
       "statusBarSourceLabel": "状态栏",
       "statusBarSourceHint": "终端下方那条显示什么。选「隐藏」即可隐藏它。",
@@ -488,8 +507,8 @@
       "noFontsFound": "未找到字体。"
     },
     "defaultAgent": {
-      "title": "默认代理",
-      "description": "创建新任务时默认选中的代理。"
+      "title": "默认 Runtime",
+      "description": "创建新任务时默认选中的 Runtime。"
     },
     "resetToDefaultWithLabel": "重置为默认值：{{label}}",
     "serverUnavailable": "{{product}} 服务器当前不可用，请稍后重试。",
@@ -699,6 +718,7 @@
       "pin": "固定标签页",
       "copyPath": "复制路径",
       "copyYodaLink": "复制会话 Yoda 链接",
+      "openInSidePane": "在右侧面板打开",
       "openInWindow": "在独立窗口打开",
       "openInWindowFailed": "打开独立窗口失败",
       "returnFromWindowFailed": "恢复标签页失败",
@@ -713,7 +733,17 @@
       "sessions": "会话（{{count}}）",
       "noSessions": "暂无会话",
       "archivedSessions": "已归档（{{count}}）",
-      "unarchiveFailed": "取消归档失败"
+      "unarchiveFailed": "取消归档失败",
+      "stats": {
+        "linesTitle": "本任务代码变更（已提交 + 工作区）",
+        "tokens": "{{value}} tokens",
+        "tokenBreakdown": "输入 {{input}} · 输出 {{output}} · 缓存 {{cache}}",
+        "authProvider": {
+          "official-subscription": "订阅",
+          "official-api": "API Key",
+          "yoda-maas": "MaaS"
+        }
+      }
     },
     "files": "文件",
     "toggleTerminal": "切换终端",
@@ -769,7 +799,7 @@
     "hooks": {
       "title": "Hooks",
       "unsupported": "不支持 Hooks",
-      "unsupportedDescription": "该提供方未提供可配置的 hooks。",
+      "unsupportedDescription": "该 Runtime 未提供可配置的 hooks。",
       "none": "未配置 Hooks",
       "noneDescription": "当前会话的生效配置中未找到任何 hooks。",
       "sourceEmpty": "该层级暂无 hook",
@@ -939,7 +969,7 @@
       "emptyHint": "选择或创建一个会话。",
       "noActiveConversation": "没有活动会话",
       "claudeOnly": "仅 Claude 会话可用。",
-      "contextUnsupported": "此服务商暂不支持上下文检查。",
+      "contextUnsupported": "此 Runtime 暂不支持上下文检查。",
       "context": "上下文",
       "renameContext": "重命名上下文",
       "renameContextHint": "发送给命名模型的上下文",
@@ -948,7 +978,7 @@
       "regenerateName": "重新生成",
       "renameContextRegenerateFailed": "重新生成任务名失败",
       "truncated": "已截断",
-      "provider": "服务商",
+      "provider": "Runtime",
       "model": "模型",
       "approvalMode": "审批",
       "sandboxPolicy": "沙箱",
@@ -1027,7 +1057,7 @@
       "copyYodaLink": "复制 Yoda 链接",
       "yodaLinkCopied": "Yoda 链接已复制",
       "taskInfo": {
-        "provider": "提供方",
+        "provider": "Runtime",
         "project": "项目",
         "projectPath": "项目路径",
         "task": "任务",
@@ -1072,6 +1102,9 @@
       "summaryFailedDescription": "摘要生成失败，将在下一次回复后重试。",
       "summaryFromCompaction": "来自 agent 的压缩摘要",
       "summaryGenerated": "根据对话生成"
+    },
+    "sidePane": {
+      "moveBack": "移回主区域"
     }
   },
   "commandPalette": {
@@ -1101,7 +1134,7 @@
     "title": "MCP",
     "subtitle": "将代理连接到外部数据源与工具",
     "searchPlaceholder": "搜索 server…",
-    "refreshAria": "刷新 provider",
+    "refreshAria": "刷新 Runtime",
     "customMcp": "自定义 MCP",
     "added": "已添加",
     "recommended": "推荐",
@@ -1352,7 +1385,6 @@
       "officialSubscriptionDescription": "{{name}} 的官方登录与订阅凭据由它自己的 CLI 或本地配置管理。",
       "officialApi": "官方 API",
       "officialApiDescription": "Yoda 启动 {{name}} 会话时会转发这些 API Key 和 Base URL 环境变量。",
-      "configureApi": "配置环境变量",
       "maasSource": "Yoda MaaS",
       "maasDescription": "如已配置模型平台，可作为共享路由、观测与计费来源。",
       "manageMaas": "管理 MaaS",
@@ -1384,9 +1416,25 @@
       "envSourceCustom": "自定义",
       "envSourceInherited": "系统环境",
       "envSourceUnset": "未设置",
+      "envSet": "设置",
+      "envEdit": "修改",
+      "envOverride": "覆盖",
+      "envClear": "清除",
+      "envSave": "保存",
+      "envCancel": "取消",
+      "envValuePlaceholder": "粘贴值，例如 sk-…",
+      "localUsageTitle": "本地用量",
+      "localUsageMeta": "近 {{days}} 天 · {{count}} 个会话",
+      "localUsageCost": "折合费用",
+      "localUsageUnpriced": "未计价模型：{{models}}（费用未计入）",
+      "localUsageInput": "输入",
+      "localUsageOutput": "输出",
+      "localUsageCacheRead": "缓存读",
+      "localUsageCacheWrite": "缓存写",
+      "localUsageLoading": "正在统计本地用量…",
+      "localUsageError": "统计本地用量失败",
       "noMaasConnections": "尚未连接 MaaS 平台。",
       "usageTitle": "用量",
-      "usageDescription": "来自 ZenMux Management API 的真实用量统计。",
       "usageRefresh": "刷新",
       "usageNoMaas": "在 MaaS 视图连接 ZenMux 后即可显示真实用量统计。",
       "usageLoading": "正在加载用量…",

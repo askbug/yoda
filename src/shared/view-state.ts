@@ -23,6 +23,8 @@ export type TabDescriptor =
 export type TabManagerSnapshot = {
   tabs: TabDescriptor[];
   activeTabId: string | undefined;
+  /** Tab pinned into the right side pane. Lives outside `tabs`/tab order. */
+  sidePaneTab?: TabDescriptor;
 };
 
 export type EditorViewSnapshot = {
@@ -93,6 +95,17 @@ export type NavigationSnapshot = {
   viewParams: Record<string, unknown>;
 };
 
+/** Persisted top-level app tabs (scoped navigation contexts). */
+export type AppTabsSnapshot = {
+  tabs: { id: string; viewId: string; params: Record<string, unknown>; seq?: number }[];
+  activeTabId: string | null;
+};
+
+/** Persisted shell-level side pane attachment (which task's pin is showing). */
+export type AppSidePaneSnapshot = {
+  attachment: { projectId: string; taskId: string } | null;
+};
+
 export type SidebarTaskSortBy = 'created-at' | 'updated-at';
 
 export type SidebarTaskGroupBy = 'project' | 'none' | 'type' | 'activity';
@@ -102,6 +115,7 @@ export type SidebarSnapshot = {
   expandedProjectIds?: string[];
   projectOrder?: string[];
   taskOrderByProject?: Record<string, string[]>;
+  projectActivityById?: Record<string, string>;
   taskSortBy?: SidebarTaskSortBy;
   taskGroupBy?: SidebarTaskGroupBy;
   pinnedProjectIds?: string[];
@@ -111,4 +125,6 @@ export type SidebarSnapshot = {
   activeWorkspaceId?: string;
   navItemOrder?: string[];
   hiddenNavItems?: string[];
+  /** Global show/hide for the entire secondary nav section at the sidebar bottom. */
+  navSectionHidden?: boolean;
 };

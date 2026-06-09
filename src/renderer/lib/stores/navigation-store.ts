@@ -2,6 +2,7 @@ import { makeAutoObservable, toJS } from 'mobx';
 import type { NavigationSnapshot } from '@shared/view-state';
 import { type ViewId, type WrapParams } from '@renderer/app/view-registry';
 import { modalStore } from '@renderer/lib/modal/modal-store';
+import type { HistoryEntry } from '@renderer/lib/stores/navigation-history-store';
 import { focusTracker } from '@renderer/utils/focus-tracker';
 import { captureTelemetry } from '@renderer/utils/telemetryClient';
 // Resolved at call-site (not at module init); circular with app-state is safe.
@@ -15,16 +16,19 @@ export const viewEvents: Record<
   | 'home_viewed'
   | 'project_viewed'
   | 'task_viewed'
+  | 'file_viewed'
   | 'settings_viewed'
   | 'skills_viewed'
   | 'mcp_viewed'
   | 'agents_viewed'
   | 'maas_viewed'
   | 'automation_viewed'
+  | 'mobile_viewed'
 > = {
   home: 'home_viewed',
   project: 'project_viewed',
   task: 'task_viewed',
+  file: 'file_viewed',
   settings: 'settings_viewed',
   skills: 'skills_viewed',
   mcp: 'mcp_viewed',
@@ -32,6 +36,7 @@ export const viewEvents: Record<
   agents: 'agents_viewed',
   maas: 'maas_viewed',
   automation: 'automation_viewed',
+  mobile: 'mobile_viewed',
 };
 
 export class NavigationStore implements Snapshottable<NavigationSnapshot> {
@@ -44,10 +49,20 @@ export class NavigationStore implements Snapshottable<NavigationSnapshot> {
   }
 
   navigate<T extends ViewId>(viewId: T, params?: WrapParams<T>): void {
-    if (viewId !== 'task') {
-      appState.history.push({ kind: 'view', viewId, params: params ?? ({} as WrapParams<T>) });
-    }
+    appState.history.pushNavigation(
+      this._historyEntry(this.currentViewId),
+      this._historyEntry(viewId, params)
+    );
     this._applyNavigation(viewId, params);
+  }
+
+  private _historyEntry<T extends ViewId>(viewId: T, params?: WrapParams<T>): HistoryEntry {
+    const effectiveParams = params ?? this.viewParamsStore[viewId] ?? ({} as WrapParams<T>);
+    return {
+      kind: 'view',
+      viewId,
+      params: toJS(effectiveParams) as WrapParams<ViewId>,
+    };
   }
 
   _applyNavigation<T extends ViewId>(viewId: T, params?: WrapParams<T>): void {

@@ -1,7 +1,10 @@
+import { reaction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import { useEffect, type ReactNode } from 'react';
 import { agentSessionExitedChannel } from '@shared/events/agentEvents';
 import { INTERNAL_PROJECT_ID } from '@shared/projects';
+import type { TaskWindowTabTarget } from '@shared/task-window';
+import { openProvisionedTaskTab, openTaskTopTab } from '@renderer/app/open-task-target';
 import { type ViewDefinition } from '@renderer/app/view-registry';
 import {
   getTaskManagerStore,
@@ -14,7 +17,10 @@ import {
   useProvisionedTask,
 } from '@renderer/features/tasks/task-view-context';
 import { events } from '@renderer/lib/ipc';
-import { useNavigate } from '@renderer/lib/layout/navigation-provider';
+import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
+import { appState } from '@renderer/lib/stores/app-state';
+import { routeKey } from '@renderer/lib/stores/app-tabs-store';
+import { log } from '@renderer/utils/logger';
 import { createTaskCommandProvider } from './commands';
 import { EditorProvider } from './editor/editor-provider';
 import { useIsActiveTask } from './hooks/use-is-active-task';
@@ -59,7 +65,136 @@ const TabManagerVisibilitySync = observer(function TabManagerVisibilitySync({
   return null;
 });
 
-const TaskViewWrapperWithProviders = observer(function TaskViewWrapperWithProviders({
+/**
+ * Phase 2 bridge between top-level app tabs and the task's internal tab state.
+ *
+ * Downward: reacts to the route's `tab` target and replays it onto the internal
+ * TabManagerStore via openProvisionedTaskTab (with re-entrancy guard so the
+ * replay doesn't bounce back up).
+ *
+ * Upward: injects the bridge into TabManagerStore so internal open/activate
+ * intents (sidebar lists, file tree, terminals, …) surface as top-level tabs.
+ */
+const TopLevelTabSync = observer(function TopLevelTabSync({
+  projectId,
+  taskId,
+}: {
+  projectId: string;
+  taskId: string;
+}) {
+  const provisioned = useProvisionedTask();
+  const isActive = useIsActiveTask(taskId);
+  const { params } = useParams('task');
+  const tabManager = provisioned.taskView.tabManager;
+  // Re-run the replay on every openTab, even for an unchanged route — clicking
+  // the same session again must re-align internal state.
+  const replayNonce = appState.appTabs.replayNonce;
+
+  // The route's target only applies while this task IS the routed task.
+  const target: TaskWindowTabTarget | null =
+    isActive && params.taskId === taskId ? (params.tab ?? { kind: 'overview' }) : null;
+  const targetKey = target ? JSON.stringify(target) : null;
+
+  useEffect(() => {
+    const bridge = {
+      applyingKey: null as string | null,
+      open: (tab: TaskWindowTabTarget) => openTaskTopTab(projectId, taskId, tab),
+    };
+    tabManager.topLevelBridge = bridge;
+    // Surface open intents that happened before the bridge mounted (e.g. the
+    // initial conversation opened during provisioning) — a fresh task lands on
+    // its session tab, not the overview.
+    const pending = tabManager.flushPendingTopLevelTarget();
+    if (pending) openTaskTopTab(projectId, taskId, pending);
+    return () => {
+      if (tabManager.topLevelBridge === bridge) tabManager.topLevelBridge = null;
+    };
+  }, [tabManager, projectId, taskId]);
+
+  useEffect(() => {
+    if (!target || !targetKey) return;
+    console.info('[tab-sync] replay: applying route target', { projectId, taskId, target });
+    let cancelled = false;
+    const bridge = tabManager.topLevelBridge;
+    if (bridge) bridge.applyingKey = targetKey;
+    void openProvisionedTaskTab(provisioned, target)
+      .then((found) => {
+        console.info('[tab-sync] replay: result', {
+          target: JSON.parse(targetKey),
+          found,
+          cancelled,
+          postAlign: {
+            activeTabId: tabManager.activeTabId,
+            activeConversationId: tabManager.activeConversationId,
+            activeRenderer: provisioned.taskView.activeRenderer,
+            isVisible: tabManager.isVisible,
+          },
+        });
+        if (found) return;
+        log.warn('TopLevelTabSync: replay target could not be materialized', {
+          projectId,
+          taskId,
+          target,
+        });
+        if (cancelled) return;
+        // The target cannot be materialized (e.g. an archived/deleted
+        // conversation). Remove the dangling top-level tab — otherwise the
+        // strip and the rendered content diverge: the tab stays selectable
+        // forever while the panel keeps showing whatever was active before.
+        const danglingKey = routeKey('task', { projectId, taskId, tab: target });
+        appState.appTabs.closeTabsWhere(
+          (entry) => routeKey(entry.viewId, entry.params) === danglingKey
+        );
+      })
+      .catch((error: unknown) => {
+        log.warn('TopLevelTabSync: replay failed', { projectId, taskId, target, error });
+      })
+      .finally(() => {
+        // Only clear our own key — a newer replay may have set its own.
+        if (bridge && bridge.applyingKey === targetKey) bridge.applyingKey = null;
+      });
+    return () => {
+      // A newer target superseded this replay mid-flight (rapid clicks):
+      // never remove the newer route's tab based on a stale result.
+      cancelled = true;
+    };
+    // targetKey is the stable identity of `target`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetKey, replayNonce, provisioned, tabManager]);
+
+  // Lifecycle: close top-level tabs whose conversation was archived/deleted.
+  // fireImmediately also sweeps STALE persisted tabs on mount (e.g. ghosts
+  // created before ownership guards existed).
+  useEffect(
+    () =>
+      reaction(
+        () => [...provisioned.conversations.conversations.keys()].sort().join('\n'),
+        () => {
+          const ids = new Set(provisioned.conversations.conversations.keys());
+          appState.appTabs.closeTabsWhere((tab) => {
+            if (tab.viewId !== 'task') return false;
+            const params = tab.params as {
+              projectId?: string;
+              taskId?: string;
+              tab?: TaskWindowTabTarget;
+            };
+            return (
+              params.projectId === projectId &&
+              params.taskId === taskId &&
+              params.tab?.kind === 'conversation' &&
+              !ids.has(params.tab.conversationId)
+            );
+          });
+        },
+        { fireImmediately: true }
+      ),
+    [provisioned, projectId, taskId]
+  );
+
+  return null;
+});
+
+export const TaskViewWrapperWithProviders = observer(function TaskViewWrapperWithProviders({
   children,
   projectId,
   taskId,
@@ -67,9 +202,16 @@ const TaskViewWrapperWithProviders = observer(function TaskViewWrapperWithProvid
   children: ReactNode;
   projectId: string;
   taskId: string;
+  /** Top-level tab target (Phase 2): which internal tab this route shows. */
+  tab?: TaskWindowTabTarget;
 }) {
   const taskStore = getTaskStore(projectId, taskId);
   const kind = taskViewKind(taskStore, projectId);
+
+  // [boot-timing] track the gap between mount and the provision trigger firing.
+  console.log(
+    `[boot-timing] TaskViewWrapper: render kind='${kind}' hasStore=${!!taskStore} @ ${Math.round(performance.now())}ms`
+  );
 
   // Auto-provision when the task view is rendered with an idle task — covers
   // session restore where the task wasn't in openTaskIds, direct navigation,
@@ -78,6 +220,9 @@ const TaskViewWrapperWithProviders = observer(function TaskViewWrapperWithProvid
     if (kind !== 'idle') return;
     if (taskStore && 'archivedAt' in taskStore.data && taskStore.data.archivedAt) return;
 
+    console.log(
+      `[boot-timing] TaskViewWrapper: provisionTask() trigger fired @ ${Math.round(performance.now())}ms`
+    );
     getTaskManagerStore(projectId)
       ?.provisionTask(taskId)
       .catch(() => {});
@@ -95,6 +240,7 @@ const TaskViewWrapperWithProviders = observer(function TaskViewWrapperWithProvid
     <TaskViewWrapper projectId={projectId} taskId={taskId}>
       <ProvisionedTaskProvider projectId={projectId} taskId={taskId}>
         <TabManagerVisibilitySync projectId={projectId} taskId={taskId} />
+        <TopLevelTabSync projectId={projectId} taskId={taskId} />
         <EditorProvider key={taskId} taskId={taskId} projectId={projectId}>
           {children}
         </EditorProvider>
@@ -109,4 +255,4 @@ export const taskView = {
   MainPanel: TaskMainPanel,
   commandProvider: ({ projectId, taskId }: { projectId: string; taskId: string }) =>
     createTaskCommandProvider(projectId, taskId),
-} satisfies ViewDefinition<{ projectId: string; taskId: string }>;
+} satisfies ViewDefinition<{ projectId: string; taskId: string; tab?: TaskWindowTabTarget }>;
