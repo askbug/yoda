@@ -1,6 +1,7 @@
 import { ProjectManagerStore } from '@renderer/features/projects/stores/project-manager';
 import { SidebarStore } from '@renderer/features/sidebar/sidebar-store';
 import { WorkspaceStore } from '@renderer/features/workspaces/workspace-store';
+import { AgentRuntimeStore } from './agent-runtime-store';
 import { DependenciesStore } from './dependencies-store';
 import { NavigationHistoryStore } from './navigation-history-store';
 import { NavigationStore } from './navigation-store';
@@ -18,6 +19,7 @@ class AppState {
   readonly navigation: NavigationStore;
   readonly dependencies: DependenciesStore;
   readonly sshConnections: SshConnectionStore;
+  readonly agentRuntime: AgentRuntimeStore;
 
   constructor() {
     this.snapshots = snapshotRegistry;
@@ -31,10 +33,13 @@ class AppState {
     this.sshConnections = new SshConnectionStore({
       onConnectionReady: (connectionId) => void this.dependencies.refreshAgents(connectionId),
     });
+    this.agentRuntime = new AgentRuntimeStore();
     snapshotRegistry.register('navigation', () => this.navigation.snapshot);
     snapshotRegistry.register('sidebar', () => this.sidebar.snapshot);
+    snapshotRegistry.register('agentRuntime', () => this.agentRuntime.snapshot);
     this.dependencies.start();
     this.sshConnections.start();
+    void this.agentRuntime.start();
   }
 }
 
@@ -59,3 +64,4 @@ if (import.meta.hot) {
 // Re-export for callers that previously imported sidebarStore from sidebar-store.ts.
 export const sidebarStore = appState.sidebar;
 export const workspaceStore = appState.workspaces;
+export const agentRuntimeStore = appState.agentRuntime;

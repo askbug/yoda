@@ -14,6 +14,7 @@ import { codeEditorPool } from '@renderer/lib/monaco/monaco-code-pool';
 import { diffEditorPool } from '@renderer/lib/monaco/monaco-diff-pool';
 import { modelRegistry } from '@renderer/lib/monaco/monaco-model-registry';
 import { wirePrCacheInvalidation } from '@renderer/lib/pr-cache-invalidation';
+import type { AgentRuntimeSnapshot } from '@renderer/lib/stores/agent-runtime-store';
 import { viewStateCache } from '@renderer/lib/stores/view-state-cache';
 import { log } from '@renderer/utils/logger';
 import { initSoundPlayer } from '@renderer/utils/soundPlayer';
@@ -46,6 +47,11 @@ async function bootstrap() {
   ]);
 
   viewStateCache.populate(allViewState as Record<string, unknown>);
+
+  const agentRuntimeResult = (allViewState as Record<string, unknown>)?.agentRuntime;
+  if (agentRuntimeResult) {
+    appState.agentRuntime.restoreSnapshot(agentRuntimeResult as Partial<AgentRuntimeSnapshot>);
+  }
 
   if (navResult) appState.navigation.restoreSnapshot(navResult);
   setupAppCommandProvider();

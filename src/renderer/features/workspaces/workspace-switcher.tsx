@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 import { cn } from '@renderer/utils/utils';
+import { workspaceTaskCounts, type WorkspaceTaskCounts } from './workspace-task-counts';
 
 /**
  * Current-workspace selector for the sidebar footer. Shows the active workspace
@@ -32,7 +33,7 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
   const currentName =
     activeWorkspace?.name ??
     (activeId === DEFAULT_WORKSPACE_ID ? t('workspaces.defaultTab') : t('workspaces.allTab'));
-  const currentLabel = t('workspaces.current', { name: currentName });
+  const activeCounts = workspaceTaskCounts(activeId);
 
   async function handleCreate() {
     try {
@@ -96,17 +97,20 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
         aria-label={t('workspaces.switch')}
       >
         <FolderInput className="h-4 w-4 shrink-0" />
-        <span className="truncate">{currentLabel}</span>
+        <span className="truncate">{currentName}</span>
+        <WorkspaceCounts counts={activeCounts} className="ml-auto pr-1" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={6} className="w-(--anchor-width) min-w-56">
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t('workspaces.switch')}</DropdownMenuLabel>
           <WorkspaceChoice
+            workspaceId={ALL_WORKSPACES_ID}
             label={t('workspaces.allTab')}
             isActive={activeId === ALL_WORKSPACES_ID}
             onSelect={() => workspaceStore.setActiveWorkspaceId(ALL_WORKSPACES_ID)}
           />
           <WorkspaceChoice
+            workspaceId={DEFAULT_WORKSPACE_ID}
             label={t('workspaces.defaultTab')}
             isActive={activeId === DEFAULT_WORKSPACE_ID}
             onSelect={() => workspaceStore.setActiveWorkspaceId(DEFAULT_WORKSPACE_ID)}
@@ -114,6 +118,7 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
           {workspaces.map((workspace) => (
             <WorkspaceChoice
               key={workspace.id}
+              workspaceId={workspace.id}
               label={workspace.name}
               isActive={activeId === workspace.id}
               onSelect={() => workspaceStore.setActiveWorkspaceId(workspace.id)}
@@ -142,11 +147,13 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
   );
 });
 
-function WorkspaceChoice({
+const WorkspaceChoice = observer(function WorkspaceChoice({
+  workspaceId,
   label,
   isActive,
   onSelect,
 }: {
+  workspaceId: string;
   label: string;
   isActive: boolean;
   onSelect: () => void;
@@ -155,7 +162,39 @@ function WorkspaceChoice({
     <DropdownMenuItem onClick={onSelect}>
       <Check className={cn('size-4', isActive ? 'opacity-100' : 'opacity-0')} />
       <span className="truncate">{label}</span>
+      <WorkspaceCounts counts={workspaceTaskCounts(workspaceId)} className="ml-auto" />
     </DropdownMenuItem>
+  );
+});
+
+/**
+ * Compact `(ToRead / Running / Total)` badge. A terracotta dot precedes the
+ * numbers when there are unread tasks.
+ */
+function WorkspaceCounts({
+  counts,
+  className,
+}: {
+  counts: WorkspaceTaskCounts;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <span
+      className={cn('flex items-center gap-1 text-xs text-foreground-passive font-mono', className)}
+      aria-label={t('workspaces.countsAria', {
+        toRead: counts.toRead,
+        running: counts.running,
+        total: counts.total,
+      })}
+    >
+      {counts.toRead > 0 && (
+        <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+      )}
+      <span>
+        ({counts.toRead} / {counts.running} / {counts.total})
+      </span>
+    </span>
   );
 }
 

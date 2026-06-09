@@ -71,6 +71,12 @@ export class NavigationStore implements Snapshottable<NavigationSnapshot> {
     if (params !== undefined) {
       this.viewParamsStore = { ...this.viewParamsStore, [viewId]: params };
     }
+    if (viewId === 'task') {
+      const taskParams = params as WrapParams<'task'> | undefined;
+      if (taskParams?.projectId && taskParams.taskId) {
+        appState.agentRuntime.markTaskSeen(taskParams.projectId, taskParams.taskId);
+      }
+    }
     modalStore.closeModal();
   }
 

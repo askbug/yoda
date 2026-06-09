@@ -28,6 +28,7 @@ import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { sidebarStore } from '@renderer/lib/stores/app-state';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
 import { cn } from '@renderer/utils/utils';
+import { type SidebarNavItemKey } from './nav-items';
 import { SidebarPinnedTaskList } from './pinned-task-list';
 import { SidebarProjectlessTaskList } from './projectless-task-list';
 import { ProjectsGroupLabel, ProjectsSettingsMenu } from './projects-group-label';
@@ -85,6 +86,99 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
     }
     navigate('home');
   }, [currentProjectId, navigate]);
+
+  const navItems: Record<SidebarNavItemKey, React.ReactNode> = {
+    maas: (
+      <SidebarMenuButton
+        key="maas"
+        isActive={isCurrentView(currentView, 'maas')}
+        onClick={() => navigate('maas')}
+        aria-label={t('sidebar.maas')}
+        className="w-full justify-start"
+      >
+        <Cloud className="h-5 w-5 sm:h-4 sm:w-4" />
+        {t('sidebar.maas')}
+      </SidebarMenuButton>
+    ),
+    agents: (
+      <SidebarMenuButton
+        key="agents"
+        isActive={isCurrentView(currentView, 'agents')}
+        onClick={() => navigate('agents')}
+        aria-label={t('sidebar.agents')}
+        className="w-full justify-start"
+      >
+        <Terminal className="h-5 w-5 sm:h-4 sm:w-4" />
+        {t('sidebar.agents')}
+      </SidebarMenuButton>
+    ),
+    agentManager: (
+      <SidebarMenuButton
+        key="agentManager"
+        isActive={isCurrentView(currentView, 'agentManager')}
+        onClick={() => navigate('agentManager')}
+        aria-label={t('sidebar.agentManager')}
+        className="w-full justify-start"
+      >
+        <Bot className="h-5 w-5 sm:h-4 sm:w-4" />
+        {t('sidebar.agentManager')}
+      </SidebarMenuButton>
+    ),
+    skills: (
+      <SidebarMenuRow
+        key="skills"
+        isActive={isCurrentView(currentView, 'skills')}
+        className="gap-1 px-1 py-1"
+      >
+        <button
+          type="button"
+          onClick={() => navigate('skills')}
+          onMouseDown={(event) => event.preventDefault()}
+          aria-label={t('sidebar.skills')}
+          className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Puzzle className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" />
+          <span className="truncate">{t('sidebar.skills')}</span>
+        </button>
+        {skillIssueCount > 0 && (
+          <button
+            type="button"
+            onClick={handleOpenFirstSkillIssue}
+            onMouseDown={(event) => event.preventDefault()}
+            aria-label={`${skillIssueLabel}: ${t('sidebar.openFirstSkillIssue')}`}
+            title={skillIssueTitle}
+            className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-1.5 text-[10px] font-medium text-amber-600 transition-colors hover:border-amber-500/70 hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-400"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            {formatIssueCount(skillIssueCount)}
+          </button>
+        )}
+      </SidebarMenuRow>
+    ),
+    automation: (
+      <SidebarMenuButton
+        key="automation"
+        isActive={isCurrentView(currentView, 'automation')}
+        onClick={() => navigate('automation')}
+        aria-label={t('sidebar.automation')}
+        className="w-full justify-start"
+      >
+        <Workflow className="h-5 w-5 sm:h-4 sm:w-4" />
+        {t('sidebar.automation')}
+      </SidebarMenuButton>
+    ),
+    mobile: (
+      <SidebarMenuButton
+        key="mobile"
+        onClick={() => showMobileConnection({})}
+        aria-label={t('sidebar.mobile')}
+        className="w-full justify-start"
+      >
+        <Smartphone className="h-5 w-5 sm:h-4 sm:w-4" />
+        {t('sidebar.mobile')}
+      </SidebarMenuButton>
+    ),
+  };
 
   return (
     <div
@@ -161,78 +255,9 @@ export const LeftSidebar: React.FC = observer(function LeftSidebar() {
         </SidebarContent>
         <div className="flex flex-col border-t border-border">
           <SidebarMenu className="px-2 pt-2">
-            <SidebarMenuButton
-              isActive={isCurrentView(currentView, 'maas')}
-              onClick={() => navigate('maas')}
-              aria-label={t('sidebar.maas')}
-              className="w-full justify-start"
-            >
-              <Cloud className="h-5 w-5 sm:h-4 sm:w-4" />
-              {t('sidebar.maas')}
-            </SidebarMenuButton>
-            <SidebarMenuButton
-              isActive={isCurrentView(currentView, 'agents')}
-              onClick={() => navigate('agents')}
-              aria-label={t('sidebar.agents')}
-              className="w-full justify-start"
-            >
-              <Terminal className="h-5 w-5 sm:h-4 sm:w-4" />
-              {t('sidebar.agents')}
-            </SidebarMenuButton>
-            <SidebarMenuButton
-              isActive={isCurrentView(currentView, 'agentManager')}
-              onClick={() => navigate('agentManager')}
-              aria-label={t('sidebar.agentManager')}
-              className="w-full justify-start"
-            >
-              <Bot className="h-5 w-5 sm:h-4 sm:w-4" />
-              {t('sidebar.agentManager')}
-            </SidebarMenuButton>
-            <SidebarMenuRow
-              isActive={isCurrentView(currentView, 'skills')}
-              className="gap-1 px-1 py-1"
-            >
-              <button
-                type="button"
-                onClick={() => navigate('skills')}
-                onMouseDown={(event) => event.preventDefault()}
-                aria-label={t('sidebar.skills')}
-                className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Puzzle className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" />
-                <span className="truncate">{t('sidebar.skills')}</span>
-              </button>
-              {skillIssueCount > 0 && (
-                <button
-                  type="button"
-                  onClick={handleOpenFirstSkillIssue}
-                  onMouseDown={(event) => event.preventDefault()}
-                  aria-label={`${skillIssueLabel}: ${t('sidebar.openFirstSkillIssue')}`}
-                  title={skillIssueTitle}
-                  className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-1.5 text-[10px] font-medium text-amber-600 transition-colors hover:border-amber-500/70 hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-400"
-                >
-                  <AlertTriangle className="h-3 w-3" />
-                  {formatIssueCount(skillIssueCount)}
-                </button>
-              )}
-            </SidebarMenuRow>
-            <SidebarMenuButton
-              isActive={isCurrentView(currentView, 'automation')}
-              onClick={() => navigate('automation')}
-              aria-label={t('sidebar.automation')}
-              className="w-full justify-start"
-            >
-              <Workflow className="h-5 w-5 sm:h-4 sm:w-4" />
-              {t('sidebar.automation')}
-            </SidebarMenuButton>
-            <SidebarMenuButton
-              onClick={() => showMobileConnection({})}
-              aria-label={t('sidebar.mobile')}
-              className="w-full justify-start"
-            >
-              <Smartphone className="h-5 w-5 sm:h-4 sm:w-4" />
-              {t('sidebar.mobile')}
-            </SidebarMenuButton>
+            {sidebarStore.orderedNavItems
+              .filter((key) => !sidebarStore.isNavItemHidden(key))
+              .map((key) => navItems[key])}
           </SidebarMenu>
           <div className="border-t border-border">
             <SidebarAccount />

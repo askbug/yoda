@@ -10,13 +10,14 @@ import { AccountTab } from './AccountTab';
 import ArchivedProjectsCard from './ArchivedProjectsCard';
 import { CliAgentsList } from './CliAgentsList';
 import DefaultAgentSettingsCard from './DefaultAgentSettingsCard';
+import GithubSettingsCard from './GithubSettingsCard';
 import HiddenToolsSettingsCard from './HiddenToolsSettingsCard';
 import IntegrationsCard from './IntegrationsCard';
 import KeyboardSettingsCard from './KeyboardSettingsCard';
 import LanguageCard from './LanguageCard';
 import NotificationSettingsCard from './NotificationSettingsCard';
-import RepositorySettingsCard from './RepositorySettingsCard';
 import { ReviewPromptResetButton, ReviewPromptSettingsCard } from './ReviewPromptSettingsCard';
+import { SidebarNavSettingsCard } from './SidebarNavSettingsCard';
 import {
   AutoGenerateTaskNamesRow,
   AutoTrustWorktreesRow,
@@ -36,7 +37,9 @@ export type SettingsPageTab =
   | 'integrations'
   | 'mcp'
   | 'repository'
+  | 'github'
   | 'interface'
+  | 'keyboard-shortcuts'
   | 'docs';
 
 interface SectionConfig {
@@ -70,7 +73,9 @@ export function SettingsPage({
     { id: 'integrations', label: t('settings.tabs.integrations') },
     { id: 'mcp', label: t('settings.tabs.mcp') },
     { id: 'repository', label: t('settings.tabs.repository') },
+    { id: 'github', label: t('settings.tabs.github') },
     { id: 'interface', label: t('settings.tabs.interface') },
+    { id: 'keyboard-shortcuts', label: t('settings.tabs.keyboardShortcuts') },
     { id: 'docs', label: t('settings.tabs.docs'), isExternal: true },
   ];
 
@@ -182,14 +187,20 @@ export function SettingsPage({
       description: t('settings.repositoryTab.description'),
       sections: [
         {
-          id: 'repository-settings',
-          title: t('settings.repositoryTab.branchPrefix'),
-          component: <RepositorySettingsCard />,
-        },
-        {
           id: 'archived-projects',
           title: t('settings.archivedProjects.title'),
           component: <ArchivedProjectsCard />,
+        },
+      ],
+    },
+    github: {
+      title: t('settings.tabs.github'),
+      description: t('settings.githubTab.description'),
+      sections: [
+        {
+          id: 'github-settings',
+          title: t('settings.repositoryTab.branchPrefix'),
+          component: <GithubSettingsCard />,
         },
       ],
     },
@@ -200,14 +211,24 @@ export function SettingsPage({
         { id: 'theme', component: <ThemeCard /> },
         { id: 'terminal', component: <TerminalSettingsCard /> },
         {
-          id: 'keyboard-shortcuts',
-          title: t('settings.interfaceTab.keyboardShortcuts'),
-          component: <KeyboardSettingsCard />,
+          id: 'sidebar-nav',
+          title: t('settings.interfaceTab.sidebarNav'),
+          component: <SidebarNavSettingsCard />,
         },
         {
           id: 'tools',
           title: t('settings.interfaceTab.tools'),
           component: <HiddenToolsSettingsCard />,
+        },
+      ],
+    },
+    'keyboard-shortcuts': {
+      title: t('settings.tabs.keyboardShortcuts'),
+      description: t('settings.keyboardShortcutsTab.description'),
+      sections: [
+        {
+          id: 'keyboard-shortcuts',
+          component: <KeyboardSettingsCard />,
         },
       ],
     },

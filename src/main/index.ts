@@ -94,7 +94,7 @@ void app.whenReady().then(async () => {
   const __bootMark = (label: string) =>
     console.log(`[DEBUG][boot] ${label} +${Date.now() - __bootT0}ms`);
   __bootMark('whenReady fired');
-  console.log('[BUILD-MARKER] agent-run-state-sync v3 (claude-truth + enrichEvent-null)');
+  console.log('[BUILD-MARKER] agent-run-state-sync v4 (stateless-derive + claude-awaiting)');
   agentSessionRuntimeStore.initialize();
 
   // Login-shell env capture (`$SHELL -ilc 'env'`) can take 1-2s when the user
