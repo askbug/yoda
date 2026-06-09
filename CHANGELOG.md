@@ -5,6 +5,30 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.3.11 — 2026-06-09
+
+### Added
+
+- **Customizable sidebar**: reorder and hide the secondary navigation items via
+  a drag-and-drop "Customize sidebar" settings card, backed by a single source
+  of truth for nav items.
+- **Live agent runtime indicators**: a new agent runtime store surfaces
+  running/attention badges per task across the sidebar and workspace switcher,
+  with workspace-level task counts.
+- **Conversation runtime aggregation**: aggregate per-conversation running/idle
+  state across projects and tasks.
+- Expand the mobile gateway and mobile app to consume runtime status with a
+  richer in-app UI.
+
+### Changed
+
+- Consolidate prompt-injection logic into a shared payload builder (Claude stays
+  raw; other providers wrap multiline payloads in bracketed paste).
+- Refine Claude/Codex run-state sources and keep the specific awaiting-input
+  sub-state on non-forced turn starts, so permission/elicitation prompts are no
+  longer clobbered by a bare "working" spinner.
+- Rename the repository settings card to a GitHub settings card.
+
 ## 0.3.10 — 2026-06-09
 
 ### Added
