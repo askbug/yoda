@@ -209,7 +209,7 @@ export const TerminalsPanel = observer(function TerminalsPanel() {
           e.currentTarget.setPointerCapture(e.pointerId);
           panelDragStore.setDragging(true);
         }}
-        className="hover:bg-background-2 bg-transparent"
+        className="hover:bg-background-2"
         onPointerUp={() => panelDragStore.setDragging(false)}
         onPointerCancel={() => panelDragStore.setDragging(false)}
       />
@@ -234,6 +234,7 @@ export const TerminalsPanel = observer(function TerminalsPanel() {
           onAddTerminal={() => void handleCreate()}
           onRemoveTerminal={(id) => terminalTabView.removeTab(id)}
           onRenameTerminal={(id, name) => void terminalMgr?.renameTerminal(id, name)}
+          onClose={() => provisionedTask.taskView.setTerminalDrawerOpen(false)}
         />
       </ResizablePanel>
     </ResizablePanelGroup>
