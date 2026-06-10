@@ -1,4 +1,4 @@
-import { Check, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,10 +8,13 @@ import { workspaceStore } from '@renderer/lib/stores/app-state';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@renderer/lib/ui/dropdown-menu';
 import { isImeComposing } from '@renderer/utils/ime';
@@ -20,9 +23,10 @@ import { workspaceTaskCounts, type WorkspaceTaskCounts } from './workspace-task-
 
 /**
  * Current-workspace selector for the sidebar footer. Shows the active workspace
- * name and opens a dropdown to switch between "All" and user workspaces, plus
- * inline create / rename / delete of the active one. Workspaces scope the
- * pinned list, projects, and projectless tasks shown below.
+ * name and opens a dropdown that manages the workspace itself: switch (submenu
+ * with "All", user workspaces and create), then rename and remove of the active
+ * workspace as separate groups. Workspaces scope the pinned list, projects, and
+ * projectless tasks shown below.
  */
 export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
   const { t } = useTranslation();
@@ -71,7 +75,7 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
       await workspaceStore.deleteWorkspace(activeWorkspace.id);
     } catch (error) {
       toast({
-        title: t('workspaces.deleteFailed'),
+        title: t('workspaces.removeFailed'),
         description: error instanceof Error ? error.message : String(error),
         variant: 'destructive',
       });
@@ -101,45 +105,52 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
         <span className="truncate">{currentName}</span>
         <WorkspaceCounts counts={activeCounts} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={6} className="w-(--anchor-width) min-w-56">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>{t('workspaces.switch')}</DropdownMenuLabel>
-          <WorkspaceChoice
-            workspaceId={ALL_WORKSPACES_ID}
-            label={t('workspaces.allTab')}
-            isActive={activeId === ALL_WORKSPACES_ID}
-            onSelect={() => workspaceStore.setActiveWorkspaceId(ALL_WORKSPACES_ID)}
-          />
-          <WorkspaceChoice
-            workspaceId={DEFAULT_WORKSPACE_ID}
-            label={t('workspaces.defaultTab')}
-            isActive={activeId === DEFAULT_WORKSPACE_ID}
-            onSelect={() => workspaceStore.setActiveWorkspaceId(DEFAULT_WORKSPACE_ID)}
-          />
-          {workspaces.map((workspace) => (
-            <WorkspaceChoice
-              key={workspace.id}
-              workspaceId={workspace.id}
-              label={workspace.name}
-              isActive={activeId === workspace.id}
-              onSelect={() => workspaceStore.setActiveWorkspaceId(workspace.id)}
-            />
-          ))}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => void handleCreate()}>
-          <Plus className="size-4" />
-          {t('workspaces.create')}
-        </DropdownMenuItem>
+      <DropdownMenuContent align="start" sideOffset={6} className="min-w-56">
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Layers className="size-4" />
+            {t('workspaces.switch')}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="min-w-56">
+            <DropdownMenuRadioGroup value={activeId}>
+              <WorkspaceChoice
+                workspaceId={ALL_WORKSPACES_ID}
+                label={t('workspaces.allTab')}
+                onSelect={() => workspaceStore.setActiveWorkspaceId(ALL_WORKSPACES_ID)}
+              />
+              <DropdownMenuSeparator />
+              <WorkspaceChoice
+                workspaceId={DEFAULT_WORKSPACE_ID}
+                label={t('workspaces.defaultTab')}
+                onSelect={() => workspaceStore.setActiveWorkspaceId(DEFAULT_WORKSPACE_ID)}
+              />
+              {workspaces.map((workspace) => (
+                <WorkspaceChoice
+                  key={workspace.id}
+                  workspaceId={workspace.id}
+                  label={workspace.name}
+                  onSelect={() => workspaceStore.setActiveWorkspaceId(workspace.id)}
+                />
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => void handleCreate()}>
+              <Plus className="size-4" />
+              {t('workspaces.create')}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         {activeWorkspace && (
           <>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setRenaming(true)}>
               <Pencil className="size-4" />
               {t('workspaces.rename')}
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={() => void handleDelete()}>
               <Trash2 className="size-4" />
-              {t('workspaces.delete')}
+              {t('workspaces.remove')}
             </DropdownMenuItem>
           </>
         )}
@@ -151,20 +162,17 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher() {
 const WorkspaceChoice = observer(function WorkspaceChoice({
   workspaceId,
   label,
-  isActive,
   onSelect,
 }: {
   workspaceId: string;
   label: string;
-  isActive: boolean;
   onSelect: () => void;
 }) {
   return (
-    <DropdownMenuItem onClick={onSelect}>
-      <Check className={cn('size-4', isActive ? 'opacity-100' : 'opacity-0')} />
+    <DropdownMenuRadioItem value={workspaceId} onClick={onSelect}>
       <span className="truncate">{label}</span>
       <WorkspaceCounts counts={workspaceTaskCounts(workspaceId)} className="ml-auto" />
-    </DropdownMenuItem>
+    </DropdownMenuRadioItem>
   );
 });
 

@@ -106,6 +106,9 @@ export function buildCustomThemeCssVars(theme: CustomTheme): CssVarMap {
   const tertiaryBg1 = isDark ? c.background1 : mix(c.background3, c.background2, 0.55);
   const tertiaryBg2 = isDark ? c.background2 : c.background3;
   const tertiaryBg3 = isDark ? c.background3 : mix(c.foreground, c.background3, 0.05);
+  // Popup surfaces sit one elevation step above the page: dark lifts to
+  // background-1, light lifts toward white while keeping the theme hue.
+  const quaternaryBg = isDark ? c.background1 : mix('#ffffff', c.background, 0.75);
 
   return {
     '--background': c.background,
@@ -130,7 +133,7 @@ export function buildCustomThemeCssVars(theme: CustomTheme): CssVarMap {
     '--foreground-tertiary': c.foreground,
     '--foreground-tertiary-muted': c.foregroundMuted,
     '--foreground-tertiary-passive': c.foregroundPassive,
-    '--background-quaternary': isDark ? c.background1 : c.background,
+    '--background-quaternary': quaternaryBg,
     '--background-quaternary-1': isDark ? c.background2 : c.background1,
     '--background-quaternary-2': isDark ? c.background3 : c.background2,
     '--background-destructive': destructiveBg,

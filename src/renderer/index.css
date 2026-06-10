@@ -152,7 +152,8 @@
     --foreground-tertiary-muted: color(display-p3 0.392 0.392 0.392);
     --foreground-tertiary-passive: color(display-p3 0.732 0.732 0.732);
 
-    --background-quaternary: var(--background);
+    /* Popup surfaces: one elevation step above the page (lifted toward white). */
+    --background-quaternary: color(display-p3 0.997 0.997 0.997);
     --background-quaternary-1: var(--background-1);
     --background-quaternary-2: var(--background-2);
 
