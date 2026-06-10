@@ -10,13 +10,9 @@ function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
 }
 
 function TooltipTrigger({ className, ...props }: TooltipPrimitive.Trigger.Props) {
-  return (
-    <TooltipPrimitive.Trigger
-      data-slot="tooltip-trigger"
-      className={cn('h-full', className)}
-      {...props}
-    />
-  );
+  // No default sizing here: this className is merged into the rendered element
+  // (render prop), where a stray h-full would override the element's own height.
+  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" className={className} {...props} />;
 }
 
 function TooltipContent({

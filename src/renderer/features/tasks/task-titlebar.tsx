@@ -54,7 +54,7 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
             <TooltipTrigger
               render={
                 <Toggle
-                  size="sm"
+                  size="icon-sm"
                   pressed={taskView.isTerminalDrawerOpen}
                   className="border-none"
                   onPressedChange={() =>
@@ -73,7 +73,7 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
             <TooltipTrigger
               render={
                 <Toggle
-                  size="sm"
+                  size="icon-sm"
                   pressed={!taskView.isSidebarCollapsed}
                   className="border-none"
                   onPressedChange={() => taskView.setSidebarCollapsed(!taskView.isSidebarCollapsed)}

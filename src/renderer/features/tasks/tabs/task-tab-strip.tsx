@@ -346,7 +346,7 @@ export const TaskTabStrip = observer(function TaskTabStrip() {
               <button
                 type="button"
                 aria-label={t('tasks.tabs.newConversation')}
-                className="flex w-9 shrink-0 items-center justify-center border-r border-border text-foreground-passive outline-none transition-colors hover:bg-background-secondary-1/70 hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+                className="flex h-full w-9 shrink-0 items-center justify-center border-r border-border text-foreground-passive outline-none transition-colors hover:bg-background-secondary-1/70 hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
                 onClick={handleCreateConversation}
               >
                 <Plus className="size-4" />
