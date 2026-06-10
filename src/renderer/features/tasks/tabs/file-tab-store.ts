@@ -22,9 +22,9 @@ export class FileTabStore {
   isPreview: boolean;
   fileKind: ManagedFileKind;
   renderer: FileRendererData;
-  /** Data-URL for image files; empty string for Monaco-backed files. */
+  /** Data-URL for image/pdf files; empty string for Monaco-backed files. */
   content: string;
-  /** True only for image files while the data-URL is being fetched. */
+  /** True only for image/pdf files while the data-URL is being fetched. */
   isLoading: boolean;
   totalSize: number | null;
   pendingReveal: FileRevealTarget | null;
@@ -38,7 +38,7 @@ export class FileTabStore {
     this.fileKind = fileKind;
     this.renderer = getDefaultRenderer(fileKind);
     this.content = '';
-    this.isLoading = fileKind === 'image';
+    this.isLoading = fileKind === 'image' || fileKind === 'pdf';
     this.totalSize = null;
     this.pendingReveal = null;
 
@@ -105,7 +105,7 @@ export class FileTabStore {
     this.fileKind = fileKind;
     this.renderer = getDefaultRenderer(fileKind);
     this.content = '';
-    this.isLoading = fileKind === 'image';
+    this.isLoading = fileKind === 'image' || fileKind === 'pdf';
     this.totalSize = null;
     this.pendingReveal = null;
   }

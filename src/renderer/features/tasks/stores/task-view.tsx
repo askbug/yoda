@@ -25,7 +25,7 @@ import { taskSidebarPreferenceStore } from './task-sidebar-preferences';
  * - `'markdown'`    — markdown files (preview or source; MarkdownEditorPanel owns both)
  * - `'diff'`        — git diff viewer
  * - `'agents'`      — conversation / PTY view
- * - `'other-file'`  — image, svg preview, binary, too-large, file-error
+ * - `'other-file'`  — image, svg preview, pdf, binary, too-large, file-error
  */
 export type RendererKind = 'overview' | 'monaco' | 'markdown' | 'diff' | 'agents' | 'other-file';
 
@@ -211,7 +211,7 @@ export class TaskViewStore {
       case 'markdown-source':
         return 'markdown';
       default:
-        return 'other-file'; // image, svg, binary, too-large
+        return 'other-file'; // image, svg, pdf, binary, too-large
     }
   }
 

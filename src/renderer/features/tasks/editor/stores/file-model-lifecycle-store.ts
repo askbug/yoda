@@ -222,7 +222,7 @@ export class FileModelLifecycleStore implements Snapshottable<EditorViewSnapshot
   private async _registerModels(filePath: string): Promise<void> {
     const kind = getFileKind(filePath);
 
-    if (kind === 'image') {
+    if (kind === 'image' || kind === 'pdf') {
       const result = await rpc.fs.readImage(this.projectId, this.workspaceId, filePath);
       const imageContent = result.success ? (result.data?.dataUrl ?? '') : '';
       runInAction(() => this.tabManager.setImageContent(filePath, imageContent));

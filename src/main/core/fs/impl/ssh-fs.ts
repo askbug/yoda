@@ -35,9 +35,19 @@ interface SftpError extends Error {
 }
 
 /**
- * Allowed image extensions for readImage
+ * Allowed extensions for readImage (images + pdf, both previewed via data URL)
  */
-const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico'];
+const ALLOWED_IMAGE_EXTENSIONS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.svg',
+  '.bmp',
+  '.ico',
+  '.pdf',
+];
 
 /**
  * Maximum file size for reading (100MB to prevent memory issues)
@@ -716,8 +726,8 @@ export class SshFileSystem implements FileSystemProvider {
             return;
           }
 
-          // Check file size limit (5MB for images)
-          const maxImageSize = 5 * 1024 * 1024;
+          // Check file size limit (5MB for images, 50MB for PDFs)
+          const maxImageSize = ext === '.pdf' ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
           if (stats.size > maxImageSize) {
             sftp.close(handle, () => {});
             resolve({
@@ -753,6 +763,7 @@ export class SshFileSystem implements FileSystemProvider {
               '.svg': 'image/svg+xml',
               '.bmp': 'image/bmp',
               '.ico': 'image/x-icon',
+              '.pdf': 'application/pdf',
             };
             const mimeType = mimeTypes[ext] || 'application/octet-stream';
 

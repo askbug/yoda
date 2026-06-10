@@ -116,7 +116,7 @@ const WATCH_IGNORED_NAMES = [
 // Glob patterns for parcel/watcher ignore option, derived from WATCH_IGNORED_NAMES.
 const WATCH_IGNORE_GLOBS = WATCH_IGNORED_NAMES.map((n) => `**/${n}/**`);
 
-// Allowed image extensions for readImage
+// Allowed extensions for readImage (images + pdf, both previewed via data URL)
 const ALLOWED_IMAGE_EXTENSIONS = new Set([
   '.png',
   '.jpg',
@@ -126,6 +126,7 @@ const ALLOWED_IMAGE_EXTENSIONS = new Set([
   '.svg',
   '.bmp',
   '.ico',
+  '.pdf',
 ]);
 
 // MIME types for images
@@ -138,6 +139,7 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf',
 };
 
 export class LocalFileSystem implements FileSystemProvider {
@@ -688,12 +690,12 @@ export class LocalFileSystem implements FileSystemProvider {
       return { success: false, error: `Path is a directory: ${path}` };
     }
 
-    // Size limit for images (10MB)
-    const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-    if (stat.size > MAX_IMAGE_SIZE) {
+    // Size limit: 10MB for images, 50MB for PDFs
+    const maxSize = ext === '.pdf' ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (stat.size > maxSize) {
       return {
         success: false,
-        error: `Image too large: ${stat.size} bytes (max ${MAX_IMAGE_SIZE})`,
+        error: `Image too large: ${stat.size} bytes (max ${maxSize})`,
       };
     }
 

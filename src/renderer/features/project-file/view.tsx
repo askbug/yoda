@@ -7,6 +7,7 @@ import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { BinaryRenderer } from '@renderer/lib/editor/binary-renderer';
 import { FileErrorRenderer } from '@renderer/lib/editor/file-error-renderer';
 import { ImageRenderer } from '@renderer/lib/editor/image-renderer';
+import { PdfRenderer } from '@renderer/lib/editor/pdf-renderer';
 import { SvgRenderer } from '@renderer/lib/editor/svg-renderer';
 import { TooLargeRenderer } from '@renderer/lib/editor/too-large-renderer';
 import { useParams } from '@renderer/lib/layout/navigation-provider';
@@ -130,6 +131,8 @@ function NonTextRenderer({ file }: { file: FileTabStore }) {
       return <SvgRenderer filePath={file.path} />;
     case 'image':
       return <ImageRenderer file={file} />;
+    case 'pdf':
+      return <PdfRenderer file={file} />;
     case 'too-large':
       return <TooLargeRenderer file={file} />;
     case 'binary':

@@ -13,7 +13,12 @@ export type SidebarTab =
  * `SidebarTab` values now route into a single "session" titlebar toggle and
  * deep-link to one of these accordion sections.
  */
-export type SessionPanelSection = 'basic' | 'conversation' | 'tasks' | 'summary-global';
+export type SessionPanelSection =
+  | 'basic'
+  | 'conversation'
+  | 'transcript'
+  | 'tasks'
+  | 'summary-global';
 
 /**
  * Legacy tabs that route into the Harness titlebar toggle (the agent runtime
@@ -93,6 +98,7 @@ export type FileRendererData =
   | { kind: 'svg' }
   | { kind: 'svg-source' }
   | { kind: 'image' }
+  | { kind: 'pdf' }
   | { kind: 'binary' }
   | { kind: 'too-large' }
   | { kind: 'file-error' };
