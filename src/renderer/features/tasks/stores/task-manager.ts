@@ -642,10 +642,22 @@ export class TaskManagerStore {
 
   setTaskArchiving(taskId: string, archiving: boolean): void {
     runInAction(() => {
+      const store = this.tasks.get(taskId);
       if (archiving) {
         this.archivingTaskIds.add(taskId);
+        // Mirror what the main process persists (archive_requested_at) so
+        // data-driven consumers — the sidebar's "archiving last" demote rule —
+        // see the in-flight archive without a renderer reload.
+        if (store && isRegistered(store) && !store.data.archiveRequestedAt) {
+          store.data.archiveRequestedAt = new Date().toISOString();
+        }
       } else {
         this.archivingTaskIds.delete(taskId);
+        // Failed/cancelled archive: clear the mirror so the task stops sinking.
+        // A completed archive keeps it (the row leaves the sidebar anyway).
+        if (store && isRegistered(store) && !store.data.archivedAt) {
+          store.data.archiveRequestedAt = undefined;
+        }
       }
     });
   }
@@ -707,6 +719,9 @@ export class TaskManagerStore {
           const current = this.tasks.get(id);
           if (current && isRegistered(current)) {
             current.data.archivedAt = undefined;
+            // The server clears the archive intent on restore — mirror it so
+            // the task is not treated as archiving (sidebar demote rule).
+            current.data.archiveRequestedAt = undefined;
           }
         }
       });
