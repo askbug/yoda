@@ -57,14 +57,14 @@ export function SkillUsageTrend({ daily }: { daily: Record<string, number> }) {
           </div>
         ))}
       </div>
-      <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>{labelFor(days[0]!.key)}</span>
-        <span>
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <span className="shrink-0">{labelFor(days[0]!.key)}</span>
+        <span className="min-w-0 truncate text-center">
           {total > 0
             ? t('skills.detail.usageTrendSummary', { count: total })
             : t('skills.detail.usageTrendEmpty')}
         </span>
-        <span>{labelFor(days[days.length - 1]!.key)}</span>
+        <span className="shrink-0">{labelFor(days[days.length - 1]!.key)}</span>
       </div>
     </div>
   );

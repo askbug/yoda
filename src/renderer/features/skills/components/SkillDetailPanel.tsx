@@ -246,9 +246,9 @@ const SkillDetailContent: React.FC<{
 
   return (
     <div className="@container h-full overflow-y-auto bg-background text-foreground">
-      <div className="mx-auto w-full max-w-3xl px-8 py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-start gap-3">
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 @xl:px-8 @xl:py-8">
+        {/* Header — actions sit beside the title on wide containers, drop below it on narrow ones */}
+        <div className="mb-6 flex flex-wrap items-start gap-3">
           <SkillIconRenderer skill={skill} size="md" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold">{skill.displayName}</h1>
@@ -288,7 +288,7 @@ const SkillDetailContent: React.FC<{
             </div>
           </div>
           {/* Actions */}
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex w-full shrink-0 flex-wrap items-center gap-2 @xl:w-auto @xl:justify-end">
             {skill.installed ? (
               <>
                 <Button
@@ -399,7 +399,11 @@ const SkillDetailContent: React.FC<{
 
           <DetailSection
             title={t('skills.detail.usageTrend')}
-            action={<span className="text-[10px] text-muted-foreground">{usageDescription}</span>}
+            action={
+              <span className="min-w-0 truncate text-[10px] text-muted-foreground">
+                {usageDescription}
+              </span>
+            }
           >
             <SkillUsageTrend daily={usageStats.daily} />
           </DetailSection>
@@ -492,8 +496,8 @@ const SkillDetailContent: React.FC<{
             <DetailSection
               title={t('skills.examplePrompt')}
               action={
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 truncate text-[10px] text-muted-foreground">
                     ~{numberFormatter.format(promptStats.tokens)} {t('skills.detail.tokens')}
                   </span>
                   <Button
@@ -535,7 +539,7 @@ function DetailSection({
   return (
     <section className="group/detail-section space-y-2">
       <div className="flex min-h-6 items-center justify-between gap-2">
-        <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
+        <h3 className="shrink-0 text-xs font-medium text-muted-foreground">{title}</h3>
         {action}
       </div>
       {children}
