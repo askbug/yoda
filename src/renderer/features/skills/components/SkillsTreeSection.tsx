@@ -9,6 +9,8 @@ import { buildSkillTree } from '../skill-tree';
 interface SkillsTreeSectionProps {
   /** Pre-sorted skills; tree grouping preserves this order. */
   skills: CatalogSkill[];
+  /** 'count' reorders entries by group member count descending. */
+  orderBy: 'position' | 'count';
   lookupUsage: (skillId: string) => SkillUsageStat | undefined;
   onSelect: (skill: CatalogSkill) => void;
   onInstall: (skillId: string) => void;
@@ -19,13 +21,14 @@ interface SkillsTreeSectionProps {
 /** Tree layout: skills grouped by their first name segment (brand/author). */
 const SkillsTreeSection: React.FC<SkillsTreeSectionProps> = ({
   skills,
+  orderBy,
   lookupUsage,
   onSelect,
   onInstall,
   setSkillRef,
   highlightedSkillId,
 }) => {
-  const entries = React.useMemo(() => buildSkillTree(skills), [skills]);
+  const entries = React.useMemo(() => buildSkillTree(skills, orderBy), [skills, orderBy]);
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -57,7 +60,7 @@ const SkillsTreeSection: React.FC<SkillsTreeSectionProps> = ({
   );
 };
 
-interface SkillTreeGroupProps extends Omit<SkillsTreeSectionProps, 'skills'> {
+interface SkillTreeGroupProps extends Omit<SkillsTreeSectionProps, 'skills' | 'orderBy'> {
   prefix: string;
   skills: CatalogSkill[];
 }
@@ -161,19 +164,29 @@ const SkillTreeRow: React.FC<SkillTreeRowProps> = ({
       </span>
       {skill.disabled && <PowerOff className="h-3 w-3 shrink-0 text-muted-foreground" />}
       <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{description}</span>
-      {usage && usage.total > 0 && (
-        <span
-          className="flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground"
-          title={t('skills.usageTitle', { manual: usage.manual, auto: usage.auto })}
-        >
-          <ChartNoAxesColumn className="h-3 w-3" />
-          {usage.total}
+      {/* Usage / edit affordance — for installed skills the hover pen swaps
+          into the stat slot in place (stacked grid keeps the width stable) */}
+      {(skill.installed || (usage && usage.total > 0)) && (
+        <span className="grid shrink-0 place-items-center">
+          {usage && usage.total > 0 && (
+            <span
+              className={cn(
+                'col-start-1 row-start-1 flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground',
+                skill.installed && 'transition-opacity group-hover:opacity-0'
+              )}
+              title={t('skills.usageTitle', { manual: usage.manual, auto: usage.auto })}
+            >
+              <ChartNoAxesColumn className="h-3 w-3" />
+              {usage.total}
+            </span>
+          )}
+          {skill.installed && (
+            <Pencil className="col-start-1 row-start-1 h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+          )}
         </span>
       )}
-      <span className="shrink-0">
-        {skill.installed ? (
-          <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-        ) : (
+      {!skill.installed && (
+        <span className="shrink-0">
           <button
             type="button"
             onClick={(e) => {
@@ -185,8 +198,8 @@ const SkillTreeRow: React.FC<SkillTreeRowProps> = ({
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
-        )}
-      </span>
+        </span>
+      )}
     </div>
   );
 };
