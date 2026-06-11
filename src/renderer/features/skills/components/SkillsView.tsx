@@ -1,4 +1,12 @@
-import { ArrowDownWideNarrow, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
+import {
+  ArrowDownWideNarrow,
+  LayoutGrid,
+  ListTree,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+} from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogSkill } from '@shared/skills/types';
@@ -14,12 +22,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@renderer/lib/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@renderer/lib/ui/toggle-group';
 import { cn } from '@renderer/utils/utils';
 import { SKILL_SORT_MODES, sortSkills, type SkillSortMode } from '../skill-sort';
 import SkillCard from './SkillCard';
 import SkillsCatalogHint from './SkillsCatalogHint';
+import SkillsTreeSection from './SkillsTreeSection';
 import { useSkills } from './useSkills';
 import { useSkillUsage } from './useSkillUsage';
+
+type SkillsLayout = 'grid' | 'tree';
+
+const LAYOUT_STORAGE_KEY = 'yoda.skillsLayout';
+
+function loadStoredLayout(): SkillsLayout {
+  try {
+    return window.localStorage.getItem(LAYOUT_STORAGE_KEY) === 'tree' ? 'tree' : 'grid';
+  } catch {
+    return 'grid';
+  }
+}
 
 const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { t } = useTranslation();
@@ -37,7 +59,17 @@ const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   } = useSkills();
   const { usage, lookupUsage } = useSkillUsage();
   const [sortMode, setSortMode] = React.useState<SkillSortMode>('name');
+  const [layout, setLayout] = React.useState<SkillsLayout>(loadStoredLayout);
   const usageAvailable = usage !== null && Object.keys(usage.bySkill).length > 0;
+
+  const switchLayout = React.useCallback((value: SkillsLayout) => {
+    setLayout(value);
+    try {
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, value);
+    } catch {
+      // Persistence is best-effort.
+    }
+  }, []);
 
   const sortedInstalledSkills = React.useMemo(
     () => sortSkills(installedSkills, sortMode, lookupUsage),
@@ -158,6 +190,22 @@ const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
               className="pl-9"
             />
           </div>
+          <ToggleGroup
+            size="icon-sm"
+            multiple={false}
+            value={[layout]}
+            onValueChange={([value]) => {
+              if (value) switchLayout(value as SkillsLayout);
+            }}
+            aria-label={t('skills.layout.ariaLabel')}
+          >
+            <ToggleGroupItem value="grid" aria-label={t('skills.layout.grid')}>
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="tree" aria-label={t('skills.layout.tree')}>
+              <ListTree className="h-3.5 w-3.5" />
+            </ToggleGroupItem>
+          </ToggleGroup>
           {usageAvailable && (
             <Select value={sortMode} onValueChange={(value) => setSortMode(value as SkillSortMode)}>
               <SelectTrigger
@@ -193,60 +241,51 @@ const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
           </Button>
         </div>
 
-        {installedSkills.length > 0 && (
-          <div className="mb-6">
-            <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
-              {t('skills.installed')}
-            </h2>
-            <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
-              {sortedInstalledSkills.map((skill) => (
-                <div
-                  key={skill.id}
-                  ref={setSkillCardRef(skill.id)}
-                  className={cn(
-                    'scroll-mt-20 rounded-lg transition-shadow duration-300',
-                    highlightedSkillId === skill.id &&
-                      'ring-2 ring-amber-400 ring-offset-2 ring-offset-background'
-                  )}
-                >
-                  <SkillCard
-                    skill={skill}
-                    usage={lookupUsage(skill.id)}
+        {(
+          [
+            ['skills.installed', sortedInstalledSkills],
+            ['skills.recommended', sortedRecommendedSkills],
+          ] as const
+        ).map(
+          ([titleKey, skills]) =>
+            skills.length > 0 && (
+              <div key={titleKey} className="mb-6">
+                <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
+                  {t(titleKey)}
+                </h2>
+                {layout === 'tree' ? (
+                  <SkillsTreeSection
+                    skills={skills}
+                    lookupUsage={lookupUsage}
                     onSelect={openDetail}
                     onInstall={install}
+                    setSkillRef={setSkillCardRef}
+                    highlightedSkillId={highlightedSkillId}
                   />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {recommendedSkills.length > 0 && (
-          <div className="mb-6">
-            <h2 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground">
-              {t('skills.recommended')}
-            </h2>
-            <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
-              {sortedRecommendedSkills.map((skill) => (
-                <div
-                  key={skill.id}
-                  ref={setSkillCardRef(skill.id)}
-                  className={cn(
-                    'scroll-mt-20 rounded-lg transition-shadow duration-300',
-                    highlightedSkillId === skill.id &&
-                      'ring-2 ring-amber-400 ring-offset-2 ring-offset-background'
-                  )}
-                >
-                  <SkillCard
-                    skill={skill}
-                    usage={lookupUsage(skill.id)}
-                    onSelect={openDetail}
-                    onInstall={install}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
+                    {skills.map((skill) => (
+                      <div
+                        key={skill.id}
+                        ref={setSkillCardRef(skill.id)}
+                        className={cn(
+                          'scroll-mt-20 rounded-lg transition-shadow duration-300',
+                          highlightedSkillId === skill.id &&
+                            'ring-2 ring-amber-400 ring-offset-2 ring-offset-background'
+                        )}
+                      >
+                        <SkillCard
+                          skill={skill}
+                          usage={lookupUsage(skill.id)}
+                          onSelect={openDetail}
+                          onInstall={install}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
         )}
 
         {installedSkills.length === 0 && recommendedSkills.length === 0 && (

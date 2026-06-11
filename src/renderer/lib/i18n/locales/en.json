@@ -1444,6 +1444,11 @@
     "noSkills": "No skills available.",
     "disabled": "Disabled",
     "usageTitle": "{{manual}} manual / {{auto}} agent invocations",
+    "layout": {
+      "ariaLabel": "Switch layout",
+      "grid": "Card view",
+      "tree": "Tree view"
+    },
     "sort": {
       "ariaLabel": "Sort skills",
       "name": "Name (A-Z)",
