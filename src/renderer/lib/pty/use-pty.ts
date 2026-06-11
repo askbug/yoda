@@ -35,7 +35,11 @@ import { registerTerminalImeNativePunctuation } from './terminal-ime-native-punc
 import { isTerminalLinkActivation } from './terminal-link-activation';
 import type { TerminalLinkTarget } from './terminal-link-target';
 import { TERMINAL_RELAYOUT_EVENT } from './terminal-relayout';
-import { getTerminalWebLinkAtCell, registerTerminalWebLinkProvider } from './terminal-web-links';
+import {
+  getTerminalWebLinkAtCell,
+  registerTerminalWebLinkProvider,
+  type TerminalWebLinkOptions,
+} from './terminal-web-links';
 
 /**
  * Minimum spacing between terminal commits during a continuous resize
@@ -143,6 +147,8 @@ export interface UsePtyOptions {
   onSubmittedInput?: (message: string, isTaskInput: boolean) => void;
   onInterruptPress?: () => void;
   fileLinks?: TerminalFileLinkOptions | null;
+  /** Overrides URL link activation (smart web links + OSC 8 hyperlinks); defaults to the system browser. */
+  webLinks?: TerminalWebLinkOptions | null;
 }
 
 export interface UseTerminalReturn {
@@ -186,6 +192,7 @@ export function usePty(
     onSubmittedInput,
     onInterruptPress,
     fileLinks,
+    webLinks,
   } = options;
 
   // Stable refs for callbacks so the effect doesn't re-run on every render.
@@ -203,6 +210,8 @@ export function usePty(
   onInterruptPressRef.current = onInterruptPress;
   const fileLinksRef = useRef(fileLinks ?? null);
   fileLinksRef.current = fileLinks ?? null;
+  const webLinksRef = useRef(webLinks ?? null);
+  webLinksRef.current = webLinks ?? null;
   const themeRef = useRef(theme);
   themeRef.current = theme;
 
@@ -423,6 +432,19 @@ export function usePty(
     },
     [sessionId]
   );
+
+  // URL activation funnel (smart web links, OSC 8 hyperlinks, link gestures):
+  // the injected webLinks handler wins, otherwise the system browser.
+  const openUrl = useCallback((url: string) => {
+    const handler = webLinksRef.current?.onOpen;
+    if (handler) {
+      handler(url);
+      return;
+    }
+    rpc.app.openExternal(url).catch((error) => {
+      log.warn('Failed to open URL from terminal', { url, error });
+    });
+  }, []);
 
   const getLinkTargetAtEvent = useCallback((event: MouseEvent): TerminalLinkTarget | null => {
     const terminal = termRef.current;
@@ -675,13 +697,14 @@ export function usePty(
       cleanups.push(() => fileLinkProviderDisposable.dispose());
 
       const webLinkProviderDisposable = registerTerminalWebLinkProvider(terminal, () => ({
-        onOpen: (url) => {
-          rpc.app.openExternal(url).catch((error) => {
-            log.warn('Failed to open URL from terminal', { url, error });
-          });
-        },
+        onOpen: openUrl,
       }));
       cleanups.push(() => webLinkProviderDisposable.dispose());
+
+      // OSC 8 hyperlinks go through the FrontendPty's link handler — route them
+      // through the same funnel while this pane hosts the terminal.
+      pty.setLinkOpener(openUrl);
+      cleanups.push(() => pty.setLinkOpener(null));
 
       // ── ptyStartedRef — detect first PTY output ────────────────────────────
       // FrontendPty owns the data subscription and writes directly to the
@@ -775,9 +798,7 @@ export function usePty(
             return;
           }
 
-          rpc.app.openExternal(target.url).catch((error) => {
-            log.warn('Failed to open URL from terminal', { url: target.url, error });
-          });
+          openUrl(target.url);
         };
 
         const handleSelectionGestureStart = (event: MouseEvent | TouchEvent) => {

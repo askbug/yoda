@@ -1263,6 +1263,13 @@
       "summaryGenerated": "Generated from the conversation",
       "transcript": "Transcript"
     },
+    "browser": {
+      "back": "Back",
+      "forward": "Forward",
+      "reload": "Reload",
+      "address": "Address",
+      "openExternal": "Open in system browser"
+    },
     "sidePane": {
       "moveBack": "Move back to tab strip",
       "maximize": "Expand panel over main view",

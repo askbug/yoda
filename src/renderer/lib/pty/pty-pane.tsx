@@ -5,6 +5,7 @@ import { cn } from '@renderer/utils/utils';
 import type { FrontendPty, SessionTheme } from './pty';
 import type { TerminalFileLinkOptions } from './terminal-file-links';
 import { TerminalLinkMenu, type TerminalLinkMenuState } from './terminal-link-menu';
+import type { TerminalWebLinkOptions } from './terminal-web-links';
 import { usePty } from './use-pty';
 
 type Props = {
@@ -27,6 +28,7 @@ type Props = {
   onSubmittedInput?: (message: string, isTaskInput: boolean) => void;
   onInterruptPress?: () => void;
   fileLinks?: TerminalFileLinkOptions | null;
+  webLinks?: TerminalWebLinkOptions | null;
 };
 
 const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
@@ -46,6 +48,7 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
       onSubmittedInput,
       onInterruptPress,
       fileLinks,
+      webLinks,
     },
     ref
   ) => {
@@ -67,6 +70,7 @@ const PtyPaneComponent = forwardRef<{ focus: () => void }, Props>(
         onSubmittedInput,
         onInterruptPress,
         fileLinks,
+        webLinks,
       },
       containerRef
     );

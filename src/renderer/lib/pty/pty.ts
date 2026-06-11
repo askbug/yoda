@@ -139,6 +139,8 @@ export class FrontendPty {
   private unfreezePhase: 'idle' | 'await-data' | 'await-render' = 'idle';
   private unfreezeRenderDisposable: IDisposable | null = null;
   private unfreezeFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Overrides OSC 8 hyperlink activation while a pane hosts this terminal; null = system browser. */
+  private linkOpener: ((url: string) => void) | null = null;
   private readonly scrollDisposable: { dispose(): void };
   private webglAddon: WebglAddon | null = null;
   private webglContextLossDisposable: IDisposable | null = null;
@@ -173,6 +175,10 @@ export class FrontendPty {
       scrollOnUserInput: false,
       linkHandler: {
         activate: (_event: MouseEvent, text: string) => {
+          if (this.linkOpener) {
+            this.linkOpener(text);
+            return;
+          }
           rpc.app.openExternal(text).catch((error) => {
             log.warn('FrontendPty: failed to open external link', { text, error });
           });
@@ -199,6 +205,11 @@ export class FrontendPty {
 
     ensureXtermHost().appendChild(this.ownedContainer);
     FrontendPty.all.add(this);
+  }
+
+  /** Override OSC 8 hyperlink activation (e.g. in-app browser); null restores the system browser. */
+  setLinkOpener(opener: ((url: string) => void) | null): void {
+    this.linkOpener = opener;
   }
 
   private loadWebglRenderer(): void {

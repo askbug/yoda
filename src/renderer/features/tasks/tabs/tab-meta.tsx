@@ -1,4 +1,4 @@
-import { GitCompare, LayoutDashboard, MessageSquare } from 'lucide-react';
+import { GitCompare, Globe, LayoutDashboard, MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { TaskWindowBounds, TaskWindowTarget } from '@shared/task-window';
 import { formatConversationTitleForDisplay } from '@renderer/features/tasks/conversations/conversation-title-utils';
@@ -47,6 +47,21 @@ export function getTabMeta(tab: ResolvedTab): {
     };
   }
 
+  if (tab.kind === 'browser') {
+    let host = tab.url;
+    try {
+      host = new URL(tab.url).host || tab.url;
+    } catch {
+      // Keep the raw URL when it doesn't parse.
+    }
+    return {
+      icon: <Globe className="size-3.5" />,
+      label: tab.title || host,
+      detail: host,
+      title: tab.url,
+    };
+  }
+
   const { filename, directory } = splitPath(tab.path);
   if (tab.kind === 'file') {
     return {
@@ -85,7 +100,8 @@ function diffGroupLabel(group: ResolvedDiffTab['diffGroup']): string {
 export function buildTaskWindowTarget(
   projectId: string,
   taskId: string,
-  tab: ResolvedTab
+  // Browser tabs are sidebar-only and have no top-level/window representation.
+  tab: Exclude<ResolvedTab, { kind: 'browser' }>
 ): TaskWindowTarget {
   const base = { projectId, taskId };
   switch (tab.kind) {

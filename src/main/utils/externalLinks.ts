@@ -29,4 +29,14 @@ export function registerExternalLinkHandlers(win: BrowserWindow, isDev: boolean)
       void shell.openExternal(url);
     }
   });
+
+  // <webview> guests (in-app browser pane): window.open / target="_blank"
+  // inside the guest navigates the guest itself instead of spawning windows.
+  // Non-http(s) schemes are dropped — never hand arbitrary guest URLs to the OS.
+  wc.on('did-attach-webview', (_event, guest) => {
+    guest.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//i.test(url)) void guest.loadURL(url);
+      return { action: 'deny' };
+    });
+  });
 }
