@@ -202,6 +202,9 @@ function formatTaskWindowTabTitle(tab: ResolvedTab): string {
     case 'file':
     case 'diff':
       return tab.path;
+    // Browser tabs are sidebar-only and never become a window's active tab.
+    case 'browser':
+      return tab.title || tab.url;
   }
 }
 

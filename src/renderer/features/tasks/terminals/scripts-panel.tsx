@@ -9,6 +9,7 @@ import { EmptyState } from '@renderer/lib/ui/empty-state';
 import { useIsActiveTask } from '../hooks/use-is-active-task';
 import { TerminalPtyContent } from './terminal-pty-content';
 import { useWorkspaceFileLinks } from './use-workspace-file-links';
+import { useWorkspaceWebLinks } from './use-workspace-web-links';
 
 /**
  * Bottom-drawer scripts mode: the active lifecycle script's PTY output.
@@ -25,6 +26,7 @@ export const ScriptsPanel = observer(function ScriptsPanel() {
   const remoteConnectionId =
     mountedProject?.data.type === 'ssh' ? mountedProject.data.connectionId : undefined;
   const fileLinks = useWorkspaceFileLinks(remoteConnectionId);
+  const webLinks = useWorkspaceWebLinks();
 
   const autoFocus =
     isActive &&
@@ -67,6 +69,7 @@ export const ScriptsPanel = observer(function ScriptsPanel() {
         emptyState={null}
         remoteConnectionId={remoteConnectionId}
         fileLinks={fileLinks}
+        webLinks={webLinks}
       />
     </div>
   );

@@ -18,6 +18,7 @@ import { useIsActiveTask } from '../hooks/use-is-active-task';
 import { TerminalPtyContent } from './terminal-pty-content';
 import { useCreateTerminal } from './use-create-terminal';
 import { useWorkspaceFileLinks } from './use-workspace-file-links';
+import { useWorkspaceWebLinks } from './use-workspace-web-links';
 
 export const TerminalsPanel = observer(function TerminalsPanel() {
   const { t } = useTranslation();
@@ -57,6 +58,7 @@ export const TerminalsPanel = observer(function TerminalsPanel() {
   });
 
   const fileLinks = useWorkspaceFileLinks(remoteConnectionId);
+  const webLinks = useWorkspaceWebLinks();
 
   const emptyState = (
     <EmptyState
@@ -99,6 +101,7 @@ export const TerminalsPanel = observer(function TerminalsPanel() {
         emptyState={emptyState}
         remoteConnectionId={remoteConnectionId}
         fileLinks={fileLinks}
+        webLinks={webLinks}
       />
     </div>
   );

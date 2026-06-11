@@ -8,6 +8,7 @@ import { AgentStatusIndicator } from '@renderer/features/tasks/components/agent-
 import { useIsActiveTask } from '@renderer/features/tasks/hooks/use-is-active-task';
 import { getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import { useWorkspaceWebLinks } from '@renderer/features/tasks/terminals/use-workspace-web-links';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import { rpc } from '@renderer/lib/ipc';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
@@ -211,6 +212,7 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
     }),
     [provisioned.path, provisioned.taskView, remoteConnectionId, homeDir]
   );
+  const webLinks = useWorkspaceWebLinks();
 
   return (
     <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-[var(--xterm-bg)] px-2 pt-2">
@@ -287,6 +289,7 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
                       mapShiftEnterToCtrlJ
                       remoteConnectionId={remoteConnectionId}
                       fileLinks={fileLinks}
+                      webLinks={webLinks}
                     />
                     {activeConversation?.sessionExited ? (
                       <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-center gap-3 border-t border-border bg-background/95 px-4 py-2.5">

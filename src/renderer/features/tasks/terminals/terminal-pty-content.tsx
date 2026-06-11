@@ -5,6 +5,7 @@ import { PtyPane } from '@renderer/lib/pty/pty-pane';
 import { type PtySession } from '@renderer/lib/pty/pty-session';
 import type { TerminalFileLinkOptions } from '@renderer/lib/pty/terminal-file-links';
 import { TerminalSearchOverlay } from '@renderer/lib/pty/terminal-search-overlay';
+import type { TerminalWebLinkOptions } from '@renderer/lib/pty/terminal-web-links';
 import { useTerminalSearch } from '@renderer/lib/pty/use-terminal-search';
 import { cssVar } from '@renderer/utils/cssVars';
 import { cn } from '@renderer/utils/utils';
@@ -21,6 +22,7 @@ export interface TerminalPtyContentProps {
   emptyState: ReactNode;
   remoteConnectionId?: string;
   fileLinks?: TerminalFileLinkOptions | null;
+  webLinks?: TerminalWebLinkOptions | null;
   className?: string;
 }
 
@@ -36,6 +38,7 @@ export const TerminalPtyContent = observer(function TerminalPtyContent({
   emptyState,
   remoteConnectionId,
   fileLinks,
+  webLinks,
   className,
 }: TerminalPtyContentProps) {
   const activeSessionId = activeSession?.sessionId ?? null;
@@ -127,6 +130,7 @@ export const TerminalPtyContent = observer(function TerminalPtyContent({
                   mapShiftEnterToCtrlJ={mapShiftEnterToCtrlJ}
                   remoteConnectionId={remoteConnectionId}
                   fileLinks={fileLinks}
+                  webLinks={webLinks}
                 />
               </div>
             ) : null}

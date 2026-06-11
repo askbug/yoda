@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef } from 'react';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
+import { BrowserPane } from '@renderer/features/tasks/browser/browser-pane';
 import { FileActionsOverlay } from '@renderer/features/tasks/components/file-actions';
 import type { ConversationStore } from '@renderer/features/tasks/conversations/conversation-manager';
 import { getResumeInitialSize } from '@renderer/features/tasks/conversations/conversations-panel';
@@ -14,6 +15,7 @@ import { getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import type { FileTabStore } from '@renderer/features/tasks/tabs/file-tab-store';
 import type { TabEntry } from '@renderer/features/tasks/tabs/tab-manager-store';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import { useWorkspaceWebLinks } from '@renderer/features/tasks/terminals/use-workspace-web-links';
 import { MarkdownEditorRenderer } from '@renderer/lib/editor/markdown-renderer';
 import { rpc } from '@renderer/lib/ipc';
 import { PaneSizingProvider } from '@renderer/lib/pty/pane-sizing-context';
@@ -55,6 +57,10 @@ export const SidebarPinnedContent = observer(function SidebarPinnedContent({
 
   if (entry.kind === 'file') {
     return <SidebarPinnedFile key={entry.tabId} file={entry} />;
+  }
+
+  if (entry.kind === 'browser') {
+    return <BrowserPane key={entry.tabId} tab={entry} />;
   }
 
   return null;
@@ -154,6 +160,8 @@ const SidebarPinnedConversation = observer(function SidebarPinnedConversation({
     }),
     [provisioned.path, provisioned.taskView, remoteConnectionId, homeDir]
   );
+  // URLs open as a sibling sidebar browser pin — switching chips is cheap.
+  const webLinks = useWorkspaceWebLinks();
 
   return (
     <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-[var(--xterm-bg)] px-2 pt-2">
@@ -178,6 +186,7 @@ const SidebarPinnedConversation = observer(function SidebarPinnedConversation({
               mapShiftEnterToCtrlJ
               remoteConnectionId={remoteConnectionId}
               fileLinks={fileLinks}
+              webLinks={webLinks}
             />
           </div>
         ) : null}

@@ -1269,6 +1269,13 @@
       "summaryGenerated": "根据对话生成",
       "transcript": "实录"
     },
+    "browser": {
+      "back": "后退",
+      "forward": "前进",
+      "reload": "刷新",
+      "address": "地址",
+      "openExternal": "在系统浏览器中打开"
+    },
     "sidePane": {
       "moveBack": "移回主区域",
       "maximize": "展开面板至整个主视图",
