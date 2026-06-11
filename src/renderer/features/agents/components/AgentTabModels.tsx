@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import type {
   AgentModelCandidateInferenceResult,
   AgentModelCandidateItem,
-} from '@shared/agent-model-candidates';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+} from '@shared/runtime-model-candidates';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { rpc } from '@renderer/lib/ipc';
 import { Badge } from '@renderer/lib/ui/badge';
 import { Button } from '@renderer/lib/ui/button';
@@ -18,15 +18,15 @@ type PreferencesInput = {
   hiddenModels?: string[];
 };
 
-export const AgentTabModels: React.FC<{ agentId: AgentProviderId }> = ({ agentId }) => {
+export const AgentTabModels: React.FC<{ agentId: RuntimeId }> = ({ agentId }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const modelQueryKey = useMemo(() => ['providerSettings', agentId, 'models'] as const, [agentId]);
+  const modelQueryKey = useMemo(() => ['runtimeSettings', agentId, 'models'] as const, [agentId]);
 
   const modelQuery = useQuery<AgentModelCandidateInferenceResult>({
     queryKey: modelQueryKey,
     queryFn: () =>
-      rpc.providerSettings.inferNamingModelCandidates(agentId, {
+      rpc.runtimeSettings.inferNamingModelCandidates(agentId, {
         forceRefresh: false,
       }) as Promise<AgentModelCandidateInferenceResult>,
     staleTime: 60_000,
@@ -38,20 +38,20 @@ export const AgentTabModels: React.FC<{ agentId: AgentProviderId }> = ({ agentId
     PreferencesInput
   >({
     mutationFn: (input) =>
-      rpc.providerSettings.updateModelCandidatePreferences(
+      rpc.runtimeSettings.updateModelCandidatePreferences(
         agentId,
         input
       ) as Promise<AgentModelCandidateInferenceResult>,
     onSuccess: (result) => {
       queryClient.setQueryData(modelQueryKey, result);
-      void queryClient.invalidateQueries({ queryKey: ['providerSettings', agentId, 'meta'] });
-      void queryClient.invalidateQueries({ queryKey: ['providerSettings', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['runtimeSettings', agentId, 'meta'] });
+      void queryClient.invalidateQueries({ queryKey: ['runtimeSettings', agentId] });
     },
   });
 
   const refreshModels = useMutation<AgentModelCandidateInferenceResult, Error, void>({
     mutationFn: () =>
-      rpc.providerSettings.inferNamingModelCandidates(agentId, {
+      rpc.runtimeSettings.inferNamingModelCandidates(agentId, {
         forceRefresh: true,
       }) as Promise<AgentModelCandidateInferenceResult>,
     onSuccess: (result) => {

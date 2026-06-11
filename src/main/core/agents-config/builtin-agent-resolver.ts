@@ -1,4 +1,4 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { agentsConfigService } from './agents-config-service';
 
 /**
@@ -8,7 +8,7 @@ import { agentsConfigService } from './agents-config-service';
  * configurable in the Agent Store rather than via bespoke settings.
  */
 export interface ResolvedUtilityAgent {
-  providerId: AgentProviderId | null;
+  runtimeId: RuntimeId | null;
   model: string | null;
   systemPrompt: string;
 }
@@ -20,10 +20,33 @@ export interface ResolvedUtilityAgent {
  */
 export async function resolveUtilityAgent(builtinSlug: string): Promise<ResolvedUtilityAgent> {
   const agent = await agentsConfigService.getBySlug(builtinSlug);
-  if (!agent) return { providerId: null, model: null, systemPrompt: '' };
+  if (!agent) return { runtimeId: null, model: null, systemPrompt: '' };
   return {
-    providerId: agent.preferredRuntimeProvider,
+    runtimeId: agent.preferredRuntime,
     model: agent.model,
     systemPrompt: agent.systemPrompt,
   };
+}
+
+/**
+ * Resolves a utility's Agent from a user-selected Agent id, falling back to the
+ * built-in preset (by slug) when no id is set or the selected Agent no longer
+ * exists. Lets users bind any Agent — runtime, model, and prompt together — to an
+ * internal utility while keeping the built-in as a safe default.
+ */
+export async function resolveSelectedUtilityAgent(
+  agentId: string | null | undefined,
+  builtinSlug: string
+): Promise<ResolvedUtilityAgent> {
+  if (agentId) {
+    const agent = await agentsConfigService.get(agentId);
+    if (agent) {
+      return {
+        runtimeId: agent.preferredRuntime,
+        model: agent.model,
+        systemPrompt: agent.systemPrompt,
+      };
+    }
+  }
+  return resolveUtilityAgent(builtinSlug);
 }

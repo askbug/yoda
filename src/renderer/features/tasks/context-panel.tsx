@@ -5,6 +5,7 @@ import {
   Check,
   ChevronRight,
   FileText,
+  IdCard,
   Info,
   PanelBottom,
   Plug,
@@ -20,6 +21,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HookInspectionResult } from '@shared/agent-hooks';
 import type {
+  AgentMemory,
   ClaudeMemoryFile,
   ClaudeSessionContext,
   ClaudeSessionPrompt,
@@ -56,6 +58,7 @@ const CONTEXT_REFRESH_MS = 3_000;
  * orderable/hideable unit of the Session panel.
  */
 export const HARNESS_SECTION_IDS = [
+  'persona',
   'memory',
   'tools',
   'mcp-servers',
@@ -75,6 +78,8 @@ function harnessSectionChrome(
   t: (key: string) => string
 ): { title: string; icon: React.ReactNode } {
   switch (id) {
+    case 'persona':
+      return { title: t('tasks.panel.persona'), icon: <IdCard className="size-3.5" /> };
     case 'memory':
       return { title: t('tasks.panel.memory'), icon: <Brain className="size-3.5" /> };
     case 'tools':
@@ -221,13 +226,15 @@ function ClaudeHarnessSection({
   }
 
   switch (id) {
-    case 'memory':
+    case 'persona':
       return (
-        <MemorySection
+        <PersonaSection
           files={data.memoryFiles}
           systemPromptHint={t('tasks.panel.systemPromptHint')}
         />
       );
+    case 'memory':
+      return <MemoriesSection memories={data.memories} />;
     case 'tools':
       return <ToolsSection tools={data.tools.filter((tool) => !tool.startsWith('mcp__'))} />;
     case 'mcp-servers':
@@ -288,9 +295,9 @@ function CodexHarnessSection({
   }
 
   switch (id) {
-    case 'memory':
+    case 'persona':
       return (
-        <MemorySection
+        <PersonaSection
           files={data.memoryFiles}
           codexSystemPrompt={{
             baseInstructions: data.baseInstructions,
@@ -298,6 +305,11 @@ function CodexHarnessSection({
             sourcePath: data.rolloutPath,
           }}
         />
+      );
+    case 'memory':
+      // Codex has no self-maintained memory store — honest empty state.
+      return (
+        <HarnessPlaceholder id={id}>{t('tasks.panel.memoriesUnsupported')}</HarnessPlaceholder>
       );
     case 'tools':
       return (
@@ -425,13 +437,14 @@ type CodexSystemPrompt = {
 };
 
 /**
- * Unified "Memory" chapter: the system prompt and the memory files (CLAUDE.md /
- * AGENTS.md) live together, since both are the durable instructions the model
- * carries into every turn. Claude does not log its base system prompt, so it
- * contributes only a hint; Codex contributes base instructions + developer
- * messages read from the rollout transcript.
+ * The "Persona" chapter: the human-authored standing instructions the model
+ * carries into every turn — system prompt plus instruction files (CLAUDE.md /
+ * AGENTS.md). Claude does not log its base system prompt, so it contributes
+ * only a hint; Codex contributes base instructions + developer messages read
+ * from the rollout transcript. Distinct from the Memory section, which holds
+ * the agent's self-maintained memories.
  */
-function MemorySection({
+function PersonaSection({
   files,
   systemPromptHint,
   codexSystemPrompt,
@@ -449,9 +462,9 @@ function MemorySection({
 
   return (
     <Section
-      id={'memory'}
-      title={t('tasks.panel.memory')}
-      icon={<Brain className="size-3.5" />}
+      id={'persona'}
+      title={t('tasks.panel.persona')}
+      icon={<IdCard className="size-3.5" />}
       count={files.length}
       hint={systemPromptHint ?? t('tasks.panel.codexSystemPromptHint')}
     >
@@ -482,9 +495,9 @@ function MemorySection({
         </SubGroup>
       ) : null}
 
-      <SubGroup label={t('tasks.panel.memoryFiles')}>
+      <SubGroup label={t('tasks.panel.instructionFiles')}>
         {files.length === 0 ? (
-          <Empty>{t('tasks.panel.noMemoryFiles')}</Empty>
+          <Empty>{t('tasks.panel.noInstructionFiles')}</Empty>
         ) : (
           files.map((f) => (
             <ContextItem
@@ -498,6 +511,54 @@ function MemorySection({
           ))
         )}
       </SubGroup>
+    </Section>
+  );
+}
+
+/**
+ * The "Memory" chapter: the agent's self-maintained memory store
+ * (~/.claude/projects/<encoded-cwd>/memory/) — a MEMORY.md index plus one file
+ * per remembered fact, written and curated by the agent itself.
+ */
+function MemoriesSection({ memories }: { memories?: AgentMemory[] | null }) {
+  const { t } = useTranslation();
+  const memoryItems = Array.isArray(memories) ? memories : [];
+  const index = memoryItems.find((m) => m.kind === 'index');
+  const entries = memoryItems.filter((m) => m.kind === 'entry');
+
+  return (
+    <Section
+      id={'memory'}
+      title={t('tasks.panel.memory')}
+      icon={<Brain className="size-3.5" />}
+      count={entries.length}
+      hint={t('tasks.panel.memoriesHint')}
+    >
+      {memoryItems.length === 0 ? (
+        <Empty>{t('tasks.panel.noMemories')}</Empty>
+      ) : (
+        <>
+          {index ? (
+            <ContextItem
+              icon={<FileText className="size-3.5" />}
+              label={t('tasks.panel.memoryIndex')}
+              meta={formatBytes(index.bytes)}
+              text={index.content}
+              sourcePath={index.path}
+            />
+          ) : null}
+          {entries.map((m) => (
+            <ContextItem
+              key={m.path}
+              icon={<Brain className="size-3.5" />}
+              label={m.name}
+              meta={m.type ?? formatBytes(m.bytes)}
+              text={m.content}
+              sourcePath={m.path}
+            />
+          ))}
+        </>
+      )}
     </Section>
   );
 }

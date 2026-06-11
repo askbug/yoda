@@ -1,9 +1,9 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 
 export interface AgentSessionConfig {
   taskId: string;
   conversationId: string;
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   command: string;
   args: string[];
   cwd: string;

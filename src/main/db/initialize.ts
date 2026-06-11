@@ -56,7 +56,7 @@ function ensureBuiltinAgents(connection: BetterSqlite3.Database): void {
   const existsStmt = connection.prepare(`SELECT 1 FROM agents WHERE slug = ? LIMIT 1`);
   const insertStmt = connection.prepare(
     `INSERT INTO agents (id, slug, name, description, icon, system_prompt, enabled_skill_ids, preferred_runtime_provider, model, source)
-     VALUES (@id, @slug, @name, @description, @icon, @systemPrompt, '[]', @preferredRuntimeProvider, NULL, 'local')`
+     VALUES (@id, @slug, @name, @description, @icon, @systemPrompt, '[]', @preferredRuntime, NULL, 'local')`
   );
 
   const seed = connection.transaction(() => {
@@ -69,7 +69,7 @@ function ensureBuiltinAgents(connection: BetterSqlite3.Database): void {
         description: preset.description,
         icon: preset.icon,
         systemPrompt: preset.systemPrompt,
-        preferredRuntimeProvider: preset.preferredRuntimeProvider,
+        preferredRuntime: preset.preferredRuntime,
       });
     }
     connection

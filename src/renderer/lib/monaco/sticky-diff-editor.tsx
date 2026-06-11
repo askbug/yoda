@@ -50,42 +50,59 @@ export function StickyDiffEditor({
 
   const { effectiveTheme, themeFingerprint } = useTheme();
 
-  // Create editor once on mount, dispose on unmount.
-  // Monaco is guaranteed ready because bootstrap awaited diffEditorPool.init().
+  // Create editor once on mount, dispose on unmount. Monaco is usually already
+  // warm (bootstrap pre-inits it), but a detached task window may render before
+  // the pool finishes, so fall back to awaiting init() instead of bailing.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const m = (globalThis as any).__monaco as typeof monaco;
-    if (!m || !mountRef.current) return;
+    let editor: monaco.editor.IStandaloneDiffEditor | null = null;
+    let heightDisposable: monaco.IDisposable | null = null;
+    let disposed = false;
 
-    const editor = m.editor.createDiffEditor(mountRef.current, {
-      ...DIFF_EDITOR_BASE_OPTIONS,
-      readOnly: !modifiedUriRef.current.startsWith('file://'),
-      renderSideBySide: diffStyle === 'split',
-    });
-    onEditorChangeRef.current?.(editor);
+    const setup = (m: typeof monaco) => {
+      if (disposed || !mountRef.current) return;
+      editor = m.editor.createDiffEditor(mountRef.current, {
+        ...DIFF_EDITOR_BASE_OPTIONS,
+        readOnly: !modifiedUriRef.current.startsWith('file://'),
+        renderSideBySide: diffStyle === 'split',
+      });
+      onEditorChangeRef.current?.(editor);
 
-    const modifiedEditor = editor.getModifiedEditor();
-    modifiedEditor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => {
-      const uri = modifiedUriRef.current;
-      if (!uri.startsWith('file://')) return;
-      void modelRegistry.saveFileToDisk(uri);
-    });
+      const modifiedEditor = editor.getModifiedEditor();
+      modifiedEditor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => {
+        const uri = modifiedUriRef.current;
+        if (!uri.startsWith('file://')) return;
+        void modelRegistry.saveFileToDisk(uri);
+      });
 
-    const heightDisposable = modifiedEditor.onDidContentSizeChange(
-      (e: { contentHeightChanged: boolean; contentHeight: number }) => {
-        if (e.contentHeightChanged) {
-          onHeightChangeRef.current?.(e.contentHeight);
+      heightDisposable = modifiedEditor.onDidContentSizeChange(
+        (e: { contentHeightChanged: boolean; contentHeight: number }) => {
+          if (e.contentHeightChanged) {
+            onHeightChangeRef.current?.(e.contentHeight);
+          }
         }
-      }
-    );
+      );
 
-    runInAction(() => editorBox.set(editor));
+      runInAction(() => editorBox.set(editor));
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ready = (globalThis as any).__monaco as typeof monaco | undefined;
+    if (ready) {
+      setup(ready);
+    } else {
+      void diffEditorPool.init().then(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const m = (globalThis as any).__monaco as typeof monaco | undefined;
+        if (m) setup(m);
+      });
+    }
 
     return () => {
+      disposed = true;
       onEditorChangeRef.current?.(null);
-      heightDisposable.dispose();
+      heightDisposable?.dispose();
       runInAction(() => editorBox.set(null));
-      editor.dispose();
+      editor?.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type Database from 'better-sqlite3';
-import { isValidProviderId } from '@shared/agent-provider-registry';
 import type { AppSettings, AppSettingsKey } from '@shared/app-settings';
+import { isValidRuntimeId } from '@shared/runtime-registry';
 import { getDefaultForKey } from '@main/core/settings/settings-registry';
 import { isPlainObject, mergeDeep } from '@main/core/settings/utils';
 import { tableExists } from '../../sqlite-utils';
@@ -200,15 +200,15 @@ export async function portLegacySettings(
   }
 
   if (legacyRaw.defaultProvider !== undefined) {
-    if (isValidProviderId(legacyRaw.defaultProvider)) {
+    if (isValidRuntimeId(legacyRaw.defaultProvider)) {
       try {
-        await updateScalarSetting(settingsStore, 'defaultAgent', legacyRaw.defaultProvider);
-        summary.imported.push('defaultAgent');
+        await updateScalarSetting(settingsStore, 'defaultRuntime', legacyRaw.defaultProvider);
+        summary.imported.push('defaultRuntime');
       } catch {
-        summary.skipped.push('defaultAgent:validation-failed');
+        summary.skipped.push('defaultRuntime:validation-failed');
       }
     } else {
-      summary.skipped.push('defaultAgent:invalid-provider');
+      summary.skipped.push('defaultRuntime:invalid-provider');
     }
   }
 

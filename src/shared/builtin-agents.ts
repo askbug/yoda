@@ -1,4 +1,4 @@
-import type { AgentProviderId } from './agent-provider-registry';
+import type { RuntimeId } from './runtime-registry';
 
 /**
  * Built-in Agent presets. These carry the role framings that used to live as
@@ -16,7 +16,25 @@ export interface BuiltinAgentPreset {
   description: string;
   icon: string;
   systemPrompt: string;
-  preferredRuntimeProvider: AgentProviderId | null;
+  preferredRuntime: RuntimeId | null;
+}
+
+/** Slug prefix every built-in preset is seeded under (its `key` is its slug). */
+export const BUILTIN_AGENT_SLUG_PREFIX = 'builtin:';
+
+/**
+ * i18n key under which a built-in Agent's localized name/description live, or
+ * null for user-authored Agents (whose name/description are shown verbatim).
+ *
+ * Built-in presets are seeded into the DB with their English name/description,
+ * so the renderer translates them at display time via this key. Once a user
+ * edits a built-in Agent it stays keyed by its slug, so this still resolves —
+ * keep the i18n strings authoritative for unedited built-ins only if you care
+ * to detect edits; for now we always prefer the translation when it exists.
+ */
+export function builtinAgentI18nKey(slug: string): string | null {
+  if (!slug.startsWith(BUILTIN_AGENT_SLUG_PREFIX)) return null;
+  return `builtinAgents.${slug.slice(BUILTIN_AGENT_SLUG_PREFIX.length)}`;
 }
 
 export const BUILTIN_AGENT_KEYS = {
@@ -76,7 +94,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
     description: 'A general-purpose coding agent with no special framing.',
     icon: '🤖',
     systemPrompt: '',
-    preferredRuntimeProvider: 'claude',
+    preferredRuntime: 'claude',
   },
   {
     key: BUILTIN_AGENT_KEYS.spec,
@@ -84,7 +102,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
     description: 'Spec-first: clarify requirements and produce a PRD before coding.',
     icon: '💡',
     systemPrompt: SPEC_PROMPT,
-    preferredRuntimeProvider: 'claude',
+    preferredRuntime: 'claude',
   },
   {
     key: BUILTIN_AGENT_KEYS.reviewImplementer,
@@ -92,7 +110,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
     description: 'Implements the requirement and addresses reviewer feedback.',
     icon: '🛠️',
     systemPrompt: REVIEW_IMPLEMENTER_PROMPT,
-    preferredRuntimeProvider: 'claude',
+    preferredRuntime: 'claude',
   },
   {
     key: BUILTIN_AGENT_KEYS.reviewReviewer,
@@ -100,7 +118,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
     description: 'Reviews an implementation against the requirement.',
     icon: '🛡️',
     systemPrompt: REVIEW_REVIEWER_PROMPT,
-    preferredRuntimeProvider: 'codex',
+    preferredRuntime: 'codex',
   },
   {
     key: BUILTIN_AGENT_KEYS.teamCeo,
@@ -108,7 +126,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
     description: 'Decomposes the requirement and assigns work to the team.',
     icon: '👑',
     systemPrompt: TEAM_CEO_PROMPT,
-    preferredRuntimeProvider: 'claude',
+    preferredRuntime: 'claude',
   },
   {
     key: BUILTIN_AGENT_KEYS.teamProduct,
@@ -120,7 +138,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
       'Steve Jobs',
       'Turn the requirement into product behavior, scope, acceptance criteria, and tradeoffs.'
     ),
-    preferredRuntimeProvider: 'claude',
+    preferredRuntime: 'claude',
   },
   {
     key: BUILTIN_AGENT_KEYS.teamEngineering,
@@ -132,7 +150,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
       'Linus Torvalds',
       'Implement the code changes with engineering rigor and run the relevant validation.'
     ),
-    preferredRuntimeProvider: 'codex',
+    preferredRuntime: 'codex',
   },
   {
     key: BUILTIN_AGENT_KEYS.teamUiux,
@@ -144,7 +162,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
       'Jony Ive',
       'Shape the user experience and UI details, then implement UI changes when appropriate.'
     ),
-    preferredRuntimeProvider: 'claude',
+    preferredRuntime: 'claude',
   },
   {
     key: BUILTIN_AGENT_KEYS.teamOperations,
@@ -156,7 +174,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
       'Tim Cook',
       'Review user-facing rollout, onboarding, communication, and operational risks.'
     ),
-    preferredRuntimeProvider: 'codex',
+    preferredRuntime: 'codex',
   },
   {
     key: BUILTIN_AGENT_KEYS.naming,
@@ -165,7 +183,7 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
     icon: '🏷️',
     systemPrompt: 'You generate concise, action-oriented names for coding tasks.',
     // null = follow the task's own runtime; pin one to always name via it.
-    preferredRuntimeProvider: null,
+    preferredRuntime: null,
   },
   {
     key: BUILTIN_AGENT_KEYS.summary,
@@ -174,6 +192,6 @@ export const BUILTIN_AGENT_PRESETS: readonly BuiltinAgentPreset[] = [
     icon: '📝',
     systemPrompt: 'You write short, faithful summaries of coding sessions.',
     // null = summary always runs on the session's own runtime.
-    preferredRuntimeProvider: null,
+    preferredRuntime: null,
   },
 ] as const;

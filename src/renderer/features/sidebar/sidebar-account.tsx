@@ -1,73 +1,33 @@
-import {
-  ChevronsUpDown,
-  Download,
-  Info,
-  LogIn,
-  LogOut,
-  MessageSquareShare,
-  Settings,
-  Settings2,
-  User,
-} from 'lucide-react';
+import { ChevronsUpDown, LogIn, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useToast } from '@renderer/lib/hooks/use-toast';
-import {
-  useAccountSession,
-  useAccountSignIn,
-  useAccountSignOut,
-} from '@renderer/lib/hooks/useAccount';
-import { useNavigate } from '@renderer/lib/layout/navigation-provider';
+import { useAccountSession, useAccountSignIn } from '@renderer/lib/hooks/useAccount';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
-import { appState } from '@renderer/lib/stores/app-state';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@renderer/lib/ui/dropdown-menu';
+import { sidebarStore } from '@renderer/lib/stores/app-state';
 import { cn } from '@renderer/utils/utils';
 
 /**
  * Account anchor pinned to the very bottom of the left sidebar. Surfaces the
- * signed-in identity (avatar / name / email) and an account menu, falling back
- * to a sign-in prompt when no live session exists. Mirrors the data flow of the
- * settings AccountTab so the two stay consistent.
+ * signed-in identity (avatar / name) and toggles the secondary sidebar
+ * navigation, falling back to a sign-in prompt when no live session exists.
+ * Usage details live in the dedicated Usage view, not here.
+ * Mirrors the data flow of the settings AccountTab so the two stay consistent.
  */
 export const SidebarAccount: React.FC = observer(function SidebarAccount() {
   const { t } = useTranslation();
-  const { navigate } = useNavigate();
-  const { toast } = useToast();
-  const update = appState.update;
 
   const { data: session, isLoading } = useAccountSession();
   const signInMutation = useAccountSignIn();
-  const signOutMutation = useAccountSignOut();
 
   const showAccountDeviceFlow = useShowModal('accountDeviceFlowModal');
-  const showConfirmSignOut = useShowModal('confirmActionModal');
-  const showFeedbackModal = useShowModal('feedbackModal');
 
   const user = session?.user ?? null;
   const isSignedIn = session?.isSignedIn ?? false;
 
-  const goToAccount = React.useCallback(() => {
-    navigate('settings', { tab: 'account' });
-  }, [navigate]);
-
-  const goToSettings = React.useCallback(() => {
-    navigate('settings');
-  }, [navigate]);
-
-  const handleGiveFeedback = React.useCallback(() => {
-    showFeedbackModal({});
-  }, [showFeedbackModal]);
-
-  const goToUpdateSettings = React.useCallback(() => {
-    navigate('settings', { tab: 'general' });
-  }, [navigate]);
+  const handleToggleSidebarNav = React.useCallback(() => {
+    sidebarStore.toggleNavSectionHidden();
+  }, []);
 
   const handleSignIn = React.useCallback(() => {
     showAccountDeviceFlow({});
@@ -76,107 +36,37 @@ export const SidebarAccount: React.FC = observer(function SidebarAccount() {
     });
   }, [showAccountDeviceFlow, signInMutation]);
 
-  const handleSignOut = React.useCallback(() => {
-    showConfirmSignOut({
-      title: t('settings.account.signOutConfirmTitle'),
-      description: t('settings.account.signOutConfirmDescription'),
-      confirmLabel: t('settings.account.signOutConfirmLabel'),
-      variant: 'default',
-      onSuccess: () => {
-        signOutMutation.mutateAsync().catch((err) => {
-          toast({
-            title: t('settings.account.signOutFailed'),
-            description: err instanceof Error ? err.message : undefined,
-            variant: 'destructive',
-          });
-        });
-      },
-    });
-  }, [showConfirmSignOut, signOutMutation, t, toast]);
-
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2.5 px-3 py-2.5">
-        <div className="size-8 shrink-0 animate-pulse rounded-full bg-background-tertiary-2" />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="h-2.5 w-2/3 animate-pulse rounded bg-background-tertiary-2" />
-          <div className="h-2 w-1/2 animate-pulse rounded bg-background-tertiary-1" />
-        </div>
+      <div className="flex items-center gap-2 px-3 py-1.5">
+        <div className="size-6 shrink-0 animate-pulse rounded-full bg-background-tertiary-2" />
+        <div className="h-2.5 w-2/3 animate-pulse rounded bg-background-tertiary-2" />
       </div>
     );
   }
 
   if (isSignedIn && user) {
     const displayName = user.name?.trim() || `@${user.username}`;
-    const secondary = user.email?.trim() || `@${user.username}`;
+    const navHidden = sidebarStore.navSectionHidden;
 
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className={cn(
-            'group/account flex w-full items-center gap-2.5 px-3 py-2.5 text-left outline-none transition-colors',
-            'hover:bg-background-tertiary-1 focus-visible:bg-background-tertiary-1',
-            'data-popup-open:bg-background-tertiary-1'
-          )}
-          aria-label={t('sidebar.account.openMenu')}
-        >
-          <Avatar avatarUrl={user.avatarUrl} alt={displayName} />
-          <span className="flex min-w-0 flex-1 flex-col leading-tight">
-            <span className="truncate text-[13px] font-medium text-foreground-tertiary">
-              {displayName}
-            </span>
-            <span className="truncate text-[11px] text-foreground-tertiary-passive">
-              {secondary}
-            </span>
-          </span>
-          <ChevronsUpDown className="size-3.5 shrink-0 text-foreground-tertiary-passive transition-colors group-hover/account:text-foreground-tertiary" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          side="top"
-          sideOffset={6}
-          className="w-(--anchor-width) min-w-56"
-        >
-          <DropdownMenuItem onClick={goToAccount}>
-            <Settings2 className="size-4" />
-            {t('sidebar.account.manage')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={goToSettings}>
-            <Settings className="size-4" />
-            {t('sidebar.settings')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleGiveFeedback}>
-            <MessageSquareShare className="size-4" />
-            {t('sidebar.giveFeedback')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {update.hasUpdate && (
-            <DropdownMenuItem onClick={goToUpdateSettings}>
-              <Download className="size-4" />
-              {t('sidebar.update')}
-            </DropdownMenuItem>
-          )}
-          <div
-            role="presentation"
-            className="flex items-center gap-2 px-2 py-1.5 text-sm font-normal"
-          >
-            <Info className="size-4 shrink-0 text-foreground-muted" />
-            <span className="text-foreground-muted">{t('settings.update.version')}</span>
-            <span className="ml-auto font-mono text-xs text-foreground-tertiary-passive">
-              v{update.currentVersion || '...'}
-            </span>
-          </div>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={handleSignOut}
-            disabled={signOutMutation.isPending}
-          >
-            <LogOut className="size-4" />
-            {t('settings.account.signOut')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <button
+        type="button"
+        onClick={handleToggleSidebarNav}
+        className={cn(
+          'group/account flex w-full items-center gap-2 px-3 py-1.5 text-left outline-none transition-colors',
+          'hover:bg-background-tertiary-1 focus-visible:bg-background-tertiary-1'
+        )}
+        aria-expanded={!navHidden}
+        aria-label={navHidden ? t('sidebar.account.showNav') : t('sidebar.account.hideNav')}
+        title={navHidden ? t('sidebar.account.showNav') : t('sidebar.account.hideNav')}
+      >
+        <Avatar avatarUrl={user.avatarUrl} alt={displayName} />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground-tertiary">
+          {displayName}
+        </span>
+        <ChevronsUpDown className="size-3.5 shrink-0 text-foreground-tertiary-passive transition-colors group-hover/account:text-foreground-tertiary" />
+      </button>
     );
   }
 
@@ -216,13 +106,13 @@ function Avatar({ avatarUrl, alt }: { avatarUrl?: string; alt: string }) {
       <img
         src={avatarUrl}
         alt={alt}
-        className="size-8 shrink-0 rounded-full border border-border/60 object-cover"
+        className="size-6 shrink-0 rounded-full border border-border/60 object-cover"
       />
     );
   }
   return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background-tertiary-2 text-foreground-tertiary">
-      <User className="size-4" />
+    <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background-tertiary-2 text-foreground-tertiary">
+      <User className="size-3.5" />
     </span>
   );
 }

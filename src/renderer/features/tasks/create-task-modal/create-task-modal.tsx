@@ -1,8 +1,7 @@
-import { ChevronRight, FolderOpen, ListTree } from 'lucide-react';
+import { ChevronRight, FolderOpen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Branch } from '@shared/git';
 import { getPrNumber, isForkPr, type PullRequest } from '@shared/pull-requests';
 import type { CreateTaskParams, Issue } from '@shared/tasks';
 import {
@@ -13,7 +12,6 @@ import {
 import { initialConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
 import { ProjectSelector } from '@renderer/features/tasks/create-task-modal/project-selector';
 import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
-import { getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { useFeatureFlag } from '@renderer/lib/hooks/useFeatureFlag';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { type BaseModalProps } from '@renderer/lib/modal/modal-provider';
@@ -49,18 +47,12 @@ export const CreateTaskModal = observer(function CreateTaskModal({
   strategy = 'from-branch',
   initialIssue,
   initialPR,
-  parentTaskId,
-  initialBranch,
   onClose,
 }: BaseModalProps & {
   projectId?: string;
   strategy?: CreateTaskStrategy;
   initialIssue?: Issue;
   initialPR?: PullRequest;
-  /** Create the new task as a subtask of this task (same project only). */
-  parentTaskId?: string;
-  /** Pre-select this source branch (e.g. the parent task's branch). */
-  initialBranch?: Branch;
 }) {
   const { t } = useTranslation();
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(() => {
@@ -114,18 +106,12 @@ export const CreateTaskModal = observer(function CreateTaskModal({
     ? (getRepositoryStore(selectedProjectId)?.repositoryUrl ?? undefined)
     : undefined;
 
-  // The parent only applies while creating inside its own project — switching
-  // the project in the modal silently drops the subtask relationship.
-  const effectiveParentTaskId =
-    parentTaskId && projectId && selectedProjectId === projectId ? parentTaskId : undefined;
-
   const fromBranch = useFromBranchMode(
     selectedProjectId,
     defaultBranch,
     isUnborn,
     currentBranch,
-    initialConversation.prompt,
-    initialBranch
+    initialConversation.prompt
   );
   const fromIssue = useFromIssueMode(
     selectedProjectId,
@@ -192,7 +178,6 @@ export const CreateTaskModal = observer(function CreateTaskModal({
           strategy: useBYOI ? { kind: 'no-worktree' } : taskStrategy,
           workspaceProvider: useBYOI ? 'byoi' : undefined,
           initialConversation: builtInitialConversation,
-          parentTaskId: effectiveParentTaskId,
         });
         break;
       }
@@ -213,7 +198,6 @@ export const CreateTaskModal = observer(function CreateTaskModal({
           linkedIssue: fromIssue.linkedIssue ?? undefined,
           workspaceProvider: useBYOI ? 'byoi' : undefined,
           initialConversation: builtInitialConversation,
-          parentTaskId: effectiveParentTaskId,
         });
         break;
       }
@@ -239,7 +223,6 @@ export const CreateTaskModal = observer(function CreateTaskModal({
           strategy: useBYOI ? { kind: 'no-worktree' } : taskStrategy,
           workspaceProvider: useBYOI ? 'byoi' : undefined,
           initialConversation: builtInitialConversation,
-          parentTaskId: effectiveParentTaskId,
         });
         break;
       }
@@ -257,7 +240,6 @@ export const CreateTaskModal = observer(function CreateTaskModal({
     useBYOI,
     initialConversation,
     autoApproveDefaults,
-    effectiveParentTaskId,
     navigate,
     onClose,
   ]);
@@ -276,14 +258,9 @@ export const CreateTaskModal = observer(function CreateTaskModal({
           }
         />
         <ChevronRight className="size-3.5 text-foreground-passive" />
-        <DialogTitle>
-          {effectiveParentTaskId ? t('tasks.createSubtask') : t('tasks.createTask')}
-        </DialogTitle>
+        <DialogTitle>{t('tasks.createTask')}</DialogTitle>
       </DialogHeader>
       <DialogContentArea className="gap-4">
-        {effectiveParentTaskId && selectedProjectId && (
-          <ParentTaskHint projectId={selectedProjectId} parentTaskId={effectiveParentTaskId} />
-        )}
         <ToggleGroup
           className="w-full"
           value={[selectedStrategy]}
@@ -358,24 +335,5 @@ export const CreateTaskModal = observer(function CreateTaskModal({
         </ConfirmButton>
       </DialogFooter>
     </>
-  );
-});
-
-const ParentTaskHint = observer(function ParentTaskHint({
-  projectId,
-  parentTaskId,
-}: {
-  projectId: string;
-  parentTaskId: string;
-}) {
-  const { t } = useTranslation();
-  const parentName = getTaskStore(projectId, parentTaskId)?.data.name;
-  if (!parentName) return null;
-  return (
-    <div className="flex items-center gap-1.5 rounded-md bg-background-tertiary-1 px-2.5 py-1.5 text-sm text-muted-foreground">
-      <ListTree className="size-3.5 shrink-0" />
-      <span className="shrink-0">{t('tasks.create.parentTask')}</span>
-      <span className="min-w-0 truncate text-foreground">{parentName}</span>
-    </div>
   );
 });

@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { BrowserWindow, Notification } from 'electron';
-import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
 import { isAttentionNotification, type AgentEvent } from '@shared/events/agentEvents';
 import { notificationFocusTaskChannel } from '@shared/events/appEvents';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 import { getMainWindow } from '@main/app/window';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { db } from '@main/db/client';
@@ -41,9 +41,9 @@ export async function maybeShowNotification(event: AgentEvent, appFocused: boole
     const body = getNotificationBody(event);
     if (!body) return;
 
-    const providerName = getProvider(event.providerId as AgentProviderId)?.name ?? event.providerId;
+    const runtimeName = getRuntime(event.runtimeId as RuntimeId)?.name ?? event.runtimeId;
     const taskName = await getTaskName(event.taskId);
-    const title = taskName ? `${providerName} — ${taskName}` : providerName;
+    const title = taskName ? `${runtimeName} — ${taskName}` : runtimeName;
 
     const notification = new Notification({ title, body, silent: true });
 

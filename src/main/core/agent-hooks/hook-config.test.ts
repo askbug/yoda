@@ -99,7 +99,7 @@ describe('HookConfigWriter', () => {
     expect(fs.files.has('.gitignore')).toBe(false);
   });
 
-  it('registers Notification, Stop and interactive-tool PreToolUse/PostToolUse hooks', async () => {
+  it('registers Notification, Stop, UserPromptSubmit and interactive-tool PreToolUse/PostToolUse hooks', async () => {
     mockResolveCommandPath.mockResolvedValue('/usr/local/bin/claude');
     const fs = new MemoryFs();
     const writer = makeWriter(fs);
@@ -113,7 +113,12 @@ describe('HookConfigWriter', () => {
       'PostToolUse',
       'PreToolUse',
       'Stop',
+      'UserPromptSubmit',
     ]);
+    // Precise turn-start signal — fires no matter where the prompt was typed.
+    expect(hooks.UserPromptSubmit[0].hooks[0].command).toContain(
+      'X-Yoda-Event-Type: prompt-submit'
+    );
 
     // Interactive-tool waits use a matcher; lifecycle hooks do not.
     expect(hooks.PreToolUse[0].matcher).toBe('AskUserQuestion|ExitPlanMode');

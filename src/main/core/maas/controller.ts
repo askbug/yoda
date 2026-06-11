@@ -1,5 +1,10 @@
 import { createRPCController } from '@shared/ipc/rpc';
-import type { MaasConnectInput, MaasInvocationFilterKind, MaasPlatformId } from '@shared/maas';
+import type {
+  MaasConnectInput,
+  MaasInvocationFilterKind,
+  MaasPlatformId,
+  MaasUsageSummaryInput,
+} from '@shared/maas';
 import { maasService } from './maas-service';
 
 async function listConnections() {
@@ -14,6 +19,10 @@ async function disconnectPlatform(platformId: MaasPlatformId) {
   return maasService.disconnectPlatform(platformId);
 }
 
+async function checkConnection(platformId: MaasPlatformId) {
+  return maasService.checkConnection(platformId);
+}
+
 async function listInvocationRecords(args: {
   platformId: MaasPlatformId;
   kind: MaasInvocationFilterKind;
@@ -24,9 +33,15 @@ async function listInvocationRecords(args: {
   return maasService.listInvocationRecords(args);
 }
 
+async function getUsageSummary(args: MaasUsageSummaryInput) {
+  return maasService.getUsageSummary(args);
+}
+
 export const maasController = createRPCController({
   listConnections,
   connectPlatform,
   disconnectPlatform,
+  checkConnection,
   listInvocationRecords,
+  getUsageSummary,
 });

@@ -8,9 +8,11 @@ import { mcpView } from '@renderer/features/mcp/mcp-view';
 import { mobileView } from '@renderer/features/mobile/mobile-view';
 import { projectFileView } from '@renderer/features/project-file/view';
 import { projectView } from '@renderer/features/projects/view';
+import { roadmapView } from '@renderer/features/roadmap/roadmap-view';
 import { settingsView } from '@renderer/features/settings/settings-view';
 import { skillsView } from '@renderer/features/skills/skills-view';
 import { taskView } from '@renderer/features/tasks/view';
+import { usageView } from '@renderer/features/usage/usage-view';
 import type { CommandProvider } from '@renderer/lib/commands/types';
 
 // Define views here so we can use them in the navigate function
@@ -20,9 +22,11 @@ export const views = {
   agents: agentsView,
   automation: automationView,
   maas: maasView,
+  usage: usageView,
   skills: skillsView,
   mcp: mcpView,
   mobile: mobileView,
+  roadmap: roadmapView,
   project: projectView,
   task: taskView,
   file: projectFileView,

@@ -10,6 +10,15 @@ import { computeDelta, computeTrueOverrides, isDeepEqual, isPlainObject, mergeDe
 export type { AppSettings, AppSettingsKey } from '@shared/app-settings';
 export { AppSettingsKeys } from '@shared/app-settings';
 
+/** Storage rows renamed by the provider→runtime terminology migration.
+ *  Old rows are renamed in place on startup; new installs never see them. */
+const LEGACY_KEY_RENAMES: Record<string, string> = {
+  defaultAgent: 'defaultRuntime',
+  agentAutoApproveDefaults: 'runtimeAutoApproveDefaults',
+  agentModelCandidates: 'runtimeModelCandidates',
+  providerConfigs: 'runtimeConfigs',
+};
+
 export class SettingsStore implements IInitializable {
   private cache: Partial<AppSettings> = {};
   /** Serializes write operations per key so concurrent partial updates
@@ -172,7 +181,28 @@ export class SettingsStore implements IInitializable {
     return Object.fromEntries(entries) as AppSettings;
   }
 
+  private async migrateLegacyKeys(): Promise<void> {
+    for (const [oldKey, newKey] of Object.entries(LEGACY_KEY_RENAMES)) {
+      const [oldRow] = await db
+        .select()
+        .from(appSettings)
+        .where(eq(appSettings.key, oldKey))
+        .execute();
+      if (!oldRow) continue;
+      const [newRow] = await db
+        .select()
+        .from(appSettings)
+        .where(eq(appSettings.key, newKey))
+        .execute();
+      if (!newRow) {
+        await db.insert(appSettings).values({ key: newKey, value: oldRow.value }).execute();
+      }
+      await db.delete(appSettings).where(eq(appSettings.key, oldKey)).execute();
+    }
+  }
+
   async initialize(): Promise<void> {
+    await this.migrateLegacyKeys();
     await this.getAll();
   }
 }

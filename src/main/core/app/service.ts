@@ -3,7 +3,13 @@ import { stat, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { clipboard, dialog, shell } from 'electron';
-import { appPasteChannel, appRedoChannel, appUndoChannel } from '@shared/events/appEvents';
+import {
+  appPasteChannel,
+  appRedoChannel,
+  appUndoChannel,
+  taskWindowReturnedToTabChannel,
+  type TaskWindowReturnPayload,
+} from '@shared/events/appEvents';
 import {
   getAppById,
   getResolvedLabel,
@@ -12,6 +18,14 @@ import {
   type PlatformConfig,
   type PlatformKey,
 } from '@shared/openInApps';
+import { isTaskWindowTarget, type TaskWindowTarget } from '@shared/task-window';
+import {
+  registerTaskWindowDock,
+  setTaskStripDropZone,
+  unregisterTaskWindowDock,
+  type TaskStripDropZone,
+} from '@main/app/task-window-dock';
+import { openTaskWindowFromPool } from '@main/app/task-window-pool';
 import { getMainWindow } from '@main/app/window';
 import { db } from '@main/db/client';
 import { sshConnections } from '@main/db/schema';
@@ -188,6 +202,34 @@ class AppService implements IInitializable, IDisposable {
 
   triggerVoiceInput(args?: TriggerVoiceInputArgs): Promise<TriggerVoiceInputResult> {
     return triggerVoiceInput(args);
+  }
+
+  openTaskWindow(target: TaskWindowTarget): void {
+    if (!isTaskWindowTarget(target)) throw new Error('Invalid task window target');
+    openTaskWindowFromPool(target);
+  }
+
+  notifyTaskWindowReturned(payload: TaskWindowReturnPayload): void {
+    if (!Number.isInteger(payload.sourceWindowId) || payload.sourceWindowId <= 0) {
+      throw new Error('Invalid task window source');
+    }
+    if (!isTaskWindowTarget(payload.target)) throw new Error('Invalid task window target');
+    events.emit(taskWindowReturnedToTabChannel, payload);
+  }
+
+  registerTaskWindowDock(payload: TaskWindowReturnPayload): void {
+    if (!Number.isInteger(payload.sourceWindowId) || payload.sourceWindowId <= 0) {
+      throw new Error('Invalid task window source');
+    }
+    registerTaskWindowDock(payload.sourceWindowId, payload.target);
+  }
+
+  unregisterTaskWindowDock(sourceWindowId: number): void {
+    unregisterTaskWindowDock(sourceWindowId);
+  }
+
+  setTaskStripDropZone(zone: TaskStripDropZone | null): void {
+    setTaskStripDropZone(zone);
   }
 
   async openIn(args: {

@@ -1,4 +1,4 @@
-import type { AgentProviderId } from './agent-provider-registry';
+import type { RuntimeId } from './runtime-registry';
 
 /**
  * A user-configurable Agent: a reusable bundle of a system prompt, a set of
@@ -25,7 +25,7 @@ export interface Agent {
    * Preferred Agent Runtime. At execution time we use this runtime when it is
    * available/supported, otherwise we fall back to the run-mode default.
    */
-  preferredRuntimeProvider: AgentProviderId | null;
+  preferredRuntime: RuntimeId | null;
   /** Optional model hint (e.g. 'claude-opus-4-8'); null = runtime default. */
   model: string | null;
   /** 'local' = authored here; 'imported' = brought in from a share/market. */
@@ -43,7 +43,7 @@ export interface AgentDraft {
   icon: string;
   systemPrompt: string;
   enabledSkillIds: string[];
-  preferredRuntimeProvider: AgentProviderId | null;
+  preferredRuntime: RuntimeId | null;
   model: string | null;
 }
 
@@ -56,7 +56,7 @@ export function emptyAgentDraft(): AgentDraft {
     icon: DEFAULT_AGENT_ICON,
     systemPrompt: '',
     enabledSkillIds: [],
-    preferredRuntimeProvider: null,
+    preferredRuntime: null,
     model: null,
   };
 }
@@ -68,7 +68,7 @@ export function agentToDraft(agent: Agent): AgentDraft {
     icon: agent.icon,
     systemPrompt: agent.systemPrompt,
     enabledSkillIds: [...agent.enabledSkillIds],
-    preferredRuntimeProvider: agent.preferredRuntimeProvider,
+    preferredRuntime: agent.preferredRuntime,
     model: agent.model,
   };
 }

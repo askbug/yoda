@@ -8,6 +8,7 @@ import { useParams } from '@renderer/lib/layout/navigation-provider';
 import { QuickActionsCard } from './quick-actions-card';
 import { RepoStatusCard } from './repo-status-card';
 import { TasksOverviewCard } from './tasks-overview-card';
+import { TokenUsageCard } from './token-usage-card';
 
 export const OverviewPanel = observer(function OverviewPanel() {
   const {
@@ -26,6 +27,7 @@ export const OverviewPanel = observer(function OverviewPanel() {
       <div className="max-w-3xl mx-auto w-full px-6 py-6 flex flex-col gap-4">
         <QuickActionsCard projectId={projectId} />
         <RepoStatusCard projectId={projectId} />
+        <TokenUsageCard projectId={projectId} />
         <TasksOverviewCard projectId={projectId} />
       </div>
     </div>

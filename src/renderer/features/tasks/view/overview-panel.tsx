@@ -154,7 +154,7 @@ export const OverviewPanel = observer(function OverviewPanel() {
           )}
         </section>
 
-        <SubtaskList projectId={projectId} taskId={taskId} branchName={branchName ?? undefined} />
+        <SubtaskList projectId={projectId} taskId={taskId} />
 
         {archived.length > 0 && (
           <section className="flex flex-col gap-2">

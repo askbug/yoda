@@ -30,7 +30,7 @@ export const HooksPanel = observer(function HooksPanel({
   const { taskId } = useTaskViewContext();
   const provisionedTask = useProvisionedTask();
   const conversation = getTaskMenuConversation(provisionedTask);
-  const providerId = conversation?.providerId;
+  const runtimeId = conversation?.runtimeId;
 
   // Re-fetch when the active session restarts (mirrors session-info-panel).
   const sessionStatus = conversation
@@ -46,11 +46,11 @@ export const HooksPanel = observer(function HooksPanel({
 
   const reload = useMemo(
     () => async () => {
-      if (!providerId) return;
+      if (!runtimeId) return;
       setIsLoading(true);
       try {
         const [result, overrides] = await Promise.all([
-          rpc.agentHooks.inspect(provisionedTask.path, providerId, taskId),
+          rpc.agentHooks.inspect(provisionedTask.path, runtimeId, taskId),
           rpc.agentHooks.getOverrides(taskId),
         ]);
         setInspection(result);
@@ -59,7 +59,7 @@ export const HooksPanel = observer(function HooksPanel({
         setIsLoading(false);
       }
     },
-    [providerId, provisionedTask.path, taskId]
+    [runtimeId, provisionedTask.path, taskId]
   );
 
   useEffect(() => {
@@ -137,7 +137,7 @@ export const HooksPanel = observer(function HooksPanel({
 
       <div className={cn(chromeless ? 'min-w-0' : 'min-h-0 flex-1 overflow-y-auto')}>
         <div className="flex min-w-0 flex-col gap-2 px-2.5 py-2">
-          {!providerId || inspection?.supported === false ? (
+          {!runtimeId || inspection?.supported === false ? (
             <EmptyState
               label={t('tasks.hooks.unsupported')}
               description={t('tasks.hooks.unsupportedDescription')}

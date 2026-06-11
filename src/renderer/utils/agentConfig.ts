@@ -1,4 +1,4 @@
-import { type AgentProviderId } from '@shared/agent-provider-registry';
+import { type RuntimeId } from '@shared/runtime-registry';
 import ampLogo from '../../assets/images/ampcode.png';
 import atlassianLogo from '../../assets/images/atlassian.png';
 import augmentLogoSvg from '../../assets/images/Auggie.svg?raw';
@@ -36,7 +36,7 @@ export type AgentInfo = {
 };
 
 // Agents with initial prompt support first, then those without
-export const agentConfig: Record<AgentProviderId, AgentInfo> = {
+export const agentConfig: Record<RuntimeId, AgentInfo> = {
   claude: { name: 'Claude Code', logo: claudeLogo, alt: 'Claude Code' },
   codex: { name: 'Codex', logo: openaiLogoSvg, alt: 'Codex', isSvg: true },
   devin: { name: 'Devin', logo: devinLogo, alt: 'Devin' },

@@ -21,7 +21,17 @@ export type TaskNamingSettings = {
 
 export const DEFAULT_TASK_NAMING_MODEL = '';
 export const DEFAULT_TASK_NAMING_RECENT_TASK_LIMIT = 8;
-export const DEFAULT_TASK_NAMING_TIMEOUT_MS = 15_000;
+export const MIN_TASK_NAMING_TIMEOUT_MS = 30_000;
+export const MAX_TASK_NAMING_TIMEOUT_MS = 300_000;
+export const DEFAULT_TASK_NAMING_TIMEOUT_MS = 60_000;
+
+export function normalizeTaskNamingTimeoutMs(value: number | null | undefined): number {
+  if (!Number.isFinite(value)) return DEFAULT_TASK_NAMING_TIMEOUT_MS;
+  return Math.min(
+    MAX_TASK_NAMING_TIMEOUT_MS,
+    Math.max(MIN_TASK_NAMING_TIMEOUT_MS, Math.round(value as number))
+  );
+}
 
 export const DEFAULT_TASK_NAMING_CONTEXT: TaskNamingContextSettings = {
   prompt: true,
@@ -33,7 +43,7 @@ export const DEFAULT_TASK_NAMING_CONTEXT: TaskNamingContextSettings = {
 export type TaskNamingStatus = 'idle' | 'generating' | 'ready' | 'failed';
 
 export type TaskNamingContextSource = {
-  id: TaskNamingContextSourceId;
+  id: string;
   label: string;
   content: string;
   estimatedTokens: number;
@@ -74,6 +84,17 @@ export type TaskNamingSnapshot = {
   context: TaskNamingContextSnapshot | null;
   generatedTaskName?: string;
   generatedBranchName?: string;
+  /**
+   * The system + final prompt actually assembled and sent to the naming agent.
+   * Backend-authored (not the runtime's own prompt), so it is exposed for
+   * preview/debugging. Ephemeral — not persisted to the DB, only present on the
+   * live snapshot returned/emitted during generation.
+   */
+  systemPrompt?: string;
+  systemPromptEstimatedTokens?: number;
+  prompt?: string;
+  promptChars?: number;
+  promptEstimatedTokens?: number;
   error?: string;
   createdAt: string;
   updatedAt: string;

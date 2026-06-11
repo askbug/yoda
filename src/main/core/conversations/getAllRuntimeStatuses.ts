@@ -31,7 +31,7 @@ export async function getAllRuntimeStatuses(): Promise<RuntimeStatusEntry[]> {
       projectId: conversations.projectId,
       taskId: conversations.taskId,
       conversationId: conversations.id,
-      provider: conversations.provider,
+      runtime: conversations.runtime,
     })
     .from(conversations)
     .innerJoin(tasks, eq(conversations.taskId, tasks.id))
@@ -43,22 +43,21 @@ export async function getAllRuntimeStatuses(): Promise<RuntimeStatusEntry[]> {
   // Resolve each task's cwd once; many conversations share a task.
   const cwdByTask = new Map<string, string | undefined>();
 
-  const entries = await Promise.all(
-    rows.map(async ({ projectId, taskId, conversationId, provider }) => {
-      const taskKey = `${projectId}\0${taskId}`;
-      if (!cwdByTask.has(taskKey)) {
-        cwdByTask.set(taskKey, resolveTask(projectId, taskId)?.conversations.taskPath);
-      }
-      const status = await getConversationRunStatus({
-        projectId,
-        taskId,
-        conversationId,
-        provider: provider ?? '',
-        cwd: cwdByTask.get(taskKey) ?? '',
-      });
-      return { projectId, taskId, conversationId, status };
-    })
-  );
+  const entries: RuntimeStatusEntry[] = [];
+  for (const { projectId, taskId, conversationId, runtime } of rows) {
+    const taskKey = `${projectId}\0${taskId}`;
+    if (!cwdByTask.has(taskKey)) {
+      cwdByTask.set(taskKey, resolveTask(projectId, taskId)?.conversations.taskPath);
+    }
+    const status = await getConversationRunStatus({
+      projectId,
+      taskId,
+      conversationId,
+      provider: runtime ?? '',
+      cwd: cwdByTask.get(taskKey) ?? '',
+    });
+    entries.push({ projectId, taskId, conversationId, status });
+  }
 
   return entries;
 }

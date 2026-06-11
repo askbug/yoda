@@ -45,7 +45,7 @@ describe('ensureCodexThreadArchived', () => {
     insertThread(statePath, { id: 'thread-1', archived: 0 });
 
     await ensureCodexThreadArchived({
-      providerId: 'codex',
+      runtimeId: 'codex',
       providerConfig: {
         cli: 'codex',
         resumeFlag: 'resume',
@@ -66,7 +66,7 @@ describe('ensureCodexThreadArchived', () => {
     insertThread(statePath, { id: 'thread-1', archived: 1 });
 
     await ensureCodexThreadArchived({
-      providerId: 'codex',
+      runtimeId: 'codex',
       providerConfig: {
         cli: 'codex',
         resumeFlag: 'resume',
@@ -85,7 +85,7 @@ describe('ensureCodexThreadArchived', () => {
     exec.mockRejectedValueOnce(new Error('archive failed'));
 
     await ensureCodexThreadArchived({
-      providerId: 'codex',
+      runtimeId: 'codex',
       providerConfig: {
         cli: 'codex',
         resumeFlag: 'resume',

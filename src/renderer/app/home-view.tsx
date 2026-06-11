@@ -146,7 +146,7 @@ type TeamRoleId = 'ceo' | 'product' | 'engineering' | 'uiux' | 'operations';
 type TeamRuntimeSelection = Record<TeamRoleId, RuntimeId>;
 
 type HomeComposerSubmitTarget =
-  | { kind: 'new-task' }
+  | { kind: 'new-task'; parentTask?: { projectId: string; taskId: string } }
   | { kind: 'existing-task'; projectId: string; taskId: string };
 
 export type HomeComposerSubmitResult =
@@ -844,6 +844,9 @@ export const HomeComposer = observer(function HomeComposer({
   const { t } = useTranslation();
   const { navigate } = useNavigate();
   const taskScopedTarget = submitTarget.kind === 'existing-task' ? submitTarget : null;
+  // Subtask mode: still creates tasks, but locked to the parent's project and
+  // linked via parentTaskId; new branches fork off the parent's branch.
+  const parentTarget = submitTarget.kind === 'new-task' ? (submitTarget.parentTask ?? null) : null;
 
   const projectManager = getProjectManagerStore();
 
@@ -863,24 +866,26 @@ export const HomeComposer = observer(function HomeComposer({
 
   const { value: draft, update: updateDraft } = useAppSettingsKey('homeDraft');
 
+  const isProjectLocked = !!(taskScopedTarget || parentTarget);
   const selectedProjectId =
     taskScopedTarget?.projectId ??
+    parentTarget?.projectId ??
     homeProjectId ??
     navProjectId ??
     (draft === undefined ? undefined : (draft.selectedProjectId ?? undefined));
   const setSelectedProjectId = useCallback(
     (next: string | undefined) => {
-      if (taskScopedTarget) return;
+      if (isProjectLocked) return;
       updateDraft({ selectedProjectId: next ?? null });
     },
-    [taskScopedTarget, updateDraft]
+    [isProjectLocked, updateDraft]
   );
 
   useEffect(() => {
-    if (!homeProjectId || taskScopedTarget) return;
+    if (!homeProjectId || isProjectLocked) return;
     updateDraft({ selectedProjectId: homeProjectId });
     setHomeParams({ projectId: undefined });
-  }, [homeProjectId, setHomeParams, taskScopedTarget, updateDraft]);
+  }, [homeProjectId, setHomeParams, isProjectLocked, updateDraft]);
 
   const projectStore = selectedProjectId
     ? projectManager.projects.get(selectedProjectId)
@@ -891,14 +896,24 @@ export const HomeComposer = observer(function HomeComposer({
   const taskScopedTaskStore = taskScopedTarget
     ? getTaskStore(taskScopedTarget.projectId, taskScopedTarget.taskId)
     : undefined;
-  const taskScopedProjectName = taskScopedTarget
-    ? (projectDisplayName(projectStore) ?? taskScopedTarget.projectId)
+  const lockedProjectName = isProjectLocked
+    ? (projectDisplayName(projectStore) ?? selectedProjectId)
     : undefined;
+
+  // Subtasks branch off the parent task's branch instead of the project default.
+  const parentTaskStore = parentTarget
+    ? getTaskStore(parentTarget.projectId, parentTarget.taskId)
+    : undefined;
+  const parentBranchName =
+    asProvisioned(parentTaskStore)?.workspace.git.branchName ??
+    (parentTaskStore && 'taskBranch' in parentTaskStore.data
+      ? parentTaskStore.data.taskBranch
+      : undefined);
 
   const repo = selectedProjectId ? getRepositoryStore(selectedProjectId) : undefined;
   const defaultBranch = repo?.defaultBranch;
   const isUnborn = repo?.isUnborn ?? false;
-  const branchLabel = defaultBranch?.branch ?? repo?.currentBranch ?? 'main';
+  const branchLabel = parentBranchName ?? defaultBranch?.branch ?? repo?.currentBranch ?? 'main';
   const runHostKind: RunHostKind = projectData?.type === 'ssh' ? 'ssh' : 'local';
   const strategyLabels = useMemo(
     () => ({
@@ -1807,8 +1822,11 @@ export const HomeComposer = observer(function HomeComposer({
           id: taskId,
           projectId: mounted.data.id,
           name: taskName,
-          sourceBranch: defaultBranch,
+          sourceBranch: parentBranchName
+            ? { type: 'local', branch: parentBranchName }
+            : defaultBranch,
           strategy,
+          parentTaskId: parentTarget?.taskId,
           initialConversation: {
             id: conversationId,
             projectId: mounted.data.id,
@@ -1976,6 +1994,8 @@ export const HomeComposer = observer(function HomeComposer({
     canSubmit,
     mounted,
     taskScopedTarget,
+    parentTarget,
+    parentBranchName,
     targetProvisionedTask,
     runtimeId,
     defaultBranch,
@@ -2627,10 +2647,14 @@ export const HomeComposer = observer(function HomeComposer({
       <div className="mt-3 flex flex-col gap-2">
         <div className="overflow-x-auto pb-1">
           <div ref={runModeAnchorRef} className="flex min-w-max flex-wrap items-center gap-2">
-            {taskScopedTarget ? (
+            {isProjectLocked ? (
               <TaskScopedProjectButton
-                label={taskScopedProjectName ?? taskScopedTarget.projectId}
-                tooltip={t('home.taskConversationScopeTooltip')}
+                label={lockedProjectName ?? selectedProjectId ?? ''}
+                tooltip={
+                  taskScopedTarget
+                    ? t('home.taskConversationScopeTooltip')
+                    : t('home.subtaskScopeTooltip')
+                }
               />
             ) : (
               <ProjectSelector

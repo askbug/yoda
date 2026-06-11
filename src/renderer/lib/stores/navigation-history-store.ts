@@ -7,27 +7,55 @@ export type HistoryEntry =
   | { kind: 'view'; viewId: ViewId; params: WrapParams<ViewId> }
   | { kind: 'tab'; projectId: string; taskId: string; tabId: string };
 
+function normalizeValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeValue);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.keys(value as Record<string, unknown>)
+    .sort()
+    .reduce<Record<string, unknown>>((acc, key) => {
+      const next = normalizeValue((value as Record<string, unknown>)[key]);
+      if (next !== undefined) acc[key] = next;
+      return acc;
+    }, {});
+}
+
+function paramsEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(normalizeValue(a ?? {})) === JSON.stringify(normalizeValue(b ?? {}));
+}
+
 function entriesEqual(a: HistoryEntry, b: HistoryEntry): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === 'view' && b.kind === 'view') {
-    if (a.viewId !== b.viewId) return false;
-    // Task view is parameterized by taskId — different tasks are distinct entries.
-    if (a.viewId === 'task') {
-      const ap = a.params as { taskId?: string };
-      const bp = b.params as { taskId?: string };
-      return ap.taskId === bp.taskId;
-    }
-    return true;
+    return a.viewId === b.viewId && paramsEqual(a.params, b.params);
   }
   if (a.kind === 'tab' && b.kind === 'tab') {
-    return a.tabId === b.tabId && a.taskId === b.taskId;
+    return a.projectId === b.projectId && a.taskId === b.taskId && a.tabId === b.tabId;
   }
   return false;
 }
 
-/** Collapses adjacent identical entries that appear after a prune. */
-function flatten(entries: HistoryEntry[]): HistoryEntry[] {
-  return entries.filter((e, i) => i === 0 || !entriesEqual(e, entries[i - 1]!));
+function flattenWithIndex(
+  entries: HistoryEntry[],
+  preferredIndex: number
+): { entries: HistoryEntry[]; index: number } {
+  const flattened: HistoryEntry[] = [];
+  let index = -1;
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!;
+    const duplicate = flattened.length > 0 && entriesEqual(entry, flattened[flattened.length - 1]!);
+    if (duplicate) {
+      if (i === preferredIndex) index = flattened.length - 1;
+      continue;
+    }
+
+    flattened.push(entry);
+    if (i === preferredIndex) index = flattened.length - 1;
+  }
+
+  if (flattened.length === 0) return { entries: flattened, index: -1 };
+  return { entries: flattened, index: index === -1 ? flattened.length - 1 : index };
 }
 
 /**
@@ -44,6 +72,7 @@ export class NavigationHistoryStore {
   /** Append-only log; not observable — only `index` drives reactivity. */
   entries: HistoryEntry[] = [];
   index = -1;
+  private revision = 0;
 
   /** Set to true while back/forward is being applied. Suppresses push(). */
   private navigating = false;
@@ -57,11 +86,31 @@ export class NavigationHistoryStore {
   }
 
   get canGoBack(): boolean {
+    void this.revision;
     return this.index > 0;
   }
 
   get canGoForward(): boolean {
+    void this.revision;
     return this.index < this.entries.length - 1;
+  }
+
+  get currentEntry(): HistoryEntry | undefined {
+    void this.revision;
+    return this.entries[this.index];
+  }
+
+  pushNavigation(currentEntry: HistoryEntry | undefined, nextEntry: HistoryEntry): void {
+    if (this.navigating) return;
+    if (currentEntry && entriesEqual(currentEntry, nextEntry)) return;
+
+    if (this.entries.length === 0 && currentEntry) {
+      this.entries.push(currentEntry);
+      this.index = 0;
+      this.revision++;
+    }
+
+    this.push(nextEntry);
   }
 
   push(entry: HistoryEntry): void {
@@ -81,6 +130,26 @@ export class NavigationHistoryStore {
     } else {
       this.index++;
     }
+    this.revision++;
+  }
+
+  replaceCurrent(
+    entry: HistoryEntry,
+    predicate?: (currentEntry: HistoryEntry) => boolean
+  ): boolean {
+    if (this.navigating) return false;
+
+    const currentEntry = this.entries[this.index];
+    if (!currentEntry) return false;
+    if (predicate && !predicate(currentEntry)) return false;
+    if (entriesEqual(currentEntry, entry)) return true;
+
+    this.entries[this.index] = entry;
+    const flattened = flattenWithIndex(this.entries, this.index);
+    this.entries = flattened.entries;
+    this.index = flattened.index;
+    this.revision++;
+    return true;
   }
 
   back(apply: (entry: HistoryEntry) => void): void {
@@ -114,8 +183,19 @@ export class NavigationHistoryStore {
    */
   prune(predicate: (entry: HistoryEntry) => boolean): void {
     const currentEntry = this.entries[this.index];
-    this.entries = flatten(this.entries.filter((e) => !predicate(e)));
-    const newIndex = currentEntry ? this.entries.indexOf(currentEntry) : -1;
-    this.index = newIndex !== -1 ? newIndex : Math.max(0, this.entries.length - 1);
+    const filtered = this.entries.filter((e) => !predicate(e));
+    const preservedIndex = currentEntry ? filtered.indexOf(currentEntry) : -1;
+    const fallbackIndex =
+      filtered.length === 0 ? -1 : Math.max(0, Math.min(this.index, filtered.length - 1));
+    const flattened = flattenWithIndex(
+      filtered,
+      preservedIndex === -1 ? fallbackIndex : preservedIndex
+    );
+    this.entries = flattened.entries;
+    this.index =
+      this.entries.length === 0
+        ? -1
+        : Math.max(0, Math.min(flattened.index, this.entries.length - 1));
+    this.revision++;
   }
 }

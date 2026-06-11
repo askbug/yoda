@@ -70,7 +70,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const { navigate } = useNavigate();
   const showRename = useShowModal('renameTaskModal');
   const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
-  const showCreateTask = useShowModal('taskModal');
+  const showCreateSubtask = useShowModal('newSubtaskModal');
   const showSetParent = useShowModal('setParentTaskModal');
 
   const { params } = useParams('task');
@@ -262,12 +262,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     // Subtask tree entries — projectless Drafts tasks stay flat for now.
     onCreateSubtask:
       projectId !== INTERNAL_PROJECT_ID && task.state !== 'unregistered'
-        ? () =>
-            showCreateTask({
-              projectId,
-              parentTaskId: taskId,
-              initialBranch: branchName ? { type: 'local', branch: branchName } : undefined,
-            })
+        ? () => showCreateSubtask({ projectId, parentTaskId: taskId })
         : undefined,
     onSetParent:
       projectId !== INTERNAL_PROJECT_ID && task.state !== 'unregistered'

@@ -1,5 +1,5 @@
-import { getProvider } from '@shared/agent-provider-registry';
 import { PRODUCT_NAME } from '@shared/app-identity';
+import { getRuntime } from '@shared/runtime-registry';
 import type { ActiveAgentSessionSummary } from '@main/core/tasks/task-manager';
 import type { TeardownMode } from '@main/core/workspaces/workspace-registry';
 
@@ -43,8 +43,8 @@ function truncateLabel(value: string): string {
 function sessionLabel(session: SessionDetail): string {
   const taskTitle = session.taskTitle?.trim() || session.taskId;
   const title = session.title.trim() || session.conversationId;
-  const providerName = getProvider(session.providerId)?.name ?? session.providerId;
-  return truncateLabel(`${taskTitle} - ${title} (${providerName})`);
+  const runtimeName = getRuntime(session.runtimeId)?.name ?? session.runtimeId;
+  return truncateLabel(`${taskTitle} - ${title} (${runtimeName})`);
 }
 
 function formatSessionList(sessions: SessionDetail[]): string {

@@ -113,6 +113,42 @@ async function listLocalRelativePath(
   };
 }
 
+/** Read-only whitelist roots for agent session transcripts (see readFile). */
+const AGENT_TRANSCRIPT_ROOTS = [
+  path.join(homedir(), '.claude', 'projects'),
+  path.join(homedir(), '.codex', 'sessions'),
+];
+
+function isAgentTranscriptPath(filePath: string): boolean {
+  if (!path.isAbsolute(filePath)) return false;
+  const resolved = path.resolve(filePath);
+  return AGENT_TRANSCRIPT_ROOTS.some((root) => resolved.startsWith(root + path.sep));
+}
+
+// Transcripts are plain JSONL and frequently exceed the workspace default of
+// 200 KiB; give them a viewer-friendly cap instead.
+const TRANSCRIPT_MAX_BYTES = 5 * 1024 * 1024;
+
+async function readAgentTranscriptFile(
+  filePath: string,
+  maxBytes: number = TRANSCRIPT_MAX_BYTES
+): Promise<{ content: string; truncated: boolean; totalSize: number }> {
+  const resolved = path.resolve(filePath);
+  const stat = await nativeFs.stat(resolved);
+  const truncated = stat.size > maxBytes;
+  if (!truncated) {
+    return { content: await nativeFs.readFile(resolved, 'utf8'), truncated, totalSize: stat.size };
+  }
+  const fd = await nativeFs.open(resolved, 'r');
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    await fd.read(buffer, 0, maxBytes, 0);
+    return { content: buffer.toString('utf8'), truncated, totalSize: stat.size };
+  } finally {
+    await fd.close();
+  }
+}
+
 export const filesController = createRPCController({
   listPathCompletions: async (
     projectId: string | null,
@@ -253,6 +289,18 @@ export const filesController = createRPCController({
   },
 
   readFile: async (projectId: string, workspaceId: string, filePath: string, maxBytes?: number) => {
+    // Agent transcript escape: session JSONL files (Claude transcript / Codex
+    // rollout) live under the agent CLIs' home dirs, outside any workspace
+    // jail. Allow READ-ONLY access to exactly those roots so the regular file
+    // viewer can open them; writes are not extended.
+    if (isAgentTranscriptPath(filePath)) {
+      try {
+        return ok(await readAgentTranscriptFile(filePath, maxBytes));
+      } catch (e) {
+        return err({ type: 'fs_error' as const, message: String(e) });
+      }
+    }
+
     const env = resolveWorkspace(projectId, workspaceId);
     if (!env)
       return err({ type: 'not_found' as const, entity: 'filesystem' as const, detail: undefined });

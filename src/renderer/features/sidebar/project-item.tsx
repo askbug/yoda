@@ -27,8 +27,8 @@ import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-
 import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import { copyTaskLink } from '@renderer/features/tasks/components/task-context-menu';
 import { nextDefaultConversationTitle } from '@renderer/features/tasks/conversations/conversation-title-utils';
-import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use-effective-provider';
-import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
+import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
+import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { isRegistered } from '@renderer/features/tasks/stores/task';
 import { ConnectionStatusDot } from '@renderer/lib/components/connection-status-dot';
 import { rpc } from '@renderer/lib/ipc';
@@ -100,8 +100,8 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
   const expressMode = homeDraft?.expressMode ?? false;
   const expressConnectionId =
     mountedProject?.data?.type === 'ssh' ? mountedProject.data.connectionId : undefined;
-  const { providerId: expressProviderId } = useEffectiveProvider(expressConnectionId);
-  const expressAutoApproveDefaults = useAgentAutoApproveDefaults();
+  const { runtimeId: expressProviderId } = useEffectiveRuntime(expressConnectionId);
+  const expressAutoApproveDefaults = useRuntimeAutoApproveDefaults();
 
   const currentProjectId =
     currentView === 'task'
@@ -155,7 +155,7 @@ export const SidebarProjectItem = observer(function SidebarProjectItem({
         id: crypto.randomUUID(),
         projectId: mounted.data.id,
         taskId,
-        provider: expressProviderId,
+        runtime: expressProviderId,
         title: nextDefaultConversationTitle(expressProviderId, []),
         autoApprove: expressAutoApproveDefaults.getDefault(expressProviderId),
       },

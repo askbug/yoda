@@ -1,16 +1,16 @@
 import type { HookInspectionResult, TaskHookOverrides } from '@shared/agent-hooks';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import { createRPCController } from '@shared/ipc/rpc';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { inspectHooks } from './inspect/hook-inspector';
 import { hookOverridesStore } from './inspect/hook-overrides-store';
 
 async function inspect(
   cwd: string,
-  providerId: AgentProviderId,
+  runtimeId: RuntimeId,
   taskId: string
 ): Promise<HookInspectionResult> {
   const overrides = await hookOverridesStore.get(taskId);
-  return inspectHooks(cwd, providerId, overrides);
+  return inspectHooks(cwd, runtimeId, overrides);
 }
 
 async function getOverrides(taskId: string): Promise<TaskHookOverrides> {

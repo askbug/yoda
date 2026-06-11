@@ -1,4 +1,4 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { createAmpClassifier } from './amp';
 import { createAuggieClassifier } from './auggie';
 import { createAutohandClassifier } from './autohand';
@@ -28,7 +28,7 @@ import { createRovoClassifier } from './rovo';
 
 export type { ProviderClassifier, ClassificationResult } from './base';
 
-const classifierFactories: Partial<Record<AgentProviderId, () => ProviderClassifier>> = {
+const classifierFactories: Partial<Record<RuntimeId, () => ProviderClassifier>> = {
   amp: createAmpClassifier,
   auggie: createAuggieClassifier,
   autohand: createAutohandClassifier,
@@ -55,7 +55,7 @@ const classifierFactories: Partial<Record<AgentProviderId, () => ProviderClassif
   rovo: createRovoClassifier,
 };
 
-export function createClassifier(providerId: AgentProviderId): ProviderClassifier {
-  const factory = classifierFactories[providerId];
+export function createClassifier(runtimeId: RuntimeId): ProviderClassifier {
+  const factory = classifierFactories[runtimeId];
   return factory ? factory() : createGenericClassifier();
 }

@@ -113,8 +113,8 @@ export function AgentEditModal({ agent, onSuccess, onClose }: Props) {
             <div className="space-y-2">
               <Label className="text-xs">{t('agentManager.preferredRuntime')}</Label>
               <AgentSelector
-                value={draft.preferredRuntimeProvider}
-                onChange={(provider) => set('preferredRuntimeProvider', provider)}
+                value={draft.preferredRuntime}
+                onChange={(provider) => set('preferredRuntime', provider)}
                 className="h-9 text-sm"
               />
               <p className="text-[10px] text-muted-foreground">

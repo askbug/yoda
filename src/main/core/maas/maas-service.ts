@@ -4,12 +4,15 @@ import {
   MAAS_PLATFORMS,
   type MaasConnectInput,
   type MaasConnection,
+  type MaasConnectionCheckResult,
   type MaasInvocationFilterKind,
   type MaasInvocationKind,
   type MaasInvocationPage,
   type MaasInvocationRecord,
   type MaasPlatformConnection,
   type MaasPlatformId,
+  type MaasUsageSummary,
+  type MaasUsageSummaryInput,
 } from '@shared/maas';
 import { TTLCache } from '@main/core/utils/ttl-cache';
 import { log } from '@main/lib/logger';
@@ -271,6 +274,39 @@ function buildZenmuxUsageRecords(
   });
 }
 
+function normalizeHints(hints: readonly string[] | undefined): string[] {
+  return (hints ?? []).map((hint) => hint.trim().toLowerCase()).filter(Boolean);
+}
+
+function matchesHints(
+  record: MaasInvocationRecord,
+  providerHints: string[],
+  modelHints: string[]
+): boolean {
+  const provider = record.provider.toLowerCase();
+  const model = record.model.toLowerCase();
+  const providerMatches =
+    providerHints.length === 0 ||
+    providerHints.some((hint) => provider.includes(hint) || model.includes(hint));
+  const modelMatches = modelHints.length === 0 || modelHints.some((hint) => model.includes(hint));
+  return providerMatches && modelMatches;
+}
+
+function sumNullable(
+  records: MaasInvocationRecord[],
+  pick: (record: MaasInvocationRecord) => number | null
+): number | null {
+  let total = 0;
+  let hasValue = false;
+  for (const record of records) {
+    const value = pick(record);
+    if (typeof value !== 'number') continue;
+    total += value;
+    hasValue = true;
+  }
+  return hasValue ? total : null;
+}
+
 export class MaasService {
   private readonly recordsCacheByConnection = new Map<string, TTLCache<RealRecordsResult>>();
   private readonly zenmuxModelCatalogCache = new TTLCache<string[]>(
@@ -342,6 +378,49 @@ export class MaasService {
     }
   }
 
+  async checkConnection(platformId: MaasPlatformId): Promise<MaasConnectionCheckResult> {
+    const checkedAt = new Date().toISOString();
+    try {
+      if (!isMaasPlatformId(platformId)) {
+        return { ok: false, error: 'Unsupported MaaS platform.', checkedAt };
+      }
+
+      const settings = await appSettingsService.get('maas');
+      const connection = getConnectedPlatform(settings, platformId);
+      if (!connection) {
+        return { ok: false, error: 'Platform is not connected.', checkedAt };
+      }
+
+      if (platformId !== 'zenmux') {
+        return {
+          ok: false,
+          error: `${MAAS_PLATFORMS[platformId].name} connectivity checks are not available yet.`,
+          checkedAt,
+        };
+      }
+
+      const apiKey = await encryptedAppSecretsStore.getSecret(secretKey(platformId));
+      if (!apiKey) {
+        return {
+          ok: false,
+          error: 'Stored API key is missing. Reconnect the platform to restore it.',
+          checkedAt,
+        };
+      }
+
+      // A real Management API round-trip: the cheapest call that exercises
+      // both the endpoint and the key.
+      await this.fetchZenmuxTimeseries(connection.endpoint, apiKey, 'cost');
+      return { ok: true, error: null, checkedAt };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Connectivity check failed.',
+        checkedAt,
+      };
+    }
+  }
+
   async disconnectPlatform(
     platformId: MaasPlatformId
   ): Promise<{ success: boolean; error?: string }> {
@@ -406,6 +485,45 @@ export class MaasService {
       records,
       nextOffset,
       total: filteredRecords.length,
+      source: result.source,
+      fetchedAt: result.fetchedAt,
+      period: result.period,
+    };
+  }
+
+  async getUsageSummary(input: MaasUsageSummaryInput): Promise<MaasUsageSummary> {
+    const kind = input.kind ?? 'all';
+    const settings = await appSettingsService.get('maas');
+    if (!getConnectedPlatform(settings, input.platformId)) {
+      return {
+        platformId: input.platformId,
+        recordCount: 0,
+        totalRecords: 0,
+        totalInputTokens: null,
+        totalOutputTokens: null,
+        totalCostUsd: null,
+        source: 'none',
+        fetchedAt: null,
+        period: null,
+      };
+    }
+
+    const result = await this.listRealRecords(settings, input.platformId, !!input.forceRefresh);
+    const kindFiltered =
+      kind === 'all' ? result.records : result.records.filter((record) => record.kind === kind);
+    const providerHints = normalizeHints(input.providerHints);
+    const modelHints = normalizeHints(input.modelHints);
+    const records = kindFiltered.filter((record) =>
+      matchesHints(record, providerHints, modelHints)
+    );
+
+    return {
+      platformId: input.platformId,
+      recordCount: records.length,
+      totalRecords: kindFiltered.length,
+      totalInputTokens: sumNullable(records, (record) => record.inputTokens),
+      totalOutputTokens: sumNullable(records, (record) => record.outputTokens),
+      totalCostUsd: sumNullable(records, (record) => record.costUsd),
       source: result.source,
       fetchedAt: result.fetchedAt,
       period: result.period,

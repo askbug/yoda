@@ -71,6 +71,20 @@ describe('getCodexSessionContext', () => {
         timestamp: '2026-06-02T11:00:03.000Z',
       },
     ]);
+    expect(context?.messages).toEqual([
+      {
+        id: '2026-06-02T11:00:03.000Z',
+        role: 'user',
+        text: 'Implement Codex context',
+        timestamp: '2026-06-02T11:00:03.000Z',
+      },
+      {
+        id: '2026-06-02T11:00:04.000Z',
+        role: 'assistant',
+        text: 'Done',
+        timestamp: '2026-06-02T11:00:04.000Z',
+      },
+    ]);
     expect(context?.developerMessages[0]?.text).toBe('Developer instructions');
     expect(context?.turnContexts[0]).toEqual(
       expect.objectContaining({

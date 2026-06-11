@@ -99,7 +99,7 @@ describe('resolveCodexThreadIdForConversation', () => {
         id: 'conversation-1',
         projectId: 'project-1',
         taskId: 'task-1',
-        providerId: 'codex',
+        runtimeId: 'codex',
         title: 'Stale Yoda conversation title',
         createdAt: '2026-06-04 06:45:36',
         lastInteractedAt: null,

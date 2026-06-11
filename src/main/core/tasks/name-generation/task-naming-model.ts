@@ -1,12 +1,12 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
-import type { ProviderCustomConfig } from '@shared/app-settings';
+import type { RuntimeCustomConfig } from '@shared/app-settings';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { parseShellWords } from '@main/core/conversations/impl/agent-command';
 
 const MODEL_FLAGS = new Set(['--model', '-m']);
 const MODEL_KEY_PATTERN = /^(?:model|model-id|model_id)$/i;
 const CODEX_EXEC_UNSUPPORTED_MODEL_ALIASES = new Set(['chat-latest']);
 
-export function resolveCurrentAgentModel(providerConfig: ProviderCustomConfig | undefined): string {
+export function resolveCurrentAgentModel(providerConfig: RuntimeCustomConfig | undefined): string {
   const args = collectLaunchArgs(providerConfig);
   for (let index = args.length - 1; index >= 0; index -= 1) {
     const arg = args[index]?.trim();
@@ -50,18 +50,18 @@ export function resolvePreferredTaskNamingModel({
 }
 
 export function normalizeTaskNamingModelForProvider(
-  providerId: AgentProviderId,
+  runtimeId: RuntimeId,
   model: string | undefined
 ): string {
   const trimmed = model?.trim() ?? '';
   if (!trimmed) return '';
-  if (providerId === 'codex' && CODEX_EXEC_UNSUPPORTED_MODEL_ALIASES.has(trimmed.toLowerCase())) {
+  if (runtimeId === 'codex' && CODEX_EXEC_UNSUPPORTED_MODEL_ALIASES.has(trimmed.toLowerCase())) {
     return '';
   }
   return trimmed;
 }
 
-function collectLaunchArgs(providerConfig: ProviderCustomConfig | undefined): string[] {
+function collectLaunchArgs(providerConfig: RuntimeCustomConfig | undefined): string[] {
   const args: string[] = [];
   const cliWords = parseWords(providerConfig?.cli);
   if (cliWords.length > 1) args.push(...cliWords.slice(1));

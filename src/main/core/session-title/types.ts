@@ -1,7 +1,7 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 
 export interface SessionTitleContext {
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   /** Yoda conversation id — also passed to the agent CLI as session id when applicable. */
   conversationId: string;
   projectId: string;
@@ -20,7 +20,7 @@ export interface SessionTitleWatcher {
 }
 
 export interface SessionTitleSource {
-  readonly providerId: AgentProviderId;
+  readonly runtimeId: RuntimeId;
   /** Start watching for title updates. Returns a watcher; call .stop() to detach. */
   watch(ctx: SessionTitleContext, onTitle: TitleListener): SessionTitleWatcher;
 }

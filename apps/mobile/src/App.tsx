@@ -1660,7 +1660,7 @@ function TaskSessionsScreen({
           <DetailItem label="Branch" value={task.taskBranch ?? 'No branch'} />
           <DetailItem
             label="Providers"
-            value={Object.keys(task.providerCounts).join(', ') || 'None'}
+            value={Object.keys(task.runtimeCounts).join(', ') || 'None'}
           />
           <DetailItem label="Updated" value={formatTimestamp(task.updatedAt)} />
         </View>
@@ -1710,7 +1710,7 @@ function SessionRow({ session, onPress }: { session: MobileSessionSummary; onPre
         </View>
       </View>
       <View style={styles.taskMetaLine}>
-        <MetaItem icon="hardware-chip-outline" label={session.providerId} />
+        <MetaItem icon="hardware-chip-outline" label={session.runtimeId} />
         <MetaItem
           icon={session.running ? 'radio-outline' : 'pause-circle-outline'}
           label={session.acceptsInput ? 'Live' : session.running ? 'Detached' : 'Stopped'}
@@ -1899,7 +1899,7 @@ function SessionDetailScreen({
             {detail ? (
               <>
                 <View style={styles.summaryPanel}>
-                  <DetailItem label="Provider" value={detail.session.providerId} />
+                  <DetailItem label="Runtime" value={detail.session.runtimeId} />
                   <DetailItem label="Runtime" value={runtimeLabel(detail.session.runtimeStatus)} />
                   <DetailItem label="Source" value={contentSourceLabel(detail.source)} />
                   <DetailItem

@@ -42,7 +42,7 @@ function runElectronRebuild(onlyModules) {
 const disablePty = process.env.YODA_DISABLE_PTY === '1';
 const disableNativeDb = process.env.YODA_DISABLE_NATIVE_DB === '1';
 
-const nativeModules: string[] = [];
+const nativeModules: string[] = ['uiohook-napi'];
 if (!disableNativeDb) nativeModules.push('better-sqlite3');
 if (!disablePty) nativeModules.push('node-pty');
 

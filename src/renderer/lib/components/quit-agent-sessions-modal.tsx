@@ -1,6 +1,5 @@
 import { ExternalLink, Power, Square, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { getProvider } from '@shared/agent-provider-registry';
 import { PRODUCT_NAME } from '@shared/app-identity';
 import {
   quitAgentSessionsRespondedChannel,
@@ -8,6 +7,7 @@ import {
   type QuitAgentSessionsRequest,
   type QuitAgentSessionsResponse,
 } from '@shared/events/appEvents';
+import { getRuntime } from '@shared/runtime-registry';
 import { openTaskTarget } from '@renderer/app/open-task-target';
 import { events, rpc } from '@renderer/lib/ipc';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
@@ -46,8 +46,8 @@ function sessionLabel(session: QuitAgentSessionInfo, resolvedTitle?: string): st
   return truncateLabel(resolvedTitle?.trim() || session.title.trim() || session.conversationId);
 }
 
-function providerName(session: QuitAgentSessionInfo): string {
-  return getProvider(session.providerId)?.name ?? session.providerId;
+function runtimeName(session: QuitAgentSessionInfo): string {
+  return getRuntime(session.runtimeId)?.name ?? session.runtimeId;
 }
 
 export function QuitAgentSessionsModal({ request, onSuccess, onClose }: Props) {
@@ -163,7 +163,7 @@ export function QuitAgentSessionsModal({ request, onSuccess, onClose }: Props) {
             {request.nonKeepableSessions.map((session) => {
               const label = taskLabel(session);
               const conversationLabel = sessionLabel(session, sessionTitles[session.sessionId]);
-              const provider = providerName(session);
+              const provider = runtimeName(session);
               return (
                 <button
                   key={session.sessionId}

@@ -1,5 +1,5 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import type { DependencyInstallError } from '@shared/dependencies';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { agentConfig } from '@renderer/utils/agentConfig';
 
 export type AgentInstallActionState = {
@@ -32,7 +32,7 @@ export function getAgentInstallActionState({
   isInstalled,
   isInstalling,
 }: {
-  agentId: AgentProviderId;
+  agentId: RuntimeId;
   canInstall: boolean;
   isInstalled: boolean;
   isInstalling: boolean;

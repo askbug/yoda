@@ -21,11 +21,11 @@ function normalizePayload(body: Record<string, unknown>): AgentEvent['payload'] 
 }
 
 function normalizeEventType(
-  providerId: string,
+  runtimeId: string,
   body: Record<string, unknown>,
   rawType: string
 ): AgentEvent['type'] {
-  if (providerId === 'codex' && body.type === 'agent-turn-complete') {
+  if (runtimeId === 'codex' && body.type === 'agent-turn-complete') {
     return 'stop';
   }
   return rawType as AgentEvent['type'];
@@ -54,9 +54,9 @@ export async function enrichEvent(raw: RawHookRequest): Promise<AgentEvent | nul
   const payload = normalizePayload(body);
 
   return {
-    type: normalizeEventType(parsed.providerId, body, raw.type),
+    type: normalizeEventType(parsed.runtimeId, body, raw.type),
     ptyId: raw.ptyId,
-    providerId: parsed.providerId,
+    runtimeId: parsed.runtimeId,
     projectId,
     conversationId: parsed.conversationId,
     taskId,

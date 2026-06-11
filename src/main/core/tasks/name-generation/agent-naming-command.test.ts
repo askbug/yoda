@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { ProviderCustomConfig } from '@shared/app-settings';
+import type { RuntimeCustomConfig } from '@shared/app-settings';
 import { buildAgentNamingCommand } from './agent-naming-command';
 
-function config(overrides: Partial<ProviderCustomConfig> = {}): ProviderCustomConfig {
+function config(overrides: Partial<RuntimeCustomConfig> = {}): RuntimeCustomConfig {
   return {
     namingModel: 'small-model',
     namingCommand: 'agent run --model {model}',

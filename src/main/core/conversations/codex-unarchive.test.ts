@@ -45,7 +45,7 @@ describe('ensureCodexThreadUnarchived', () => {
     insertThread(statePath, { id: 'thread-1', archived: 1 });
 
     await ensureCodexThreadUnarchived({
-      providerId: 'codex',
+      runtimeId: 'codex',
       providerConfig: {
         cli: 'codex',
         resumeFlag: 'resume',
@@ -66,7 +66,7 @@ describe('ensureCodexThreadUnarchived', () => {
     insertThread(statePath, { id: 'thread-1', archived: 0 });
 
     await ensureCodexThreadUnarchived({
-      providerId: 'codex',
+      runtimeId: 'codex',
       providerConfig: {
         cli: 'codex',
         resumeFlag: 'resume',

@@ -1,4 +1,5 @@
 import { NewConversationModal } from '@renderer/app/new-conversation-modal';
+import { NewSubtaskModal } from '@renderer/app/new-subtask-modal';
 import { NewTaskModal } from '@renderer/app/new-task-modal';
 import { AgentEditModal } from '@renderer/features/agents-config/agent-edit-modal';
 import { CommandPaletteModal } from '@renderer/features/command-palette/command-palette-modal';
@@ -50,6 +51,7 @@ export const modalRegistry = {
   taskModal: createModal(CreateTaskModal),
   newTaskModal: createModal(NewTaskModal, { size: 'lg' }),
   newConversationModal: createModal(NewConversationModal, { size: 'lg' }),
+  newSubtaskModal: createModal(NewSubtaskModal, { size: 'lg' }),
   addProjectModal: createModal(AddProjectModal),
   addSshConnModal: createModal(AddSshConnModal),
   changeProjectConnectionModal: createModal(ChangeProjectConnectionModal, { size: 'sm' }),

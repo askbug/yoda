@@ -44,6 +44,10 @@ function createPartialWorkspaceSchema(db: Database.Database): void {
     CREATE TABLE tasks (
       id text PRIMARY KEY NOT NULL
     );
+
+    CREATE TABLE conversations (
+      id text PRIMARY KEY NOT NULL
+    );
   `);
 }
 
@@ -78,7 +82,7 @@ describe('runBundledMigrations', () => {
 
       expect(columnExists(db, 'tasks', 'sidebar_workspace_id')).toBe(true);
       expect(indexExists(db, 'idx_tasks_sidebar_workspace_id')).toBe(true);
-      expect(countAppliedMigrations(db)).toBe(22);
+      expect(countAppliedMigrations(db)).toBe(getBundledMigrationCount());
     } finally {
       db.close();
     }

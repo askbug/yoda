@@ -75,7 +75,7 @@ describe('ClaudeTrustService', () => {
     const service = makeService();
 
     await service.maybeAutoTrustLocal({
-      providerId: 'codex',
+      runtimeId: 'codex',
       cwd: '/tmp/worktree',
       homedir: '/home/local-user',
     });
@@ -88,7 +88,7 @@ describe('ClaudeTrustService', () => {
     const service = makeService({ autoTrustWorktrees: false });
 
     await service.maybeAutoTrustLocal({
-      providerId: 'claude',
+      runtimeId: 'claude',
       cwd: '/tmp/worktree',
       homedir: '/home/local-user',
     });
@@ -102,7 +102,7 @@ describe('ClaudeTrustService', () => {
     const relPath = './relative/path';
 
     await service.maybeAutoTrustLocal({
-      providerId: 'claude',
+      runtimeId: 'claude',
       cwd: relPath,
       homedir: '/home/local-user',
     });
@@ -139,7 +139,7 @@ describe('ClaudeTrustService', () => {
     );
 
     await service.maybeAutoTrustLocal({
-      providerId: 'claude',
+      runtimeId: 'claude',
       cwd: trustedPath,
       homedir: '/home/local-user',
     });
@@ -153,7 +153,7 @@ describe('ClaudeTrustService', () => {
     mockReadFile.mockResolvedValue('{ invalid json');
 
     await service.maybeAutoTrustLocal({
-      providerId: 'claude',
+      runtimeId: 'claude',
       cwd: '/tmp/worktree',
       homedir: '/home/local-user',
     });
@@ -171,7 +171,7 @@ describe('ClaudeTrustService', () => {
     mockReadFile.mockResolvedValue(JSON.stringify([1, 2, 3]));
 
     await service.maybeAutoTrustLocal({
-      providerId: 'claude',
+      runtimeId: 'claude',
       cwd: '/tmp/worktree',
       homedir: '/home/local-user',
     });
@@ -195,12 +195,12 @@ describe('ClaudeTrustService', () => {
 
     await Promise.all([
       service.maybeAutoTrustLocal({
-        providerId: 'claude',
+        runtimeId: 'claude',
         cwd: '/worktree/a',
         homedir: '/home/local-user',
       }),
       service.maybeAutoTrustLocal({
-        providerId: 'claude',
+        runtimeId: 'claude',
         cwd: '/worktree/b',
         homedir: '/home/local-user',
       }),
@@ -243,7 +243,7 @@ describe('ClaudeTrustService', () => {
     };
 
     await service.maybeAutoTrustSsh({
-      providerId: 'claude',
+      runtimeId: 'claude',
       cwd: '/remote/worktree',
       ctx,
       remoteFs,

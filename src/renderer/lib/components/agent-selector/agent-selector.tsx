@@ -2,7 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import {
   Combobox,
@@ -28,8 +28,8 @@ import { AgentTooltipRow } from './agent-tooltip-row';
 import { useAgentAvailability } from './use-agent-availability';
 
 interface AgentSelectorProps {
-  value: AgentProviderId | null;
-  onChange: (agent: AgentProviderId) => void;
+  value: RuntimeId | null;
+  onChange: (agent: RuntimeId) => void;
   disabled?: boolean;
   className?: string;
   connectionId?: string;

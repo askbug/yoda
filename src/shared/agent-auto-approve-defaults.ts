@@ -1,18 +1,18 @@
-import type { AgentProviderId } from './agent-provider-registry';
+import type { RuntimeId } from './runtime-registry';
 
-export type AgentAutoApproveDefaults = Partial<Record<AgentProviderId, boolean>>;
+export type RuntimeAutoApproveDefaults = Partial<Record<RuntimeId, boolean>>;
 
 export function getAgentAutoApproveDefault(
-  defaults: AgentAutoApproveDefaults | undefined,
-  providerId: AgentProviderId
+  defaults: RuntimeAutoApproveDefaults | undefined,
+  runtimeId: RuntimeId
 ): boolean {
-  return defaults?.[providerId] ?? false;
+  return defaults?.[runtimeId] ?? false;
 }
 
 export function resolveAgentAutoApprove(
   explicitAutoApprove: boolean | undefined,
-  defaults: AgentAutoApproveDefaults | undefined,
-  providerId: AgentProviderId
+  defaults: RuntimeAutoApproveDefaults | undefined,
+  runtimeId: RuntimeId
 ): boolean {
-  return explicitAutoApprove ?? getAgentAutoApproveDefault(defaults, providerId);
+  return explicitAutoApprove ?? getAgentAutoApproveDefault(defaults, runtimeId);
 }

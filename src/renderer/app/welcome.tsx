@@ -1,7 +1,6 @@
 import { motion, type Variants } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import IconLight from '@/assets/images/yoda/icon-light.png';
-import YTBanner from '@/assets/images/ytbanner.png';
 import { useTheme } from '@renderer/lib/hooks/useTheme';
 import { Button } from '@renderer/lib/ui/button';
 
@@ -42,9 +41,8 @@ export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
         <div
           className="absolute inset-0 opacity-40"
           style={{
-            backgroundImage: `url(${YTBanner})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center top',
+            background:
+              'radial-gradient(120% 100% at 50% 100%, color-mix(in srgb, var(--primary-button-background) 45%, transparent) 0%, color-mix(in srgb, var(--primary-button-background) 18%, transparent) 45%, transparent 75%)',
             maskImage:
               'linear-gradient(to bottom, transparent 0%, transparent 30%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.8) 100%)',
             WebkitMaskImage:

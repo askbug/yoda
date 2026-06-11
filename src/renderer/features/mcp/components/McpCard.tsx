@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
 import { ExternalLink, Globe, Pencil, Plus, Terminal } from 'lucide-react';
 import React from 'react';
-import { type AgentProviderId } from '@shared/agent-provider-registry';
 import type { McpCatalogEntry, McpServer } from '@shared/mcp/types';
+import { type RuntimeId } from '@shared/runtime-registry';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import { agentConfig } from '@renderer/utils/agentConfig';
 import { McpServerIcon } from '@renderer/utils/mcpIcons';
@@ -24,7 +24,7 @@ function getTransport(server?: McpServer, entry?: McpCatalogEntry): 'stdio' | 'h
 function getSyncedProviders(server?: McpServer) {
   if (!server) return [];
   return server.providers.flatMap((id) => {
-    const cfg = agentConfig[id as AgentProviderId];
+    const cfg = agentConfig[id as RuntimeId];
     return cfg ? [{ id, ...cfg }] : [];
   });
 }

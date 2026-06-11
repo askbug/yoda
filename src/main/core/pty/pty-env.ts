@@ -93,10 +93,12 @@ function getWindowsEssentialEnv(resolvedPath: string): Record<string, string> {
 
 export interface AgentEnvOptions {
   /**
-   * Pass through AGENT_ENV_VARS from process.env.
-   * Defaults to true — set false only for tests or sandboxed environments.
+   * Pass through API env vars from process.env. Pass an explicit list to limit
+   * the inherited API envs to the active auth provider for the current runtime.
+   * Defaults to true — set false only for tests, sandboxed environments, or
+   * runtimes that should use native subscription/MaaS auth instead of API envs.
    */
-  agentApiVars?: boolean;
+  agentApiVars?: boolean | readonly string[];
 
   /**
    * Include SHELL in the env (needed for shell-wrapper spawns so the shell
@@ -205,7 +207,8 @@ export function buildAgentEnv(options: AgentEnvOptions = {}): Record<string, str
   }
 
   if (agentApiVars) {
-    for (const key of AGENT_ENV_VARS) {
+    const apiEnvVars = Array.isArray(agentApiVars) ? agentApiVars : AGENT_ENV_VARS;
+    for (const key of apiEnvVars) {
       const val = process.env[key];
       if (val) env[key] = val;
     }

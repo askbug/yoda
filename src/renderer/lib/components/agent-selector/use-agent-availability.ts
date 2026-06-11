@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { useToast } from '@renderer/lib/hooks/use-toast';
 import { appState } from '@renderer/lib/stores/app-state';
 import { agentConfig } from '@renderer/utils/agentConfig';
@@ -11,7 +11,7 @@ export function useAgentAvailability({
   value,
 }: {
   connectionId?: string;
-  value: AgentProviderId | null;
+  value: RuntimeId | null;
 }) {
   const dependencyResource = connectionId
     ? appState.dependencies.getRemote(connectionId)
@@ -38,7 +38,7 @@ export function useAgentAvailability({
     () => buildAgentGroups(installedAgents, assumedInstalledAgents),
     [installedAgents, assumedInstalledAgents]
   );
-  const installingAgents = new Set<AgentProviderId>();
+  const installingAgents = new Set<RuntimeId>();
   for (const group of groups) {
     for (const item of group.items) {
       if (appState.dependencies.isInstalling(item.agentId, connectionId)) {
@@ -47,7 +47,7 @@ export function useAgentAvailability({
     }
   }
 
-  async function installAgent(agentId: AgentProviderId): Promise<void> {
+  async function installAgent(agentId: RuntimeId): Promise<void> {
     if (appState.dependencies.isInstalling(agentId, connectionId)) return;
     const result = await appState.dependencies.install(agentId, connectionId);
     if (!result.success) {

@@ -1,11 +1,11 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import type { Result } from '@shared/result';
+import type { RuntimeId } from '@shared/runtime-registry';
 
 export type DependencyCategory = 'core' | 'agent';
 
 export type CoreDependencyId = 'git' | 'gh' | 'tmux' | 'ssh' | 'node';
 
-export type DependencyId = CoreDependencyId | AgentProviderId;
+export type DependencyId = CoreDependencyId | RuntimeId;
 
 export type DependencyStatus = 'available' | 'missing' | 'error';
 

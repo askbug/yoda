@@ -2,11 +2,11 @@ import { ArrowUpRight, Check, Copy } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  getDescriptionForProvider,
-  getDocUrlForProvider,
-  getInstallCommandForProvider,
-  getProvider,
-} from '@shared/agent-provider-registry';
+  getDescriptionForRuntime,
+  getDocUrlForRuntime,
+  getInstallCommandForRuntime,
+  getRuntime,
+} from '@shared/runtime-registry';
 import AgentLogo from '@renderer/lib/components/agent-logo';
 import { type UiAgent } from '@renderer/lib/providers/meta';
 import { Button } from '@renderer/lib/ui/button';
@@ -18,11 +18,11 @@ type Props = {
 
 export const AgentInfoCard: React.FC<Props> = ({ id }) => {
   const { t } = useTranslation();
-  const provider = getProvider(id);
+  const provider = getRuntime(id);
   const config = agentConfig[id];
-  const description = getDescriptionForProvider(id);
-  const installCommand = getInstallCommandForProvider(id) ?? 'npm install -g @openai/codex';
-  const docUrl = getDocUrlForProvider(id);
+  const description = getDescriptionForRuntime(id);
+  const installCommand = getInstallCommandForRuntime(id) ?? 'npm install -g @openai/codex';
+  const docUrl = getDocUrlForRuntime(id);
   const title = provider?.name ?? id;
   const [copied, setCopied] = useState(false);
   const copyResetRef = useRef<number | null>(null);

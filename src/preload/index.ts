@@ -18,4 +18,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return '';
     }
   },
+  getCurrentWindowId: () => ipcRenderer.invoke('window.getCurrentId') as Promise<number | null>,
+  closeCurrentWindow: () => ipcRenderer.invoke('window.closeCurrent') as Promise<void>,
 });

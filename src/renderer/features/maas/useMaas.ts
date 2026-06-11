@@ -1,6 +1,11 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import type { MaasConnectInput, MaasInvocationFilterKind, MaasPlatformId } from '@shared/maas';
+import type {
+  MaasConnectInput,
+  MaasInvocationFilterKind,
+  MaasPlatformId,
+  MaasUsageSummary,
+} from '@shared/maas';
 import { rpc } from '@renderer/lib/ipc';
 
 const PAGE_SIZE = 24;
@@ -10,6 +15,23 @@ export const maasQueryKeys = {
   connections: ['maas', 'connections'] as const,
   records: (platformId: MaasPlatformId, kind: MaasInvocationFilterKind, refreshSequence = 0) =>
     ['maas', 'records', REAL_USAGE_QUERY_VERSION, platformId, kind, refreshSequence] as const,
+  summary: (
+    platformId: MaasPlatformId,
+    kind: MaasInvocationFilterKind,
+    providerHints: readonly string[],
+    modelHints: readonly string[],
+    refreshSequence = 0
+  ) =>
+    [
+      'maas',
+      'summary',
+      REAL_USAGE_QUERY_VERSION,
+      platformId,
+      kind,
+      providerHints.join('|'),
+      modelHints.join('|'),
+      refreshSequence,
+    ] as const,
 };
 
 export function useMaasConnections() {
@@ -52,6 +74,12 @@ export function useDisconnectMaasPlatform() {
       void queryClient.invalidateQueries({ queryKey: maasQueryKeys.connections });
       void queryClient.invalidateQueries({ queryKey: ['maas', 'records'] });
     },
+  });
+}
+
+export function useCheckMaasConnection() {
+  return useMutation({
+    mutationFn: (platformId: MaasPlatformId) => rpc.maas.checkConnection(platformId),
   });
 }
 
@@ -100,6 +128,49 @@ export function useMaasInvocationRecords(
     isFetchingNextPage: query.isFetchingNextPage,
     hasNextPage: query.hasNextPage,
     fetchNextPage: query.fetchNextPage,
+    reload,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : String(query.error)
+      : null,
+  };
+}
+
+export function useMaasUsageSummary(
+  platformId: MaasPlatformId,
+  kind: MaasInvocationFilterKind,
+  enabled: boolean,
+  filters?: {
+    providerHints?: readonly string[];
+    modelHints?: readonly string[];
+  }
+) {
+  const [refreshSequence, setRefreshSequence] = useState(0);
+  const reload = useCallback(() => setRefreshSequence((value) => value + 1), []);
+  const providerHints = filters?.providerHints ?? [];
+  const modelHints = filters?.modelHints ?? [];
+
+  const query = useQuery<MaasUsageSummary>({
+    queryKey: maasQueryKeys.summary(platformId, kind, providerHints, modelHints, refreshSequence),
+    queryFn: () =>
+      rpc.maas.getUsageSummary({
+        platformId,
+        kind,
+        providerHints,
+        modelHints,
+        forceRefresh: refreshSequence > 0,
+      }) as Promise<MaasUsageSummary>,
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  return {
+    summary: query.data ?? null,
+    loading: query.isLoading,
+    reloading: query.isFetching && !query.isLoading,
     reload,
     error: query.error
       ? query.error instanceof Error

@@ -88,6 +88,26 @@ export type CodexMemoryFile = {
   bytes: number;
 };
 
+/**
+ * One entry of Claude Code's self-maintained memory store
+ * (~/.claude/projects/<encoded-cwd>/memory/). Unlike CLAUDE.md / AGENTS.md
+ * (human-authored instructions), these files are written by the agent itself.
+ * `index` is the MEMORY.md index file; `entry` is a single memory fact.
+ */
+export type AgentMemory = {
+  kind: 'index' | 'entry';
+  /** Frontmatter `name` slug for entries; file stem for the index. */
+  name: string;
+  /** Frontmatter one-line summary, when present. */
+  description: string | null;
+  /** Frontmatter `metadata.type`: user | feedback | project | reference. */
+  type: string | null;
+  path: string;
+  /** Body with frontmatter stripped (entries) or the full file (index). */
+  content: string;
+  bytes: number;
+};
+
 export type ClaudeMcpServer = {
   name: string;
   instructions: string;
@@ -116,6 +136,8 @@ export type ClaudeStatuslineConfig = {
 export type ClaudeSessionContext = {
   transcriptPath: string;
   memoryFiles: ClaudeMemoryFile[];
+  /** Agent-maintained memories from ~/.claude/projects/<encoded-cwd>/memory/. */
+  memories: AgentMemory[];
   tools: string[];
   agents: string[];
   mcpServers: ClaudeMcpServer[];

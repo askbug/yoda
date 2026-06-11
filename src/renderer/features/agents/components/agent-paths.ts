@@ -1,4 +1,4 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 
 export type AgentPaths = {
   config?: string;
@@ -13,7 +13,7 @@ export type AgentPaths = {
  * Paths are returned with the literal `~` prefix — call `expandHome` before passing
  * them to `rpc.app.openIn` so the shell can resolve them.
  */
-export function resolveAgentPaths(id: AgentProviderId): AgentPaths {
+export function resolveAgentPaths(id: RuntimeId): AgentPaths {
   switch (id) {
     case 'claude':
       return {

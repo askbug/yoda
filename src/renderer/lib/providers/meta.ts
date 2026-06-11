@@ -25,9 +25,9 @@ import openaiIcon from '@/assets/images/openai.svg?raw';
 import opencodeIcon from '@/assets/images/opencode.png';
 import piIcon from '@/assets/images/pi.png';
 import qwenIcon from '@/assets/images/qwen.png';
-import { AGENT_PROVIDERS, type AgentProviderId } from '@shared/agent-provider-registry';
+import { RUNTIMES, type RuntimeId } from '@shared/runtime-registry';
 
-export type UiAgent = AgentProviderId;
+export type UiAgent = RuntimeId;
 
 const ICONS: Record<string, string> = {
   'Auggie.svg': augmentcodeIcon,
@@ -79,7 +79,7 @@ export type AgentMeta = {
 };
 
 export const agentMeta: Record<UiAgent, AgentMeta> = Object.fromEntries(
-  AGENT_PROVIDERS.map((p) => [
+  RUNTIMES.map((p) => [
     p.id,
     {
       label: p.name,

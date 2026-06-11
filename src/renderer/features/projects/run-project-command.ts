@@ -1,7 +1,7 @@
 import { applyAgentCommandPrefix } from '@shared/agent-command-prefix';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import type { Branch } from '@shared/git';
 import type { QuickAction } from '@shared/project-settings';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { ensureUniqueTaskSlug } from '@shared/task-name';
 import type { MountedProject } from '@renderer/features/projects/stores/project';
 
@@ -26,13 +26,13 @@ function timestampSuffix(now: Date): string {
 export async function runProjectCommand(args: {
   project: MountedProject;
   action: QuickAction;
-  providerId: AgentProviderId | null;
+  runtimeId: RuntimeId | null;
   defaultBranch: Branch | undefined;
   autoApprove: boolean | undefined;
 }): Promise<string | null> {
-  const { project, action, providerId, defaultBranch, autoApprove } = args;
-  const command = providerId ? applyAgentCommandPrefix(providerId, action.command) : '';
-  if (!command || !providerId || !defaultBranch) return null;
+  const { project, action, runtimeId, defaultBranch, autoApprove } = args;
+  const command = runtimeId ? applyAgentCommandPrefix(runtimeId, action.command) : '';
+  if (!command || !runtimeId || !defaultBranch) return null;
 
   const baseName = `ops-${slugifyLabel(action.label)}-${timestampSuffix(new Date())}`;
   const existing = Array.from(project.taskManager.tasks.values(), (t) => t.data.name);
@@ -49,7 +49,7 @@ export async function runProjectCommand(args: {
       id: crypto.randomUUID(),
       projectId: project.data.id,
       taskId,
-      provider: providerId,
+      runtime: runtimeId,
       title: action.label || command,
       autoApprove,
       initialPrompt: command,

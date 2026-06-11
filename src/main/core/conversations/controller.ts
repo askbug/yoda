@@ -17,12 +17,22 @@ import { getConversationRuntimeStatuses } from './getConversationRuntimeStatuses
 import { getConversations } from './getConversations';
 import { getConversationSessionInfo } from './getConversationSessionInfo';
 import { getConversationsForTask } from './getConversationsForTask';
-import { getSessionSummary } from './getSessionSummary';
+import {
+  getSessionSummary,
+  getSessionSummaryPreview,
+  setManualSessionSummary,
+} from './getSessionSummary';
 import { interruptConversation } from './interruptConversation';
 import { renameConversation } from './renameConversation';
 import { restartConversation } from './restartConversation';
 import { resumeConversation } from './resumeConversation';
+import { getSessionSummarySnapshot } from './session-summary-snapshot';
 import { touchConversation } from './touchConversation';
+import {
+  getConversationTranscript,
+  subscribeConversationTranscript,
+  unsubscribeConversationTranscript,
+} from './transcript-feed';
 import { unarchiveConversation } from './unarchiveConversation';
 
 export const conversationController = createRPCController({
@@ -50,4 +60,10 @@ export const conversationController = createRPCController({
   getCodexSessionContext,
   getConversationSessionInfo,
   getSessionSummary,
+  getSessionSummaryPreview,
+  getSessionSummarySnapshot,
+  setManualSessionSummary,
+  getConversationTranscript,
+  subscribeConversationTranscript,
+  unsubscribeConversationTranscript,
 });

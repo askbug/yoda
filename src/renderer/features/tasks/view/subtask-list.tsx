@@ -21,15 +21,13 @@ const LIFECYCLE_LABEL_KEY: Record<TaskLifecycleStatus, string> = {
 export const SubtaskList = observer(function SubtaskList({
   projectId,
   taskId,
-  branchName,
 }: {
   projectId: string;
   taskId: string;
-  branchName?: string;
 }) {
   const { t } = useTranslation();
   const { navigate } = useNavigate();
-  const showCreateTask = useShowModal('taskModal');
+  const showCreateSubtask = useShowModal('newSubtaskModal');
   const showSetParent = useShowModal('setParentTaskModal');
 
   const children = taskChildren(projectId, taskId).filter(
@@ -50,13 +48,7 @@ export const SubtaskList = observer(function SubtaskList({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() =>
-              showCreateTask({
-                projectId,
-                parentTaskId: taskId,
-                initialBranch: branchName ? { type: 'local', branch: branchName } : undefined,
-              })
-            }
+            onClick={() => showCreateSubtask({ projectId, parentTaskId: taskId })}
           >
             <ListPlus className="size-4" />
             {t('tasks.context.createSubtask')}

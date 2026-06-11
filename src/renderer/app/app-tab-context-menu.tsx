@@ -21,10 +21,7 @@ import {
   openProvisionedTaskTab,
 } from '@renderer/app/open-task-target';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
-import {
-  archiveConversationWithPreCommand,
-  archiveTaskIfNoConversationsLeft,
-} from '@renderer/features/tasks/archive-task';
+import { archiveConversationFlow } from '@renderer/features/tasks/archive-task';
 import { copyTaskLink } from '@renderer/features/tasks/components/task-context-menu';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
@@ -49,9 +46,9 @@ import { log } from '@renderer/utils/logger';
  * automatically. Section order follows frequency, with the destructive
  * lifecycle action isolated at the bottom:
  *
- *   conversation tabs: actions (rename / copy link)
- *                      → placement (pin to sidebar / open in window)
- *                      → close group → lifecycle (reload / archive, always last)
+ *   conversation tabs: management (rename / archive) → copy link
+ *                      → open modes (in sidebar / in window)
+ *                      → close group + reload (always last)
  *   file/diff tabs:    placement → path actions → close group
  *   every other tab:   close group only
  *
@@ -140,14 +137,21 @@ function buildTaskSections(tab: AppTabEntry, t: Translate): ReactNode[][] {
   );
 
   if (target.kind === 'conversation') {
-    const [actions, lifecycle] = buildConversationSections(
+    const [management, copy, maintenance] = buildConversationSections(
       provisioned,
       projectId,
       taskId,
       target.conversationId,
       t
     );
-    return [actions ?? [], placement, buildCloseSection(tab, t), lifecycle ?? []];
+    // Final section: tab close actions + reload, the "get rid of it / fix it"
+    // cluster at the bottom.
+    return [
+      management ?? [],
+      copy ?? [],
+      placement,
+      [...buildCloseSection(tab, t), ...(maintenance ?? [])],
+    ];
   }
 
   // file / diff target — path actions based on the task worktree.
@@ -241,8 +245,8 @@ function formatHotkey(hotkey: string | undefined): string | undefined {
 }
 
 /**
- * Conversation menu sections (actions + lifecycle), shared between the
- * top-level tab strip and the task sidebar's pinned chips.
+ * Conversation menu sections (management + copy + maintenance), shared between
+ * the top-level tab strip and the task sidebar's pinned chips.
  */
 export function buildConversationSections(
   provisioned: ProvisionedTask | undefined,
@@ -251,9 +255,11 @@ export function buildConversationSections(
   conversationId: string,
   t: Translate
 ): ReactNode[][] {
-  const actions: ReactNode[] = [];
+  // Session management: rename + archive — both routine ways of curating a
+  // session (archive is recoverable, so no destructive isolation).
+  const management: ReactNode[] = [];
   if (provisioned) {
-    actions.push(
+    management.push(
       <ContextMenuItem
         key="rename"
         className="whitespace-nowrap"
@@ -269,10 +275,30 @@ export function buildConversationSections(
       >
         <Pencil className="size-4" />
         {t('tasks.tabs.renameConversation')}
+      </ContextMenuItem>,
+      <ContextMenuItem
+        key="archive"
+        className="whitespace-nowrap"
+        onClick={() => {
+          void archiveConversationFlow(projectId, taskId, conversationId).catch(
+            (error: unknown) => {
+              log.warn('AppTabContextMenu: archive conversation failed', {
+                projectId,
+                taskId,
+                conversationId,
+                error,
+              });
+            }
+          );
+        }}
+      >
+        <Archive className="size-4" />
+        {t('tasks.tabs.archiveConversation')}
       </ContextMenuItem>
     );
   }
-  actions.push(
+
+  const copy: ReactNode[] = [
     <ContextMenuItem
       key="copy-link"
       className="whitespace-nowrap"
@@ -280,14 +306,14 @@ export function buildConversationSections(
     >
       <Link className="size-4" />
       {t('tasks.tabs.copyYodaLink')}
-    </ContextMenuItem>
-  );
+    </ContextMenuItem>,
+  ];
 
-  // Lifecycle section: reload (rare recovery action) and archive — both act
-  // on the session as a whole, kept at the bottom away from the daily items.
-  const lifecycle: ReactNode[] = [];
+  // Maintenance: reload is a rare recovery action — bottom, away from the
+  // daily items.
+  const maintenance: ReactNode[] = [];
   if (provisioned) {
-    lifecycle.push(
+    maintenance.push(
       <ContextMenuItem
         key="reload"
         className="whitespace-nowrap"
@@ -297,33 +323,9 @@ export function buildConversationSections(
         {t('tasks.tabs.reloadConversation')}
       </ContextMenuItem>
     );
-    // Archiving always runs the configured pre-archive command (when set) —
-    // the plain close (×) is the no-command path.
-    const archiveConversation = () => {
-      if (provisioned.conversations.conversations.get(conversationId)?.isArchiving) return;
-      void (async () => {
-        try {
-          await archiveConversationWithPreCommand(projectId, taskId, conversationId);
-          await archiveTaskIfNoConversationsLeft(projectId, taskId);
-        } catch (error) {
-          log.warn('AppTabContextMenu: archive conversation failed', {
-            projectId,
-            taskId,
-            conversationId,
-            error,
-          });
-        }
-      })();
-    };
-    lifecycle.push(
-      <ContextMenuItem key="archive" className="whitespace-nowrap" onClick={archiveConversation}>
-        <Archive className="size-4" />
-        {t('tasks.tabs.archiveConversation')}
-      </ContextMenuItem>
-    );
   }
 
-  return [actions, lifecycle];
+  return [management, copy, maintenance];
 }
 
 /**

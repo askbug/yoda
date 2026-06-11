@@ -1,4 +1,4 @@
-import { Reorder, type HTMLElements } from 'motion/react';
+import { Reorder, type HTMLElements, type PanInfo } from 'motion/react';
 import React from 'react';
 
 type Axis = 'x' | 'y';
@@ -13,6 +13,10 @@ interface ReorderListProps<T> {
   layoutScroll?: boolean;
   as?: ReorderTag;
   getKey?: (item: T, index: number) => string | number;
+  /** Fired while an item is dragged. Use to detect drag-out gestures. */
+  onItemDrag?: (item: T, event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void;
+  /** Fired when an item drag ends. Use to commit drag-out gestures. */
+  onItemDragEnd?: (item: T, event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void;
   children: (item: T, index: number) => React.ReactNode;
 }
 
@@ -25,6 +29,8 @@ export function ReorderList<T>({
   layoutScroll = true,
   as = 'div',
   getKey,
+  onItemDrag,
+  onItemDragEnd,
   children,
 }: ReorderListProps<T>) {
   return (
@@ -42,6 +48,8 @@ export function ReorderList<T>({
           value={item}
           className={itemClassName}
           transition={{ layout: { duration: 0 } }}
+          onDrag={onItemDrag ? (event, info) => onItemDrag(item, event, info) : undefined}
+          onDragEnd={onItemDragEnd ? (event, info) => onItemDragEnd(item, event, info) : undefined}
         >
           {children(item, index)}
         </Reorder.Item>

@@ -36,7 +36,7 @@ describe('enrichEvent', () => {
 
     expect(event).not.toBeNull();
     expect(event!.type).toBe('stop');
-    expect(event!.providerId).toBe('codex');
+    expect(event!.runtimeId).toBe('codex');
     expect(event!.projectId).toBe('project-1');
     expect(event!.taskId).toBe('task-1');
     expect(event!.conversationId).toBe('conversation-1');

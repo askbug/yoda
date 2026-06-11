@@ -25,7 +25,7 @@ export function useTaskTodos(): {
 } {
   const provisioned = useProvisionedTask();
   const activeConversation = provisioned.taskView.tabManager.activeConversation;
-  const isClaude = activeConversation?.data.providerId === 'claude';
+  const isClaude = activeConversation?.data.runtimeId === 'claude';
   const cwd = provisioned.path;
   const sessionId = activeConversation?.data.id ?? '';
 
@@ -55,7 +55,7 @@ export const TaskTodosCount = observer(function TaskTodosCount({
 }: {
   todos: ReturnType<typeof useTaskTodos>;
 }) {
-  if (todos.todos.length === 0) return null;
+  if (!todos.hasConversation) return null;
   return (
     <span className="px-1.5 text-[11px] text-foreground-passive font-mono">
       {todos.done}/{todos.todos.length}

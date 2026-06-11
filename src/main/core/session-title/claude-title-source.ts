@@ -23,7 +23,7 @@ import type {
  * and is intentionally ignored — it is not the auto-title.
  */
 export class ClaudeSessionTitleSource implements SessionTitleSource {
-  readonly providerId = 'claude' as const;
+  readonly runtimeId = 'claude' as const;
 
   watch(ctx: SessionTitleContext, onTitle: TitleListener): SessionTitleWatcher {
     const filePath = resolveClaudeTranscriptPath(ctx.cwd, ctx.conversationId);

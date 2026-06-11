@@ -39,8 +39,8 @@ import {
 /**
  * Merged "Session" sidebar surface — the 百叶窗 (window-blind) accordion that
  * folds the session / conversation / task / naming tabs into one panel, plus
- * the agent-runtime (harness) blinds: memory, tools, MCP, skills, agents,
- * hooks. Each blind hosts an existing panel rendered in `chromeless` mode so
+ * the agent-runtime (harness) blinds: persona, memory, tools, MCP, skills,
+ * agents, hooks. Each blind hosts an existing panel rendered in `chromeless` mode so
  * the blind trigger is the only header.
  */
 export const SessionPanel = observer(function SessionPanel() {
@@ -111,6 +111,7 @@ export const SessionPanel = observer(function SessionPanel() {
             title={t('tasks.sessionPanel.tasks')}
           />
         );
+      case 'persona':
       case 'memory':
       case 'tools':
       case 'mcp-servers':

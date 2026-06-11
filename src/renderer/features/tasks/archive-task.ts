@@ -58,6 +58,24 @@ export async function archiveConversationWithPreCommand(
 }
 
 /**
+ * Full archive flow for a conversation: pre-archive command, then the task
+ * itself when this was its last conversation. Re-entrant safe — a no-op while
+ * the conversation is already archiving.
+ */
+export async function archiveConversationFlow(
+  projectId: string,
+  taskId: string,
+  conversationId: string
+): Promise<void> {
+  const provisioned = asProvisioned(getTaskStore(projectId, taskId));
+  if (!provisioned) return;
+  if (provisioned.conversations.conversations.get(conversationId)?.isArchiving) return;
+
+  await archiveConversationWithPreCommand(projectId, taskId, conversationId);
+  await archiveTaskIfNoConversationsLeft(projectId, taskId);
+}
+
+/**
  * Archive the task when its last conversation is gone — archiving the final
  * conversation implies the task itself is finished. No-op while any
  * conversation is still active.

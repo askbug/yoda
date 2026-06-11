@@ -2,36 +2,36 @@ import { FolderOpen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
 import { expandHome, resolveAgentPaths } from './agent-paths';
 import { AgentSection } from './AgentSection';
 
-export const AgentTabMemory: React.FC<{ agentId: AgentProviderId }> = observer(
-  function AgentTabMemory({ agentId }) {
-    const { t } = useTranslation();
-    const provider = getProvider(agentId);
-    const paths = resolveAgentPaths(agentId);
+export const AgentTabMemory: React.FC<{ agentId: RuntimeId }> = observer(function AgentTabMemory({
+  agentId,
+}) {
+  const { t } = useTranslation();
+  const provider = getRuntime(agentId);
+  const paths = resolveAgentPaths(agentId);
 
-    if (!provider) return null;
+  if (!provider) return null;
 
-    return (
-      <div className="mx-auto w-full max-w-3xl px-6 py-6">
-        <AgentSection
-          title={t('agents.memory.title')}
-          description={t('agents.memory.description', { name: provider.name })}
-        >
-          {paths.memory ? (
-            <PathRow path={paths.memory} />
-          ) : (
-            <UnsupportedNote text={t('agents.memory.unsupported', { name: provider.name })} />
-          )}
-        </AgentSection>
-      </div>
-    );
-  }
-);
+  return (
+    <div className="mx-auto w-full max-w-3xl px-6 py-6">
+      <AgentSection
+        title={t('agents.memory.title')}
+        description={t('agents.memory.description', { name: provider.name })}
+      >
+        {paths.memory ? (
+          <PathRow path={paths.memory} />
+        ) : (
+          <UnsupportedNote text={t('agents.memory.unsupported', { name: provider.name })} />
+        )}
+      </AgentSection>
+    </div>
+  );
+});
 
 const PathRow: React.FC<{ path: string }> = ({ path }) => {
   const { t } = useTranslation();

@@ -4,7 +4,7 @@ export interface TaskBasicInfoFields {
   taskId?: string;
   taskName?: string;
   branchName?: string;
-  providerName?: string;
+  runtimeName?: string;
   sessionId?: string;
   projectPath?: string;
   workingDirectory?: string;
@@ -35,7 +35,7 @@ export function buildTaskBasicInfo(
     [labels.projectPath, projectPath],
     [labels.branch, fields.branchName],
     [labels.taskId, fields.taskId],
-    [labels.provider, fields.providerName],
+    [labels.provider, fields.runtimeName],
     [labels.sessionId, fields.sessionId],
     [labels.contentSource, fields.contentSourcePath],
     [labels.readInstruction, fields.contentSourcePath ? labels.readInstructionValue : undefined],

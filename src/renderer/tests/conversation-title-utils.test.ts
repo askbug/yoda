@@ -18,8 +18,8 @@ describe('nextDefaultConversationTitle', () => {
 
   it('fills the smallest missing index for a provider', () => {
     const title = nextDefaultConversationTitle('codex', [
-      { providerId: 'codex', title: 'Codex' },
-      { providerId: 'codex', title: 'Codex (3)' },
+      { runtimeId: 'codex', title: 'Codex' },
+      { runtimeId: 'codex', title: 'Codex (3)' },
     ]);
 
     expect(title).toBe('Codex (2)');
@@ -27,9 +27,9 @@ describe('nextDefaultConversationTitle', () => {
 
   it('appends when there are no gaps', () => {
     const title = nextDefaultConversationTitle('codex', [
-      { providerId: 'codex', title: 'Codex' },
-      { providerId: 'codex', title: 'Codex (2)' },
-      { providerId: 'codex', title: 'Codex (3)' },
+      { runtimeId: 'codex', title: 'Codex' },
+      { runtimeId: 'codex', title: 'Codex (2)' },
+      { runtimeId: 'codex', title: 'Codex (3)' },
     ]);
 
     expect(title).toBe('Codex (4)');
@@ -37,8 +37,8 @@ describe('nextDefaultConversationTitle', () => {
 
   it('recognizes legacy lowercase default titles', () => {
     const title = nextDefaultConversationTitle('codex', [
-      { providerId: 'codex', title: 'codex (1)' },
-      { providerId: 'codex', title: 'codex (2)' },
+      { runtimeId: 'codex', title: 'codex (1)' },
+      { runtimeId: 'codex', title: 'codex (2)' },
     ]);
 
     expect(title).toBe('Codex (3)');
@@ -46,8 +46,8 @@ describe('nextDefaultConversationTitle', () => {
 
   it('recognizes legacy capitalized provider-id titles when agent name differs', () => {
     const title = nextDefaultConversationTitle('claude', [
-      { providerId: 'claude', title: 'Claude (1)' },
-      { providerId: 'claude', title: 'Claude (2)' },
+      { runtimeId: 'claude', title: 'Claude (1)' },
+      { runtimeId: 'claude', title: 'Claude (2)' },
     ]);
 
     expect(title).toBe('Claude Code (3)');
@@ -55,9 +55,9 @@ describe('nextDefaultConversationTitle', () => {
 
   it('ignores other providers and non-default titles', () => {
     const title = nextDefaultConversationTitle('codex', [
-      { providerId: 'claude', title: 'Claude Code' },
-      { providerId: 'codex', title: 'release-triage' },
-      { providerId: 'codex', title: 'Codex (2)' },
+      { runtimeId: 'claude', title: 'Claude Code' },
+      { runtimeId: 'codex', title: 'release-triage' },
+      { runtimeId: 'codex', title: 'Codex (2)' },
     ]);
 
     expect(title).toBe('Codex');
@@ -94,8 +94,8 @@ describe('initialConversationTitle', () => {
   it('falls back to the provider default when the prompt is empty', () => {
     expect(
       initialConversationTitle('codex', '   ', [
-        { providerId: 'codex', title: 'Codex' },
-        { providerId: 'codex', title: 'Codex (2)' },
+        { runtimeId: 'codex', title: 'Codex' },
+        { runtimeId: 'codex', title: 'Codex (2)' },
       ])
     ).toBe('Codex (3)');
   });

@@ -20,8 +20,12 @@ import { log } from '@main/lib/logger';
 import type { RepositoryGitProvider } from './repository-git-provider';
 
 function isNotAGitRepoError(error: unknown): boolean {
-  const stderr = (error as { stderr?: unknown })?.stderr;
-  return typeof stderr === 'string' && stderr.includes('not a git repository');
+  const candidate = error as { stderr?: unknown; stdout?: unknown; message?: unknown };
+  const text = [candidate.stderr, candidate.stdout, candidate.message, String(error)]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n');
+
+  return /not a git repository/i.test(text) || /不是\s*git\s*仓库/i.test(text);
 }
 
 export class GitRepositoryService {

@@ -1,7 +1,20 @@
+import type { SessionStatusBarSource } from '@shared/session-status-bar';
+import {
+  DEFAULT_SUMMARY_CONTEXT_GLOBAL,
+  DEFAULT_SUMMARY_CONTEXT_RECENT,
+  type SummaryContext,
+} from '@shared/session-summary';
+import { normalizeTaskNamingTimeoutMs } from '@shared/task-naming';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 
 export interface TaskSettingsModel {
   autoGenerateName: boolean;
+  namingAgentId: string;
+  summaryAgentId: string;
+  summaryLanguage: 'app' | 'prompt' | 'en' | 'zh-CN';
+  statusBarSource: SessionStatusBarSource;
+  summaryContextRecent: SummaryContext;
+  summaryContextGlobal: SummaryContext;
   namingModel: string;
   namingLanguage: 'app' | 'prompt' | 'en' | 'zh-CN';
   namingContext: {
@@ -18,6 +31,7 @@ export interface TaskSettingsModel {
   isFieldOverridden: (
     field:
       | 'autoGenerateName'
+      | 'namingAgentId'
       | 'namingModel'
       | 'namingLanguage'
       | 'namingContext'
@@ -26,7 +40,11 @@ export interface TaskSettingsModel {
       | 'autoTrustWorktrees'
   ) => boolean;
   updateAutoGenerateName: (next: boolean) => void;
-  updateNamingModel: (next: string) => void;
+  updateNamingAgentId: (next: string) => void;
+  updateSummaryAgentId: (next: string) => void;
+  updateSummaryLanguage: (next: 'app' | 'prompt' | 'en' | 'zh-CN') => void;
+  updateStatusBarSource: (next: SessionStatusBarSource) => void;
+  updateSummaryContext: (scope: 'recent' | 'global', next: Partial<SummaryContext>) => void;
   updateNamingLanguage: (next: 'app' | 'prompt' | 'en' | 'zh-CN') => void;
   updateNamingContext: (next: Partial<TaskSettingsModel['namingContext']>) => void;
   updateNamingRecentTaskLimit: (next: number) => void;
@@ -48,6 +66,12 @@ export function useTaskSettings(): TaskSettingsModel {
 
   return {
     autoGenerateName: tasks?.autoGenerateName ?? false,
+    namingAgentId: tasks?.namingAgentId ?? '',
+    summaryAgentId: tasks?.summaryAgentId ?? '',
+    summaryLanguage: tasks?.summaryLanguage ?? 'app',
+    statusBarSource: tasks?.statusBarSource ?? 'summary',
+    summaryContextRecent: tasks?.summaryContextRecent ?? DEFAULT_SUMMARY_CONTEXT_RECENT,
+    summaryContextGlobal: tasks?.summaryContextGlobal ?? DEFAULT_SUMMARY_CONTEXT_GLOBAL,
     namingModel: tasks?.namingModel ?? '',
     namingLanguage: tasks?.namingLanguage ?? 'app',
     namingContext: tasks?.namingContext ?? {
@@ -57,13 +81,22 @@ export function useTaskSettings(): TaskSettingsModel {
       recentTasks: true,
     },
     namingRecentTaskLimit: tasks?.namingRecentTaskLimit ?? 8,
-    namingRequestTimeoutMs: tasks?.namingRequestTimeoutMs ?? 15_000,
+    namingRequestTimeoutMs: normalizeTaskNamingTimeoutMs(tasks?.namingRequestTimeoutMs),
     autoTrustWorktrees: tasks?.autoTrustWorktrees ?? false,
     loading,
     saving,
     isFieldOverridden,
     updateAutoGenerateName: (next) => update({ autoGenerateName: next }),
-    updateNamingModel: (next) => update({ namingModel: next }),
+    updateNamingAgentId: (next) => update({ namingAgentId: next }),
+    updateSummaryAgentId: (next) => update({ summaryAgentId: next }),
+    updateSummaryLanguage: (next) => update({ summaryLanguage: next }),
+    updateStatusBarSource: (next) => update({ statusBarSource: next }),
+    updateSummaryContext: (scope, next) => {
+      const key = scope === 'recent' ? 'summaryContextRecent' : 'summaryContextGlobal';
+      const base =
+        scope === 'recent' ? DEFAULT_SUMMARY_CONTEXT_RECENT : DEFAULT_SUMMARY_CONTEXT_GLOBAL;
+      update({ [key]: { ...base, ...(tasks?.[key] ?? {}), ...next } });
+    },
     updateNamingLanguage: (next) => update({ namingLanguage: next }),
     updateNamingContext: (next) =>
       update({
@@ -77,7 +110,8 @@ export function useTaskSettings(): TaskSettingsModel {
         },
       }),
     updateNamingRecentTaskLimit: (next) => update({ namingRecentTaskLimit: next }),
-    updateNamingRequestTimeoutMs: (next) => update({ namingRequestTimeoutMs: next }),
+    updateNamingRequestTimeoutMs: (next) =>
+      update({ namingRequestTimeoutMs: normalizeTaskNamingTimeoutMs(next) }),
     updateAutoTrustWorktrees: (next) => update({ autoTrustWorktrees: next }),
     resetAutoGenerateName: () => resetField('autoGenerateName'),
     resetAutoTrustWorktrees: () => resetField('autoTrustWorktrees'),

@@ -3,11 +3,11 @@ import { FolderOpen, RefreshCw, RotateCcw, Save, Settings2 } from 'lucide-react'
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AgentModelCandidateInferenceResult } from '@shared/agent-model-candidates';
-import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
-import type { ProviderCustomConfig } from '@shared/app-settings';
+import type { RuntimeCustomConfig } from '@shared/app-settings';
+import type { AgentModelCandidateInferenceResult } from '@shared/runtime-model-candidates';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 import CustomCommandModal from '@renderer/features/settings/components/CustomCommandModal';
-import { useProviderSettings } from '@renderer/features/settings/use-provider-settings';
+import { useRuntimeSettings } from '@renderer/features/settings/use-runtime-settings';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
@@ -17,11 +17,11 @@ import { log } from '@renderer/utils/logger';
 import { expandHome, resolveAgentPaths } from './agent-paths';
 import { AgentSection } from './AgentSection';
 
-export const AgentTabSettings: React.FC<{ agentId: AgentProviderId }> = observer(
+export const AgentTabSettings: React.FC<{ agentId: RuntimeId }> = observer(
   function AgentTabSettings({ agentId }) {
     const { t } = useTranslation();
     const [customOpen, setCustomOpen] = useState(false);
-    const provider = getProvider(agentId);
+    const provider = getRuntime(agentId);
     const paths = resolveAgentPaths(agentId);
 
     if (!provider) return null;
@@ -61,27 +61,27 @@ export const AgentTabSettings: React.FC<{ agentId: AgentProviderId }> = observer
         <CustomCommandModal
           isOpen={customOpen}
           onClose={() => setCustomOpen(false)}
-          providerId={agentId}
+          runtimeId={agentId}
         />
       </div>
     );
   }
 );
 
-const AgentNamingSettings: React.FC<{ agentId: AgentProviderId; agentName: string }> = ({
+const AgentNamingSettings: React.FC<{ agentId: RuntimeId; agentName: string }> = ({
   agentId,
   agentName,
 }) => {
   const { t } = useTranslation();
-  const { value, defaults, isLoading, isSaving, update } = useProviderSettings(agentId);
+  const { value, defaults, isLoading, isSaving, update } = useRuntimeSettings(agentId);
   const [candidateRefreshToken, setCandidateRefreshToken] = useState(0);
   const [model, setModel] = useState('');
   const [command, setCommand] = useState('');
   const [saving, setSaving] = useState(false);
   const modelCandidateQuery = useQuery<AgentModelCandidateInferenceResult>({
-    queryKey: ['providerSettings', agentId, 'namingModelCandidates', candidateRefreshToken],
+    queryKey: ['runtimeSettings', agentId, 'namingModelCandidates', candidateRefreshToken],
     queryFn: () =>
-      rpc.providerSettings.inferNamingModelCandidates(agentId, {
+      rpc.runtimeSettings.inferNamingModelCandidates(agentId, {
         forceRefresh: candidateRefreshToken > 0,
       }) as Promise<AgentModelCandidateInferenceResult>,
     staleTime: 60_000,
@@ -118,7 +118,7 @@ const AgentNamingSettings: React.FC<{ agentId: AgentProviderId; agentName: strin
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      const next: ProviderCustomConfig = {
+      const next: RuntimeCustomConfig = {
         ...(value ?? {}),
         namingModel: model.trim(),
         namingCommand: command.trim(),

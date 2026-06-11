@@ -125,7 +125,7 @@ async function loadHistoricalConversationBuffer(sessionId: string): Promise<stri
   if (!row || row.projectWorkspaceProvider !== 'local') return '';
 
   const conversation = mapConversationRowToConversation(row.conversation);
-  if (conversation.providerId !== 'codex') return '';
+  if (conversation.runtimeId !== 'codex') return '';
 
   const workspaceId = taskManager.getWorkspaceId(parsed.taskId);
   const cwd = (workspaceId ? workspaceRegistry.get(workspaceId)?.path : null) ?? row.projectPath;

@@ -29,6 +29,12 @@ export type MaasConnectInput = {
   endpoint?: string;
 };
 
+export type MaasConnectionCheckResult = {
+  ok: boolean;
+  error: string | null;
+  checkedAt: string;
+};
+
 export type MaasPlatformDefinition = {
   id: MaasPlatformId;
   name: string;
@@ -69,6 +75,26 @@ export type MaasInvocationPage = {
     startingAt: string;
     endingAt: string;
   } | null;
+};
+
+export type MaasUsageSummaryInput = {
+  platformId: MaasPlatformId;
+  kind?: MaasInvocationFilterKind;
+  providerHints?: readonly string[];
+  modelHints?: readonly string[];
+  forceRefresh?: boolean;
+};
+
+export type MaasUsageSummary = {
+  platformId: MaasPlatformId;
+  recordCount: number;
+  totalRecords: number;
+  totalInputTokens: number | null;
+  totalOutputTokens: number | null;
+  totalCostUsd: number | null;
+  source: MaasInvocationPage['source'];
+  fetchedAt: string | null;
+  period: MaasInvocationPage['period'];
 };
 
 export const MAAS_PLATFORMS: Record<MaasPlatformId, MaasPlatformDefinition> = {

@@ -10,6 +10,7 @@ import type {
   CodexSessionContext,
   CodexTurnContext,
   SessionSummary,
+  SessionTranscriptMessage,
 } from '@shared/conversations';
 import {
   findClosestCodexThreadTitleByCreatedAt,
@@ -37,6 +38,7 @@ type ParsedCodexRollout = {
   baseInstructions: string | null;
   developerMessages: ClaudeSessionPrompt[];
   prompts: ClaudeSessionPrompt[];
+  messages: SessionTranscriptMessage[];
   turnContexts: CodexTurnContext[];
   dynamicTools: CodexDynamicTool[];
   completedTurnCount: number;
@@ -118,6 +120,7 @@ export async function getCodexSessionContext(
     skills,
     skillsListing: formatSkillListing(skills),
     prompts: parsed.prompts,
+    messages: parsed.messages,
     turnContexts: parsed.turnContexts,
     completedTurnCount: parsed.completedTurnCount,
     summary: parsed.summary,
@@ -470,6 +473,7 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
   const developerMessages: ClaudeSessionPrompt[] = [];
   const eventPrompts: ClaudeSessionPrompt[] = [];
   const responseUserPrompts: ClaudeSessionPrompt[] = [];
+  const messages: SessionTranscriptMessage[] = [];
   const turnContexts: CodexTurnContext[] = [];
   let completedTurnCount = 0;
   // Keep only the latest compaction summary — later compactions supersede earlier ones.
@@ -503,16 +507,27 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
       if (!payload) continue;
       if (payload.type === 'task_complete' || payload.type === 'turn_complete') {
         completedTurnCount += 1;
+        const lastAgentMessage = nullableString(payload.last_agent_message);
+        if (lastAgentMessage) {
+          pushMessage(messages, {
+            id: timestamp ?? `event-assistant-${messages.length}`,
+            role: 'assistant',
+            text: lastAgentMessage,
+            timestamp,
+          });
+        }
         continue;
       }
       if (payload.type !== 'user_message') continue;
       const text = nullableString(payload.message)?.trim();
       if (text) {
-        eventPrompts.push({
+        const prompt = {
           id: timestamp ?? `event-user-${eventPrompts.length}`,
           text,
           timestamp,
-        });
+        };
+        eventPrompts.push(prompt);
+        pushMessage(messages, { ...prompt, role: 'user' });
       }
       continue;
     }
@@ -531,8 +546,17 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
       } else if (payload.role === 'user' && text.startsWith(CODEX_SUMMARY_PREFIX)) {
         summary = { text, timestamp };
       } else if (payload.role === 'user' && !isCodexEnvironmentMessage(text)) {
-        responseUserPrompts.push({
+        const prompt = {
           id: timestamp ?? `response-user-${responseUserPrompts.length}`,
+          text,
+          timestamp,
+        };
+        responseUserPrompts.push(prompt);
+        pushMessage(messages, { ...prompt, role: 'user' });
+      } else if (payload.role === 'assistant') {
+        pushMessage(messages, {
+          id: timestamp ?? `response-assistant-${messages.length}`,
+          role: 'assistant',
           text,
           timestamp,
         });
@@ -553,6 +577,10 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
     baseInstructions,
     developerMessages,
     prompts,
+    messages:
+      messages.length > 0
+        ? messages
+        : prompts.map((prompt) => ({ ...prompt, role: 'user' as const })),
     turnContexts,
     dynamicTools,
     completedTurnCount,
@@ -560,6 +588,15 @@ function parseCodexRollout(raw: string, firstUserMessage: string | null): Parsed
     modelProvider,
     summary,
   };
+}
+
+function pushMessage(
+  messages: SessionTranscriptMessage[],
+  message: SessionTranscriptMessage
+): void {
+  const previous = messages[messages.length - 1];
+  if (previous?.role === message.role && previous.text === message.text) return;
+  messages.push(message);
 }
 
 function parseTurnContext(value: unknown): CodexTurnContext | null {
@@ -632,6 +669,7 @@ function emptyRollout(): ParsedCodexRollout {
     baseInstructions: null,
     developerMessages: [],
     prompts: [],
+    messages: [],
     turnContexts: [],
     dynamicTools: [],
     completedTurnCount: 0,

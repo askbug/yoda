@@ -1,5 +1,5 @@
-import { listDetectableProviders } from '@shared/agent-provider-registry';
 import type { DependencyStatus } from '@shared/dependencies';
+import { listDetectableRuntimes } from '@shared/runtime-registry';
 import type { IExecutionContext } from '@main/core/execution-context/types';
 import type { DependencyDescriptor, ProbeResult } from './types';
 
@@ -100,7 +100,7 @@ function agentResolveStatus(result: ProbeResult): DependencyStatus {
 }
 
 function buildAgentDependencies(): DependencyDescriptor[] {
-  return listDetectableProviders().map((provider) => ({
+  return listDetectableRuntimes().map((provider) => ({
     id: provider.id,
     name: provider.name,
     category: 'agent' as const,

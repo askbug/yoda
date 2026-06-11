@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron';
-import { type AgentProviderId } from '@shared/agent-provider-registry';
 import { agentEventChannel, type AgentEvent } from '@shared/events/agentEvents';
 import { makePtyId } from '@shared/ptyId';
+import { type RuntimeId } from '@shared/runtime-registry';
 import { agentSessionRuntimeStore } from '@main/core/conversations/agent-session-runtime';
 import { type Pty } from '@main/core/pty/pty';
 import { events } from '@main/lib/events';
@@ -67,19 +67,19 @@ function createEmissionGuard() {
 
 export function wireAgentClassifier({
   pty,
-  providerId,
+  runtimeId,
   projectId,
   taskId,
   conversationId,
 }: {
   pty: Pty;
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   projectId: string;
   taskId: string;
   conversationId: string;
 }): void {
-  const classifier = createClassifier(providerId);
-  const ptyId = makePtyId(providerId, conversationId);
+  const classifier = createClassifier(runtimeId);
+  const ptyId = makePtyId(runtimeId, conversationId);
   const guard = createEmissionGuard();
 
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -105,7 +105,7 @@ export function wireAgentClassifier({
           type: result!.type,
           source: 'classifier',
           ptyId,
-          providerId,
+          runtimeId,
           conversationId,
           taskId,
           projectId,

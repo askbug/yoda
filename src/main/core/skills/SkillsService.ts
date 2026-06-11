@@ -27,6 +27,7 @@ const PROJECT_SKILL_SUBDIRS = [
   path.join('.claude', 'commands'),
   path.join('.claude', 'skills'),
   path.join('.codex', 'skills'),
+  path.join('.agents', 'skills'),
   path.join('.agentskills'),
 ];
 

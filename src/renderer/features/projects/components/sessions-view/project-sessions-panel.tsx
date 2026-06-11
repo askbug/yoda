@@ -41,7 +41,7 @@ const ProjectSessionRow = observer(function ProjectSessionRow({
     task?.data.name ??
     t('projects.sessionsView.taskFallback', { id: conversation.taskId.slice(0, 8) });
   const liveConversation = asProvisioned(task)?.conversations.conversations.get(conversation.id);
-  const config = agentConfig[conversation.providerId];
+  const config = agentConfig[conversation.runtimeId];
   const title = conversation.title.trim() || conversation.id;
   const interactedAt =
     conversation.lastInteractedAt ?? conversation.updatedAt ?? conversation.createdAt ?? '';

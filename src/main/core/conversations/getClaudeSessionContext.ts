@@ -1,12 +1,17 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type {
+  AgentMemory,
   ClaudeSessionContext,
   ClaudeSessionPrompt,
   SessionSummary,
+  SessionTranscriptMessage,
 } from '@shared/conversations';
-import { resolveClaudeTranscriptPath } from '@main/core/session-title/claude-title-source';
+import {
+  encodeClaudeProjectDir,
+  resolveClaudeTranscriptPath,
+} from '@main/core/session-title/claude-title-source';
 import { log } from '@main/lib/logger';
 import { scanClaudeAgents } from './scanClaudeAgents';
 import { scanClaudeSkills } from './scanClaudeSkills';
@@ -36,6 +41,7 @@ export async function getClaudeSessionContext(
   const transcriptAgents = new Set<string>();
   const mcpServers = new Map<string, string>();
   const prompts: ClaudeSessionPrompt[] = [];
+  const messages: SessionTranscriptMessage[] = [];
   // Keep only the latest compaction summary — later compactions supersede earlier ones.
   let summary: SessionSummary | null = null;
 
@@ -58,12 +64,22 @@ export async function getClaudeSessionContext(
         continue;
       }
       const prompt = extractPrompt(parsed, prompts.length);
-      if (prompt) prompts.push(prompt);
+      if (prompt) {
+        prompts.push(prompt);
+        messages.push({ ...prompt, role: 'user' });
+      }
+      continue;
+    }
+
+    if (parsed.type === 'assistant') {
+      const message = extractAssistantMessage(parsed, messages.length);
+      if (message) messages.push(message);
     }
   }
 
-  const [memoryFiles, skills, scannedAgents] = await Promise.all([
+  const [memoryFiles, memories, skills, scannedAgents] = await Promise.all([
     loadMemoryFiles(cwd),
+    loadMemories(cwd),
     scanClaudeSkills(cwd),
     scanClaudeAgents(cwd),
   ]);
@@ -71,12 +87,14 @@ export async function getClaudeSessionContext(
   return {
     transcriptPath,
     memoryFiles,
+    memories,
     tools: [...tools].sort(),
     agents: scannedAgents,
     mcpServers: [...mcpServers.entries()].map(([name, instructions]) => ({ name, instructions })),
     skills,
     skillsListing: formatSkillListing(skills),
     prompts,
+    messages,
     summary,
   };
 }
@@ -166,6 +184,21 @@ function extractPrompt(row: Record<string, unknown>, index: number): ClaudeSessi
   return { id: uuid, text, timestamp };
 }
 
+function extractAssistantMessage(
+  row: Record<string, unknown>,
+  index: number
+): SessionTranscriptMessage | null {
+  if (row.isSidechain === true) return null;
+  if (row.isMeta === true) return null;
+  const message = row.message;
+  if (!message || typeof message !== 'object') return null;
+  const text = extractUserText((message as Record<string, unknown>).content);
+  if (!text) return null;
+  const timestamp = typeof row.timestamp === 'string' ? row.timestamp : null;
+  const uuid = typeof row.uuid === 'string' ? row.uuid : `assistant-${index}`;
+  return { id: uuid, role: 'assistant', text, timestamp };
+}
+
 function extractUserText(content: unknown): string | null {
   if (typeof content === 'string') {
     const trimmed = stripWrapperTags(content).trim();
@@ -214,4 +247,92 @@ async function loadMemoryFiles(cwd: string) {
     })
   );
   return out.filter((x): x is NonNullable<typeof x> => x !== null);
+}
+
+/**
+ * Loads the agent-maintained memory store: MEMORY.md (index) plus one .md file
+ * per memory fact, each carrying `name` / `description` / `metadata.type`
+ * frontmatter. Distinct from CLAUDE.md / AGENTS.md — these files are written
+ * by the agent itself, not the user.
+ */
+async function loadMemories(cwd: string): Promise<AgentMemory[]> {
+  const dir = join(homedir(), '.claude', 'projects', encodeClaudeProjectDir(cwd), 'memory');
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+
+  const out = await Promise.all(
+    names
+      .filter((name) => name.endsWith('.md'))
+      .sort()
+      .map(async (fileName): Promise<AgentMemory | null> => {
+        const path = join(dir, fileName);
+        let raw: string;
+        try {
+          raw = await readFile(path, 'utf8');
+        } catch {
+          return null;
+        }
+        if (fileName === 'MEMORY.md') {
+          return {
+            kind: 'index',
+            name: 'MEMORY.md',
+            description: null,
+            type: null,
+            path,
+            content: raw,
+            bytes: raw.length,
+          };
+        }
+        const { name, description, type, body } = parseMemoryFrontmatter(raw);
+        return {
+          kind: 'entry',
+          name: name ?? fileName.slice(0, -3),
+          description,
+          type,
+          path,
+          content: body,
+          bytes: raw.length,
+        };
+      })
+  );
+
+  const memories = out.filter((x): x is AgentMemory => x !== null);
+  // Index first, entries keep their name-sorted order.
+  return memories.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'index' ? -1 : 1));
+}
+
+function parseMemoryFrontmatter(raw: string): {
+  name: string | null;
+  description: string | null;
+  type: string | null;
+  body: string;
+} {
+  if (!raw.startsWith('---')) return { name: null, description: null, type: null, body: raw };
+  const end = raw.indexOf('\n---', 3);
+  if (end === -1) return { name: null, description: null, type: null, body: raw };
+  const yaml = raw.slice(3, end);
+  const body = raw.slice(end + 4).replace(/^\s*\n/, '');
+  return {
+    name: matchYamlValue(yaml, /^name:\s*(.+?)\s*$/m),
+    description: matchYamlValue(yaml, /^description:\s*(.+?)\s*$/m),
+    // `type` is nested under `metadata:` — match the indented key.
+    type: matchYamlValue(yaml, /^\s+type:\s*(.+?)\s*$/m),
+    body,
+  };
+}
+
+function matchYamlValue(yaml: string, pattern: RegExp): string | null {
+  const value = yaml.match(pattern)?.[1]?.trim();
+  if (!value) return null;
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
 }

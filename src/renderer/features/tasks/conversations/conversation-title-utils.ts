@@ -1,26 +1,26 @@
-import { type AgentProviderId } from '@shared/agent-provider-registry';
+import { type RuntimeId } from '@shared/runtime-registry';
 import { taskNameFromPrompt } from '@shared/task-name';
 import { agentConfig } from '@renderer/utils/agentConfig';
 
 type ConversationTitleInput = {
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   title: string;
 };
 
-function capitalizeProviderId(providerId: AgentProviderId): string {
-  return `${providerId.charAt(0).toUpperCase()}${providerId.slice(1)}`;
+function capitalizeProviderId(runtimeId: RuntimeId): string {
+  return `${runtimeId.charAt(0).toUpperCase()}${runtimeId.slice(1)}`;
 }
 
-function agentDisplayName(providerId: AgentProviderId): string {
-  return agentConfig[providerId]?.name ?? capitalizeProviderId(providerId);
+function agentDisplayName(runtimeId: RuntimeId): string {
+  return agentConfig[runtimeId]?.name ?? capitalizeProviderId(runtimeId);
 }
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function parseDefaultTitleIndex(title: string, providerId: AgentProviderId): number | null {
-  const candidates = [agentDisplayName(providerId), capitalizeProviderId(providerId), providerId];
+function parseDefaultTitleIndex(title: string, runtimeId: RuntimeId): number | null {
+  const candidates = [agentDisplayName(runtimeId), capitalizeProviderId(runtimeId), runtimeId];
   for (const candidate of candidates) {
     const escaped = escapeRegExp(candidate);
     const bareMatch = title.match(new RegExp(`^${escaped}$`, 'i'));
@@ -36,40 +36,37 @@ function parseDefaultTitleIndex(title: string, providerId: AgentProviderId): num
   return null;
 }
 
-export function formatConversationTitleForDisplay(
-  providerId: AgentProviderId,
-  title: string
-): string {
-  const index = parseDefaultTitleIndex(title, providerId);
+export function formatConversationTitleForDisplay(runtimeId: RuntimeId, title: string): string {
+  const index = parseDefaultTitleIndex(title, runtimeId);
   if (index === null) return title;
-  const name = agentDisplayName(providerId);
+  const name = agentDisplayName(runtimeId);
   return index === 1 ? name : `${name} (${index})`;
 }
 
 export function nextDefaultConversationTitle(
-  providerId: AgentProviderId,
+  runtimeId: RuntimeId,
   conversations: ConversationTitleInput[]
 ): string {
   const used = new Set<number>();
 
   for (const conversation of conversations) {
-    if (conversation.providerId !== providerId) continue;
-    const index = parseDefaultTitleIndex(conversation.title, providerId);
+    if (conversation.runtimeId !== runtimeId) continue;
+    const index = parseDefaultTitleIndex(conversation.title, runtimeId);
     if (index !== null) used.add(index);
   }
 
   let next = 1;
   while (used.has(next)) next += 1;
 
-  const name = agentDisplayName(providerId);
+  const name = agentDisplayName(runtimeId);
   return next === 1 ? name : `${name} (${next})`;
 }
 
 export function initialConversationTitle(
-  providerId: AgentProviderId,
+  runtimeId: RuntimeId,
   initialPrompt: string | undefined,
   conversations: ConversationTitleInput[]
 ): string {
   const promptTitle = initialPrompt ? taskNameFromPrompt(initialPrompt) : '';
-  return promptTitle || nextDefaultConversationTitle(providerId, conversations);
+  return promptTitle || nextDefaultConversationTitle(runtimeId, conversations);
 }

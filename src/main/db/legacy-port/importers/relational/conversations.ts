@@ -31,7 +31,7 @@ type LegacyPtySessionTargets = {
   chatPtyIdByProviderAndConversationId: Map<string, string>;
   mainPtyIdByProviderAndTaskId: Map<string, string>;
   optimisticMainPtyByProviderAndTimestamp: Array<{
-    providerId: string;
+    runtimeId: string;
     timestampMs: number;
     legacyPtyId: string;
   }>;
@@ -76,8 +76,8 @@ function readLegacyPtySessionTargets(userDataPath?: string): LegacyPtySessionTar
   for (const [ptyKey, rawEntry] of Object.entries(rawJson)) {
     const parsedPtyKey = parseLegacyPtyKey(ptyKey);
     if (parsedPtyKey) {
-      const providerId = parsedPtyKey.providerId.toLowerCase();
-      const lookupKey = legacyPtyLookupKey(providerId, parsedPtyKey.suffix);
+      const runtimeId = parsedPtyKey.runtimeId.toLowerCase();
+      const lookupKey = legacyPtyLookupKey(runtimeId, parsedPtyKey.suffix);
 
       if (parsedPtyKey.kind === 'chat') {
         if (!targets.chatPtyIdByProviderAndConversationId.has(lookupKey)) {
@@ -95,7 +95,7 @@ function readLegacyPtySessionTargets(userDataPath?: string): LegacyPtySessionTar
           const optimisticTimestampMs = Number.parseInt(optimisticTimestampPart ?? '', 10);
           if (Number.isFinite(optimisticTimestampMs)) {
             targets.optimisticMainPtyByProviderAndTimestamp.push({
-              providerId,
+              runtimeId,
               timestampMs: optimisticTimestampMs,
               legacyPtyId: ptyKey,
             });
@@ -151,13 +151,13 @@ function readLegacyPtySessionTargets(userDataPath?: string): LegacyPtySessionTar
 
 function parseLegacyPtyKey(
   ptyKey: string
-): { providerId: string; kind: 'main' | 'chat'; suffix: string } | undefined {
+): { runtimeId: string; kind: 'main' | 'chat'; suffix: string } | undefined {
   const chatIndex = ptyKey.indexOf(LEGACY_CHAT_SEPARATOR);
   if (chatIndex > 0) {
     const suffix = toTrimmedString(ptyKey.slice(chatIndex + LEGACY_CHAT_SEPARATOR.length));
     if (!suffix) return undefined;
     return {
-      providerId: ptyKey.slice(0, chatIndex),
+      runtimeId: ptyKey.slice(0, chatIndex),
       kind: 'chat',
       suffix,
     };
@@ -168,7 +168,7 @@ function parseLegacyPtyKey(
     const suffix = toTrimmedString(ptyKey.slice(mainIndex + LEGACY_MAIN_SEPARATOR.length));
     if (!suffix) return undefined;
     return {
-      providerId: ptyKey.slice(0, mainIndex),
+      runtimeId: ptyKey.slice(0, mainIndex),
       kind: 'main',
       suffix,
     };
@@ -177,8 +177,8 @@ function parseLegacyPtyKey(
   return undefined;
 }
 
-function legacyPtyLookupKey(providerId: string, suffix: string): string {
-  return `${providerId}:${suffix}`;
+function legacyPtyLookupKey(runtimeId: string, suffix: string): string {
+  return `${runtimeId}:${suffix}`;
 }
 
 function makeLegacyTmuxSessionName(legacyPtyId: string): string {
@@ -242,7 +242,7 @@ function findOptimisticMainResumeUuidForConversation(
 
 function findOptimisticMainPtyIdForConversation(
   conversationId: string,
-  providerId: string,
+  runtimeId: string,
   targets: LegacyPtySessionTargets
 ): string | undefined {
   const conversationTimestampMs = parseConversationTimestampMs(conversationId);
@@ -254,7 +254,7 @@ function findOptimisticMainPtyIdForConversation(
   let secondBestDistanceMs: number | undefined;
 
   for (const candidate of targets.optimisticMainPtyByProviderAndTimestamp) {
-    if (candidate.providerId !== providerId) continue;
+    if (candidate.runtimeId !== runtimeId) continue;
 
     const distanceMs = Math.abs(candidate.timestampMs - conversationTimestampMs);
     if (distanceMs > MAX_OPTIMISTIC_MAIN_TIMESTAMP_DRIFT_MS) continue;
@@ -286,29 +286,25 @@ function pickLegacyPtyIdForConversation(params: {
   legacyPtySessionTargets: LegacyPtySessionTargets;
 }): string | undefined {
   const { legacyConversationId, legacyTaskId, legacyProvider, legacyPtySessionTargets } = params;
-  const providerId = legacyProvider?.toLowerCase();
-  if (!providerId) return undefined;
+  const runtimeId = legacyProvider?.toLowerCase();
+  if (!runtimeId) return undefined;
 
   return (
     legacyPtySessionTargets.chatPtyIdByProviderAndConversationId.get(
-      legacyPtyLookupKey(providerId, legacyConversationId)
+      legacyPtyLookupKey(runtimeId, legacyConversationId)
     ) ??
     legacyPtySessionTargets.mainPtyIdByProviderAndTaskId.get(
-      legacyPtyLookupKey(providerId, legacyTaskId)
+      legacyPtyLookupKey(runtimeId, legacyTaskId)
     ) ??
     (() => {
       const taskIdFromConversationId = parseTaskIdFromConversationId(legacyConversationId);
       return taskIdFromConversationId
         ? legacyPtySessionTargets.mainPtyIdByProviderAndTaskId.get(
-            legacyPtyLookupKey(providerId, taskIdFromConversationId)
+            legacyPtyLookupKey(runtimeId, taskIdFromConversationId)
           )
         : undefined;
     })() ??
-    findOptimisticMainPtyIdForConversation(
-      legacyConversationId,
-      providerId,
-      legacyPtySessionTargets
-    )
+    findOptimisticMainPtyIdForConversation(legacyConversationId, runtimeId, legacyPtySessionTargets)
   );
 }
 
@@ -492,7 +488,7 @@ export async function portConversations({
       taskId: mappedTaskId,
       title:
         toTrimmedString(row.title) ?? `Legacy conversation ${legacyConversationId.slice(0, 8)}`,
-      provider: legacyProvider,
+      runtime: legacyProvider,
       config: null,
       createdAt: toIsoTimestamp(row.created_at, nowIso),
       updatedAt: toIsoTimestamp(row.updated_at, nowIso),

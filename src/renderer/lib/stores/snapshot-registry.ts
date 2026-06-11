@@ -1,5 +1,6 @@
 import { comparer, reaction } from 'mobx';
 import { rpc } from '@renderer/lib/ipc';
+import { isTaskWindowLaunch } from '@renderer/lib/task-window-launch-target';
 import { viewStateCache } from './view-state-cache';
 
 export class SnapshotRegistry {
@@ -25,6 +26,15 @@ export class SnapshotRegistry {
 
     // Warm the cache with the current snapshot value immediately on register.
     viewStateCache.set(key, getSnapshot());
+
+    if (isTaskWindowLaunch) {
+      const disposer = () => {
+        viewStateCache.delete(key);
+        this.disposers.delete(key);
+      };
+      this.disposers.set(key, disposer);
+      return disposer;
+    }
 
     const disposer = reaction(
       () => getSnapshot(),

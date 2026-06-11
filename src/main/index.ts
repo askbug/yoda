@@ -7,7 +7,9 @@ import { registerRPCRouter } from '@shared/ipc/rpc';
 import { deepLinkService } from './app/deep-link';
 import { setupApplicationMenu } from './app/menu';
 import { registerAppScheme, setupAppProtocol } from './app/protocol';
+import { warmTaskWindowPool } from './app/task-window-pool';
 import { createMainWindow } from './app/window';
+import { registerWindowIpc } from './app/window-ipc';
 import { yodaAccountService } from './core/account/services/yoda-account-service';
 import { agentHookService } from './core/agent-hooks/agent-hook-service';
 import { resolveQuitAgentSessionsDecision } from './core/app/quit-agent-sessions';
@@ -22,7 +24,7 @@ import { projectManager } from './core/projects/project-manager';
 import { ptySessionRegistry } from './core/pty/pty-session-registry';
 import { prSyncScheduler } from './core/pull-requests/pr-sync-scheduler';
 import { searchService } from './core/search/search-service';
-import { providerModelCandidatesService } from './core/settings/provider-model-candidates-service';
+import { runtimeModelCandidatesService } from './core/settings/runtime-model-candidates-service';
 import { appSettingsService } from './core/settings/settings-service';
 import { resumePendingTaskArchives } from './core/tasks/operations/archiveTask';
 import { taskManager } from './core/tasks/task-manager';
@@ -146,6 +148,7 @@ void app.whenReady().then(async () => {
 
   // RPC router must be registered before the renderer fires its first IPC call.
   registerRPCRouter(rpcRouter, ipcMain);
+  registerWindowIpc(ipcMain);
   __bootMark('registerRPCRouter done');
   deepLinkService.start();
 
@@ -156,7 +159,12 @@ void app.whenReady().then(async () => {
   __bootMark('createMainWindow returned');
   __win.webContents.once('did-start-loading', () => __bootMark('webContents did-start-loading'));
   __win.webContents.once('dom-ready', () => __bootMark('webContents dom-ready'));
-  __win.webContents.once('did-finish-load', () => __bootMark('webContents did-finish-load'));
+  __win.webContents.once('did-finish-load', () => {
+    __bootMark('webContents did-finish-load');
+    // Pre-warm a hidden task window so the first tab tear-out opens instantly.
+    // Deferred so it doesn't compete with the main window's own boot.
+    setTimeout(() => warmTaskWindowPool(), 1500);
+  });
   __win.once('ready-to-show', () => __bootMark('window ready-to-show (user sees UI)'));
 
   // Everything below is non-blocking for first paint — kick off in parallel.
@@ -196,7 +204,7 @@ void app.whenReady().then(async () => {
   // Dependency probe shells out to user tools, so wait for the login-shell
   // PATH to land before probing — otherwise nvm/mise-managed binaries miss.
   void userEnvReady.then(() => {
-    providerModelCandidatesService.refreshStartupModelCatalog().catch((e) => {
+    runtimeModelCandidatesService.refreshStartupModelCatalog().catch((e) => {
       log.warn('Failed to refresh provider model catalog:', e);
     });
 

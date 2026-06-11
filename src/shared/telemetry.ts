@@ -18,7 +18,9 @@ export type FocusView =
   | 'agents'
   | 'maas'
   | 'automation'
-  | 'mobile';
+  | 'mobile'
+  | 'usage'
+  | 'roadmap';
 export type FocusMainPanel = 'agents' | 'editor' | 'diff';
 export type FocusedRegion = 'main' | 'bottom';
 
@@ -64,6 +66,8 @@ export type TelemetryEventProperties = {
   mcp_viewed: { from_view: FocusView | null };
   agents_viewed: { from_view: FocusView | null };
   maas_viewed: { from_view: FocusView | null };
+  usage_viewed: { from_view: FocusView | null };
+  roadmap_viewed: { from_view: FocusView | null };
   automation_viewed: { from_view: FocusView | null };
   mobile_viewed: { from_view: FocusView | null };
 

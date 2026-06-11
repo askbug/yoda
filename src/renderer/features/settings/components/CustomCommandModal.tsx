@@ -1,9 +1,9 @@
 import { Info, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AGENT_PROVIDERS, type AgentProviderDefinition } from '@shared/agent-provider-registry';
-import type { ProviderCustomConfig } from '@shared/app-settings';
-import { useProviderSettings } from '@renderer/features/settings/use-provider-settings';
+import type { RuntimeCustomConfig } from '@shared/app-settings';
+import { RUNTIMES, type RuntimeDefinition } from '@shared/runtime-registry';
+import { useRuntimeSettings } from '@renderer/features/settings/use-runtime-settings';
 import { Button } from '@renderer/lib/ui/button';
 import { ConfirmButton } from '@renderer/lib/ui/confirm-button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@renderer/lib/ui/dialog';
@@ -15,7 +15,7 @@ import { log } from '@renderer/utils/logger';
 interface CustomCommandModalProps {
   isOpen: boolean;
   onClose: () => void;
-  providerId: string;
+  runtimeId: string;
 }
 
 type EnvEntry = { key: string; value: string };
@@ -30,7 +30,7 @@ type FormState = {
   envEntries: EnvEntry[];
 };
 
-const getDefaultFromProvider = (provider: AgentProviderDefinition | undefined): FormState => ({
+const getDefaultFromProvider = (provider: RuntimeDefinition | undefined): FormState => ({
   cli: provider?.cli ?? '',
   resumeFlag: provider?.resumeFlag ?? '',
   defaultArgs: provider?.defaultArgs?.join(' ') ?? '',
@@ -40,7 +40,7 @@ const getDefaultFromProvider = (provider: AgentProviderDefinition | undefined): 
   envEntries: [],
 });
 
-const configToFormState = (config: ProviderCustomConfig, fallback: FormState): FormState => ({
+const configToFormState = (config: RuntimeCustomConfig, fallback: FormState): FormState => ({
   cli: config.cli ?? fallback.cli,
   resumeFlag: config.resumeFlag ?? fallback.resumeFlag,
   defaultArgs: Array.isArray(config.defaultArgs)
@@ -52,12 +52,12 @@ const configToFormState = (config: ProviderCustomConfig, fallback: FormState): F
   envEntries: config.env ? Object.entries(config.env).map(([key, value]) => ({ key, value })) : [],
 });
 
-const CustomCommandModal: React.FC<CustomCommandModalProps> = ({ isOpen, onClose, providerId }) => {
+const CustomCommandModal: React.FC<CustomCommandModalProps> = ({ isOpen, onClose, runtimeId }) => {
   const { t } = useTranslation();
-  const provider = useMemo(() => AGENT_PROVIDERS.find((p) => p.id === providerId), [providerId]);
+  const provider = useMemo(() => RUNTIMES.find((p) => p.id === runtimeId), [runtimeId]);
   const registryDefaults = useMemo(() => getDefaultFromProvider(provider), [provider]);
 
-  const { value: storedConfig, isOverridden, isLoading, update } = useProviderSettings(providerId);
+  const { value: storedConfig, isOverridden, isLoading, update } = useRuntimeSettings(runtimeId);
 
   const [form, setForm] = useState<FormState>(registryDefaults);
   const [saving, setSaving] = useState(false);
@@ -109,7 +109,7 @@ const CustomCommandModal: React.FC<CustomCommandModalProps> = ({ isOpen, onClose
         }
       }
 
-      const config: ProviderCustomConfig = {
+      const config: RuntimeCustomConfig = {
         ...(storedConfig ?? {}),
         cli: form.cli,
         resumeFlag: form.resumeFlag,

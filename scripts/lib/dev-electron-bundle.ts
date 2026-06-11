@@ -10,6 +10,7 @@ const SOURCE_EXECUTABLE_NAME = 'Electron';
 const DEV_APP_NAME = 'Yoda.app';
 const DEV_ICON_SOURCE = path.join('src', 'assets', 'images', 'yoda', 'yoda.icns');
 const DEV_ICON_FILE = 'icon.icns';
+const DEV_PROTOCOL_SCHEME = 'yoda';
 
 const DEV_ELECTRON_BUNDLE_VALUES: Record<string, string> = {
   CFBundleName: DEV_PRODUCT_NAME,
@@ -45,6 +46,10 @@ export function prepareDevElectronBundle(repoRoot: string): string | undefined {
     ...DEV_ELECTRON_BUNDLE_VALUES,
     CFBundleExecutable: SOURCE_EXECUTABLE_NAME,
     CFBundleIconFile: DEV_ICON_FILE,
+  });
+  patchBundleUrlScheme(devBundlePath, {
+    name: DEV_PRODUCT_NAME,
+    scheme: DEV_PROTOCOL_SCHEME,
   });
   installDevBundleIcon(repoRoot, devBundlePath);
   writeFileSync(markerPath, markerValue);
@@ -102,4 +107,23 @@ function upsertPlistString(plist: string, key: string, value: string): void {
   spawnSync('/usr/libexec/PlistBuddy', ['-c', `Add :${key} string ${value}`, plist], {
     stdio: 'ignore',
   });
+}
+
+function patchBundleUrlScheme(bundlePath: string, args: { name: string; scheme: string }): void {
+  const plist = path.join(bundlePath, 'Contents', 'Info.plist');
+  if (!existsSync(plist)) return;
+
+  spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Delete :CFBundleURLTypes', plist], {
+    stdio: 'ignore',
+  });
+  for (const command of [
+    'Add :CFBundleURLTypes array',
+    'Add :CFBundleURLTypes:0 dict',
+    'Add :CFBundleURLTypes:0:CFBundleTypeRole string Editor',
+    `Add :CFBundleURLTypes:0:CFBundleURLName string ${args.name}`,
+    'Add :CFBundleURLTypes:0:CFBundleURLSchemes array',
+    `Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string ${args.scheme}`,
+  ]) {
+    spawnSync('/usr/libexec/PlistBuddy', ['-c', command, plist], { stdio: 'ignore' });
+  }
 }

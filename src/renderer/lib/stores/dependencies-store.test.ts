@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import type { DependencyState, DependencyStatusUpdatedEvent } from '@shared/dependencies';
 import { err, ok } from '@shared/result';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { DependenciesStore } from './dependencies-store';
 
 let dependencyEventHandler: ((event: DependencyStatusUpdatedEvent) => void) | null = null;
@@ -25,7 +25,7 @@ vi.mock('../../lib/ipc', () => ({
 
 const { rpc } = await import('../../lib/ipc');
 
-function availableAgent(id: AgentProviderId): DependencyState {
+function availableAgent(id: RuntimeId): DependencyState {
   return {
     id,
     category: 'agent' as const,

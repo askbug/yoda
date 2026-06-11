@@ -1,7 +1,8 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import type { DeepLinkTarget } from '@shared/deep-links';
 import type { DependencyStatusUpdatedEvent } from '@shared/dependencies';
 import { defineEvent } from '@shared/ipc/events';
+import type { RuntimeId } from '@shared/runtime-registry';
+import type { TaskWindowTarget } from '@shared/task-window';
 
 // App editing actions (renderer → main, no payload)
 export const appUndoChannel = defineEvent<void>('app:undo');
@@ -27,6 +28,42 @@ export const notificationFocusTaskChannel = defineEvent<{
 }>('notification:focus-task');
 
 export const deepLinkOpenChannel = defineEvent<DeepLinkTarget>('deep-link:open');
+
+export type TaskWindowReturnPayload = {
+  sourceWindowId: number;
+  target: TaskWindowTarget;
+};
+
+export const taskWindowReturnedToTabChannel = defineEvent<TaskWindowReturnPayload>(
+  'task-window:returned-to-tab'
+);
+
+/**
+ * Main → main-window renderer: a detached task window is being dragged over (or
+ * away from) the task tab strip drop zone, so the strip should toggle its
+ * "drop to dock" highlight.
+ */
+export const taskWindowDockHoverChannel = defineEvent<{ hovering: boolean }>(
+  'task-window:dock-hover'
+);
+
+/**
+ * Main → main-window renderer: a detached task window was released over the tab
+ * strip drop zone. The main window re-opens the tab locally, then acks via
+ * `notifyTaskWindowReturned` so the detached window closes itself.
+ */
+export const taskWindowDockRequestChannel = defineEvent<TaskWindowReturnPayload>(
+  'task-window:dock-request'
+);
+
+/**
+ * Main → a specific pre-warmed task window: assign the task target it should
+ * display. The window boots its React shell empty and parks until this arrives,
+ * which makes tearing out a tab feel instant (no cold renderer boot).
+ */
+export const taskWindowAssignTargetChannel = defineEvent<TaskWindowTarget>(
+  'task-window:assign-target'
+);
 
 export const ptyStartedChannel = defineEvent<{
   id: string;
@@ -83,7 +120,7 @@ export type QuitAgentSessionInfo = {
   projectId: string;
   taskId: string;
   taskTitle?: string;
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   title: string;
   detachable: boolean;
 };

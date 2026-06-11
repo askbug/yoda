@@ -1,5 +1,5 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
-import type { ProviderCustomConfig } from '@shared/app-settings';
+import type { RuntimeCustomConfig } from '@shared/app-settings';
+import type { RuntimeId } from '@shared/runtime-registry';
 import type { IExecutionContext } from '@main/core/execution-context/types';
 import {
   readCodexThreadArchiveStatus,
@@ -12,24 +12,24 @@ const CODEX_ARCHIVE_TIMEOUT_MS = 10_000;
 const CODEX_ARCHIVE_MAX_BUFFER = 32 * 1024;
 
 export async function ensureCodexThreadArchived({
-  providerId,
+  runtimeId,
   providerConfig,
   threadId,
   ctx,
   statePath = resolveCodexStatePath(),
 }: {
-  providerId: AgentProviderId;
-  providerConfig: ProviderCustomConfig | undefined;
+  runtimeId: RuntimeId;
+  providerConfig: RuntimeCustomConfig | undefined;
   threadId: string;
   ctx: IExecutionContext;
   statePath?: string;
 }): Promise<void> {
-  if (providerId !== 'codex') return;
+  if (runtimeId !== 'codex') return;
   if (readCodexThreadArchiveStatus(statePath, threadId) === true) return;
 
   try {
     const command = buildAgentSubcommand({
-      providerId,
+      runtimeId,
       providerConfig,
       subcommand: 'archive',
       subcommandArgs: [threadId],

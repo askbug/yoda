@@ -19,7 +19,7 @@ function nonKeepableSession(title: string, index: number = 1) {
     projectId: 'project-1',
     taskId: 'task-1',
     taskTitle: 'Exit prompt task',
-    providerId: 'codex' as const,
+    runtimeId: 'codex' as const,
     title,
     detachable: false,
   };

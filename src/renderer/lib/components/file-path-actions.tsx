@@ -59,38 +59,29 @@ export function useFilePathActions(target: FilePathTarget) {
   };
 }
 
-/** Apps that are file managers or terminals — everything else counts as an editor. */
-const NON_EDITOR_APP_IDS: OpenInAppId[] = [
-  'finder',
-  'terminal',
-  'warp',
-  'iterm2',
-  'ghostty',
-  'kitty',
-];
-
 /**
- * Resolves the user's preferred external editor (openIn.default setting,
- * falling back to the first installed editor). Returns null when none is
- * installed or none supports the remote target.
+ * All visible "Open in" targets — installed and not hidden in Settings →
+ * Open in — with the user's default app first. Finder is excluded (the
+ * dedicated open/reveal items cover it), as is Terminal on remote targets
+ * (the open-in-terminal item covers it).
  */
-function useEditorApp(isRemote: boolean) {
+function useOpenInTargets(isRemote: boolean) {
   const { icons, labels, installedApps, loading } = useOpenInApps();
   const { value: openInSettings } = useAppSettingsKey('openIn');
 
-  if (loading) return null;
-  const candidates = installedApps.filter(
-    (app) => !NON_EDITOR_APP_IDS.includes(app.id) && (!isRemote || app.supportsRemote)
-  );
-  if (candidates.length === 0) return null;
-
-  const preferred = candidates.find((app) => app.id === openInSettings?.default) ?? candidates[0];
-  return {
-    id: preferred.id,
-    label: labels[preferred.id] ?? preferred.label,
-    icon: icons[preferred.id],
-    invertInDark: getAppById(preferred.id)?.invertInDark === true,
-  };
+  if (loading) return [];
+  const defaultId = openInSettings?.default;
+  return installedApps
+    .filter(
+      (app) => app.id !== 'finder' && (!isRemote || (app.supportsRemote && app.id !== 'terminal'))
+    )
+    .sort((a, b) => (a.id === defaultId ? -1 : b.id === defaultId ? 1 : 0))
+    .map((app) => ({
+      id: app.id,
+      label: labels[app.id] ?? app.label,
+      icon: icons[app.id],
+      invertInDark: getAppById(app.id)?.invertInDark === true,
+    }));
 }
 
 type MenuPrimitives = {
@@ -116,18 +107,19 @@ export function FilePathMenuItems({
 }) {
   const { t } = useTranslation();
   const actions = useFilePathActions(target);
-  const editorApp = useEditorApp(actions.isRemote);
+  const openInTargets = useOpenInTargets(actions.isRemote);
 
   return (
     <>
-      {editorApp ? (
+      {openInTargets.map((app) => (
         <Item
+          key={app.id}
           className="whitespace-nowrap"
           onClick={(event) => {
             event.stopPropagation();
             void openIn(
               {
-                app: editorApp.id,
+                app: app.id,
                 path: target.absolutePath,
                 isRemote: actions.isRemote,
                 sshConnectionId: target.sshConnectionId ?? null,
@@ -136,18 +128,18 @@ export function FilePathMenuItems({
             );
           }}
         >
-          {editorApp.icon ? (
+          {app.icon ? (
             <img
-              src={editorApp.icon}
-              alt={editorApp.label}
-              className={cn('size-4 rounded', editorApp.invertInDark && 'dark:invert')}
+              src={app.icon}
+              alt={app.label}
+              className={cn('size-4 rounded', app.invertInDark && 'dark:invert')}
             />
           ) : (
             <ExternalLink className="size-4" />
           )}
-          {t('fileActions.openInApp', { app: editorApp.label })}
+          {t('fileActions.openInApp', { app: app.label })}
         </Item>
-      ) : null}
+      ))}
       <Item
         className="whitespace-nowrap"
         onClick={(event) => {

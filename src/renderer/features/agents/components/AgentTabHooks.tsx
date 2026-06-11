@@ -2,44 +2,44 @@ import { FolderOpen } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 import { rpc } from '@renderer/lib/ipc';
 import { Button } from '@renderer/lib/ui/button';
 import { expandHome, resolveAgentPaths } from './agent-paths';
 import { AgentSection } from './AgentSection';
 
-export const AgentTabHooks: React.FC<{ agentId: AgentProviderId }> = observer(
-  function AgentTabHooks({ agentId }) {
-    const { t } = useTranslation();
-    const provider = getProvider(agentId);
-    const paths = resolveAgentPaths(agentId);
+export const AgentTabHooks: React.FC<{ agentId: RuntimeId }> = observer(function AgentTabHooks({
+  agentId,
+}) {
+  const { t } = useTranslation();
+  const provider = getRuntime(agentId);
+  const paths = resolveAgentPaths(agentId);
 
-    if (!provider) return null;
+  if (!provider) return null;
 
-    const supported = provider.supportsHooks === true;
+  const supported = provider.supportsHooks === true;
 
-    return (
-      <div className="mx-auto w-full max-w-3xl px-6 py-6">
-        <AgentSection
-          title={t('agents.hooks.title')}
-          description={t('agents.hooks.description', { name: provider.name })}
-        >
-          {!supported ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
-              {t('agents.hooks.unsupported', { name: provider.name })}
-            </p>
-          ) : paths.hooks ? (
-            <HookPathRow path={paths.hooks} />
-          ) : (
-            <p className="rounded-md border border-dashed border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
-              {t('agents.hooks.noPath')}
-            </p>
-          )}
-        </AgentSection>
-      </div>
-    );
-  }
-);
+  return (
+    <div className="mx-auto w-full max-w-3xl px-6 py-6">
+      <AgentSection
+        title={t('agents.hooks.title')}
+        description={t('agents.hooks.description', { name: provider.name })}
+      >
+        {!supported ? (
+          <p className="rounded-md border border-dashed border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+            {t('agents.hooks.unsupported', { name: provider.name })}
+          </p>
+        ) : paths.hooks ? (
+          <HookPathRow path={paths.hooks} />
+        ) : (
+          <p className="rounded-md border border-dashed border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+            {t('agents.hooks.noPath')}
+          </p>
+        )}
+      </AgentSection>
+    </div>
+  );
+});
 
 const HookPathRow: React.FC<{ path: string }> = ({ path }) => {
   const { t } = useTranslation();

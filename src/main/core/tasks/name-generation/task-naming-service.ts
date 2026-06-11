@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
 import { and, desc, eq, ne } from 'drizzle-orm';
-import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
-import type { ProviderCustomConfig } from '@shared/app-settings';
+import type { RuntimeCustomConfig } from '@shared/app-settings';
 import { BUILTIN_AGENT_KEYS } from '@shared/builtin-agents';
 import { taskNamingUpdatedChannel } from '@shared/events/taskEvents';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 import { deriveTaskSlug, normalizeTaskDisplayName } from '@shared/task-name';
 import {
+  normalizeTaskNamingTimeoutMs,
   type TaskNamingContextSnapshot,
   type TaskNamingContextSource,
   type TaskNamingDebugStage,
@@ -15,11 +16,14 @@ import {
   type TaskNamingStatus,
 } from '@shared/task-naming';
 import type { CreateTaskParams } from '@shared/tasks';
-import { resolveUtilityAgent } from '@main/core/agents-config/builtin-agent-resolver';
-import { resolveProviderEnv } from '@main/core/conversations/impl/provider-env';
+import { resolveSelectedUtilityAgent } from '@main/core/agents-config/builtin-agent-resolver';
+import {
+  resolveRuntimeBaseEnv,
+  resolveRuntimeEnv,
+} from '@main/core/conversations/impl/runtime-env';
 import { projectManager } from '@main/core/projects/project-manager';
 import type { ProjectProvider } from '@main/core/projects/project-provider';
-import { providerOverrideSettings } from '@main/core/settings/provider-settings-service';
+import { runtimeOverrideSettings } from '@main/core/settings/runtime-settings-service';
 import { appSettingsService } from '@main/core/settings/settings-service';
 import { db } from '@main/db/client';
 import { projects, taskNamingSnapshots, tasks } from '@main/db/schema';
@@ -36,6 +40,7 @@ import {
 const MAX_SOURCE_CHARS = 2_000;
 const MAX_TOTAL_CONTEXT_CHARS = 6_000;
 const MAX_TASK_NAME_CHARS = 36;
+const MAX_SESSION_TITLE_CHARS = 48;
 const MAX_BRANCH_NAME_CHARS = 48;
 const MAX_COMMAND_OUTPUT_CHARS = 32_000;
 const MAX_COMMAND_ERROR_CHARS = 2_000;
@@ -58,22 +63,50 @@ type GenerateTaskNamesResult =
     }
   | { success: false; message: string; snapshot: TaskNamingSnapshot };
 
-type ModelNamingPayload = {
+export type ModelNamingPayload = Record<string, unknown> & {
   taskName?: unknown;
   branchName?: unknown;
+  sessionTitle?: unknown;
+  title?: unknown;
 };
 
-type NamingPayloadResult = {
+export type NamingPayloadResult = {
   payload: ModelNamingPayload;
   model: string;
   method: 'agent-cli';
   stages: TaskNamingDebugStage[];
 };
 
-type AgentNamingRuntime = {
-  providerId: AgentProviderId;
-  providerName: string;
-  providerConfig: ProviderCustomConfig;
+export type AgentNamingRuntime = {
+  runtimeId: RuntimeId;
+  runtimeName: string;
+  providerConfig: RuntimeCustomConfig;
+};
+
+export type ResolvedNamingRuntime = {
+  settings: TaskNamingSettings;
+  defaultRuntime: RuntimeId;
+  runtimeId: RuntimeId;
+  runtimeName: string;
+  providerConfig: RuntimeCustomConfig | null;
+  runtime: AgentNamingRuntime | null;
+  customSystemPrompt: string;
+};
+
+export type NamingTarget = 'task' | 'session';
+
+export type NamingContextSourceDraft = Omit<
+  TaskNamingContextSource,
+  'content' | 'estimatedTokens'
+> & {
+  content?: string;
+};
+
+export type NamingPromptParts = {
+  systemPrompt: string;
+  systemPromptEstimatedTokens: number;
+  prompt: string;
+  promptEstimatedTokens: number;
 };
 
 type AgentNamingCommandResult = {
@@ -85,6 +118,179 @@ type AgentNamingCommandResult = {
   firstJsonEventMs: number | null;
   finalAgentMessageMs: number | null;
 };
+
+export async function resolveNamingRuntime(
+  fallbackProviderId?: RuntimeId | null
+): Promise<ResolvedNamingRuntime> {
+  const [taskSettings, defaultRuntime] = await Promise.all([
+    appSettingsService.get('tasks'),
+    appSettingsService.get('defaultRuntime'),
+  ]);
+  const namingAgent = await resolveSelectedUtilityAgent(
+    taskSettings.namingAgentId,
+    BUILTIN_AGENT_KEYS.naming
+  );
+  const runtimeId = namingAgent.runtimeId ?? fallbackProviderId ?? defaultRuntime;
+  const providerConfig = await runtimeOverrideSettings.getItem(runtimeId);
+  const runtimeName = getRuntime(runtimeId)?.name ?? runtimeId;
+  const agentNamingModel = normalizeTaskNamingModelForProvider(
+    runtimeId,
+    namingAgent.model ?? providerConfig?.namingModel
+  );
+  const fallbackNamingModel = normalizeTaskNamingModelForProvider(
+    runtimeId,
+    taskSettings.namingModel
+  );
+  const model = normalizeTaskNamingModelForProvider(
+    runtimeId,
+    resolvePreferredTaskNamingModel({ agentNamingModel, fallbackNamingModel })
+  );
+  const settings: TaskNamingSettings = {
+    model,
+    language: taskSettings.namingLanguage,
+    context: taskSettings.namingContext,
+    recentTaskLimit: taskSettings.namingRecentTaskLimit,
+    requestTimeoutMs: normalizeTaskNamingTimeoutMs(taskSettings.namingRequestTimeoutMs),
+  };
+  return {
+    settings,
+    defaultRuntime,
+    runtimeId,
+    runtimeName,
+    providerConfig: providerConfig ?? null,
+    runtime: providerConfig
+      ? {
+          runtimeId,
+          runtimeName,
+          providerConfig: { ...providerConfig, namingModel: settings.model },
+        }
+      : null,
+    customSystemPrompt: namingAgent.systemPrompt,
+  };
+}
+
+export async function buildCommonProjectNamingSources(input: {
+  projectId: string;
+  project?: ProjectProvider | null;
+  projectName?: string;
+  projectPath: string;
+  settings: TaskNamingSettings;
+  excludeTaskId?: string;
+}): Promise<NamingContextSourceDraft[]> {
+  const sources: NamingContextSourceDraft[] = [];
+
+  if (input.settings.context.project) {
+    const [projectRow] = await db
+      .select({ name: projects.name, path: projects.path })
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .limit(1);
+    sources.push({
+      id: 'project',
+      label: 'Project',
+      content: [
+        `Name: ${input.projectName ?? projectRow?.name ?? input.projectId}`,
+        `Path: ${input.projectPath || projectRow?.path || input.project?.repoPath || ''}`,
+      ].join('\n'),
+    });
+  }
+
+  if (input.settings.context.readme && input.project) {
+    const readme = await readProjectReadme(input.project);
+    sources.push({ id: 'readme', label: readme?.path ?? 'README', content: readme?.content });
+  }
+
+  if (input.settings.context.recentTasks && input.settings.recentTaskLimit > 0) {
+    const recent = await db
+      .select({ name: tasks.name })
+      .from(tasks)
+      .where(
+        input.excludeTaskId
+          ? and(eq(tasks.projectId, input.projectId), ne(tasks.id, input.excludeTaskId))
+          : eq(tasks.projectId, input.projectId)
+      )
+      .orderBy(desc(tasks.updatedAt))
+      .limit(input.settings.recentTaskLimit);
+    sources.push({
+      id: 'recentTasks',
+      label: 'Recent task titles',
+      content: recent.map((task, index) => `${index + 1}. ${task.name}`).join('\n'),
+    });
+  }
+
+  return sources;
+}
+
+export function createNamingContextSnapshot(input: {
+  taskId: string;
+  projectId: string;
+  settings: TaskNamingSettings;
+  sources: NamingContextSourceDraft[];
+}): TaskNamingContextSnapshot {
+  const sources: TaskNamingContextSource[] = [];
+  let remaining = MAX_TOTAL_CONTEXT_CHARS;
+
+  for (const source of input.sources) {
+    if (!source.content?.trim() || remaining <= 0) continue;
+    const clipped = clip(source.content.trim(), Math.min(MAX_SOURCE_CHARS, remaining));
+    remaining -= clipped.content.length;
+    sources.push({
+      ...source,
+      content: clipped.content,
+      estimatedTokens: estimateTokens(clipped.content),
+      truncated: clipped.truncated,
+    });
+  }
+
+  return {
+    version: 1,
+    taskId: input.taskId,
+    projectId: input.projectId,
+    createdAt: new Date().toISOString(),
+    language: input.settings.language,
+    model: input.settings.model,
+    estimatedTokens: sources.reduce((sum, source) => sum + source.estimatedTokens, 0),
+    estimatedCharacters: sources.reduce((sum, source) => sum + source.content.length, 0),
+    sourceCount: sources.length,
+    sources,
+  };
+}
+
+export function buildNamingPromptParts(input: {
+  target: NamingTarget;
+  context: TaskNamingContextSnapshot;
+  includeBranchName?: boolean;
+  customSystemPrompt?: string;
+}): NamingPromptParts {
+  const includeBranchName = Boolean(input.includeBranchName);
+  const systemPrompt = buildNamingSystemPrompt({
+    target: input.target,
+    includeBranchName,
+    language: input.context.language,
+    customSystemPrompt: input.customSystemPrompt,
+  });
+  const prompt = [
+    systemPrompt,
+    '',
+    'Use this JSON context:',
+    JSON.stringify({
+      target: input.target,
+      includeBranchName: input.target === 'task' ? includeBranchName : undefined,
+      language: input.context.language,
+      sources: input.context.sources.map((source) => ({
+        id: source.id,
+        label: source.label,
+        content: source.content,
+      })),
+    }),
+  ].join('\n');
+  return {
+    systemPrompt,
+    systemPromptEstimatedTokens: estimateTokens(systemPrompt),
+    prompt,
+    promptEstimatedTokens: estimateTokens(prompt),
+  };
+}
 
 export async function generateTaskNames(
   input: GenerateTaskNamesInput
@@ -105,80 +311,42 @@ export async function generateTaskNames(
     strategyKind: input.params.strategy.kind,
     hasInitialPrompt: Boolean(input.params.initialConversation?.initialPrompt),
   });
-  const [taskSettings, defaultAgent] = await Promise.all([
-    appSettingsService.get('tasks'),
-    appSettingsService.get('defaultAgent'),
-  ]);
+  const namingRuntime = await resolveNamingRuntime(input.params.initialConversation?.runtime);
+  const { settings, defaultRuntime, runtimeId, runtimeName, providerConfig, runtime } =
+    namingRuntime;
   recordStage('settings', Date.now() - startedAt, {
-    defaultAgent,
-    namingModelConfigured: Boolean(taskSettings.namingModel.trim()),
-    recentTaskLimit: taskSettings.namingRecentTaskLimit,
-    timeoutMs: taskSettings.namingRequestTimeoutMs,
+    defaultRuntime,
+    namingModelConfigured: Boolean(settings.model.trim()),
+    recentTaskLimit: settings.recentTaskLimit,
+    timeoutMs: settings.requestTimeoutMs,
   });
   console.log('[DEBUG][task-naming] settings loaded:', {
     taskId: input.taskId,
     projectId: input.projectId,
     durationMs: Date.now() - startedAt,
-    defaultAgent,
-    autoGenerateName: taskSettings.autoGenerateName,
-    namingModelConfigured: Boolean(taskSettings.namingModel.trim()),
-    context: taskSettings.namingContext,
-    recentTaskLimit: taskSettings.namingRecentTaskLimit,
-    timeoutMs: taskSettings.namingRequestTimeoutMs,
+    defaultRuntime,
+    namingModelConfigured: Boolean(settings.model.trim()),
+    context: settings.context,
+    recentTaskLimit: settings.recentTaskLimit,
+    timeoutMs: settings.requestTimeoutMs,
   });
-  // The Naming built-in Agent drives task naming: its runtime/model/prompt win
-  // when set. A null runtime means "follow the task's own provider".
-  const namingAgent = await resolveUtilityAgent(BUILTIN_AGENT_KEYS.naming);
-  const providerId =
-    namingAgent.providerId ?? input.params.initialConversation?.provider ?? defaultAgent;
-  const providerConfig = await providerOverrideSettings.getItem(providerId);
   recordStage('providerConfig', Date.now() - startedAt, {
-    providerId,
+    runtimeId,
     hasProviderConfig: Boolean(providerConfig),
     hasNamingCommand: Boolean(providerConfig?.namingCommand?.trim()),
   });
-  const agentNamingModel = normalizeTaskNamingModelForProvider(
-    providerId,
-    namingAgent.model ?? providerConfig?.namingModel
-  );
-  const fallbackNamingModel = normalizeTaskNamingModelForProvider(
-    providerId,
-    taskSettings.namingModel
-  );
-  const namingModel = normalizeTaskNamingModelForProvider(
-    providerId,
-    resolvePreferredTaskNamingModel({
-      agentNamingModel,
-      fallbackNamingModel,
-    })
-  );
-  const settings: TaskNamingSettings = {
-    model: namingModel,
-    language: taskSettings.namingLanguage,
-    context: taskSettings.namingContext,
-    recentTaskLimit: taskSettings.namingRecentTaskLimit,
-    requestTimeoutMs: taskSettings.namingRequestTimeoutMs,
-  };
-  const providerName = getProvider(providerId)?.name ?? providerId;
   console.log('[DEBUG][task-naming] provider resolved:', {
     taskId: input.taskId,
     projectId: input.projectId,
     durationMs: Date.now() - startedAt,
-    providerId,
-    providerName,
+    runtimeId,
+    runtimeName,
     hasProviderConfig: Boolean(providerConfig),
     hasNamingModel: Boolean(settings.model),
     hasNamingCommand: Boolean(providerConfig?.namingCommand?.trim()),
   });
-  const runtime: AgentNamingRuntime | null = providerConfig
-    ? {
-        providerId,
-        providerName,
-        providerConfig: { ...providerConfig, namingModel: settings.model },
-      }
-    : null;
   const contextStartedAt = Date.now();
-  const context = await buildContextSnapshot(input, settings);
+  const context = await buildTaskNamingContextSnapshot(input, settings);
   recordStage('context', Date.now() - contextStartedAt, {
     sourceCount: context.sourceCount,
     estimatedTokens: context.estimatedTokens,
@@ -199,17 +367,24 @@ export async function generateTaskNames(
       truncated: Boolean(source.truncated),
     })),
   });
+  const promptParts = buildNamingPromptParts({
+    target: 'task',
+    context,
+    includeBranchName: input.includeBranchName,
+    customSystemPrompt: namingRuntime.customSystemPrompt,
+  });
   await saveNamingSnapshot({
     taskId: input.taskId,
     projectId: input.projectId,
     status: 'generating',
     model: settings.model,
     context,
+    promptParts,
   });
 
   try {
     if (!runtime) {
-      throw new Error(`No provider configuration is available for ${providerName}.`);
+      throw new Error(`No provider configuration is available for ${runtimeName}.`);
     }
     const requestStartedAt = Date.now();
     const result = await requestNamingPayload(
@@ -217,7 +392,8 @@ export async function generateTaskNames(
       input.includeBranchName,
       settings,
       runtime,
-      input.project.repoPath
+      input.project.repoPath,
+      promptParts.prompt
     );
     recordStage('agentCliRequest', Date.now() - requestStartedAt, {
       method: result.method,
@@ -259,6 +435,7 @@ export async function generateTaskNames(
       },
       generatedTaskName: taskName,
       generatedBranchName: branchName,
+      promptParts,
     });
     console.log('[DEBUG][task-naming] generateTaskNames success:', {
       taskId: input.taskId,
@@ -284,6 +461,7 @@ export async function generateTaskNames(
         ...context,
         debugTrace: buildDebugTrace(startedAt, stages),
       },
+      promptParts,
       error: message,
     });
     console.log('[DEBUG][task-naming] generateTaskNames failed:', {
@@ -319,7 +497,6 @@ export async function getTaskNamingContextPreview(
   const project = projectManager.getProject(projectId);
   if (!project) return null;
 
-  const taskSettings = await appSettingsService.get('tasks');
   const params = parseSetupParams(row.setupData) ?? {
     id: taskId,
     projectId,
@@ -331,8 +508,9 @@ export async function getTaskNamingContextPreview(
       ? { kind: 'checkout-existing' as const }
       : { kind: 'no-worktree' as const },
   };
+  const { settings } = await resolveNamingRuntime(params.initialConversation?.runtime);
 
-  return buildContextSnapshot(
+  return buildTaskNamingContextSnapshot(
     {
       taskId,
       projectId,
@@ -340,94 +518,42 @@ export async function getTaskNamingContextPreview(
       params: { ...params, id: taskId, projectId, name: params.name || row.name },
       includeBranchName: false,
     },
-    {
-      model: taskSettings.namingModel.trim(),
-      language: taskSettings.namingLanguage,
-      context: taskSettings.namingContext,
-      recentTaskLimit: taskSettings.namingRecentTaskLimit,
-      requestTimeoutMs: taskSettings.namingRequestTimeoutMs,
-    }
+    settings
   );
 }
 
-async function buildContextSnapshot(
+async function buildTaskNamingContextSnapshot(
   input: GenerateTaskNamesInput,
   settings: TaskNamingSettings
 ): Promise<TaskNamingContextSnapshot> {
-  const sources: TaskNamingContextSource[] = [];
-  let remaining = MAX_TOTAL_CONTEXT_CHARS;
-
-  const addSource = (
-    source: Omit<TaskNamingContextSource, 'content' | 'estimatedTokens'> & { content?: string }
-  ) => {
-    if (!source.content?.trim() || remaining <= 0) return;
-    const clipped = clip(source.content.trim(), Math.min(MAX_SOURCE_CHARS, remaining));
-    remaining -= clipped.content.length;
-    sources.push({
-      ...source,
-      content: clipped.content,
-      estimatedTokens: estimateTokens(clipped.content),
-      truncated: clipped.truncated,
-    });
-  };
+  const sources: NamingContextSourceDraft[] = [];
 
   if (settings.context.prompt) {
     // Only the real first prompt belongs here. params.name may be a random
     // placeholder slug (blank submit), which must not masquerade as a prompt.
-    addSource({
+    sources.push({
       id: 'prompt',
       label: 'First user prompt',
       content: input.params.initialConversation?.initialPrompt,
     });
   }
 
-  if (settings.context.project) {
-    const [projectRow] = await db
-      .select({ name: projects.name, path: projects.path })
-      .from(projects)
-      .where(eq(projects.id, input.projectId))
-      .limit(1);
-    addSource({
-      id: 'project',
-      label: 'Project',
-      content: [
-        `Name: ${projectRow?.name ?? input.projectId}`,
-        `Path: ${projectRow?.path ?? input.project.repoPath}`,
-      ].join('\n'),
-    });
-  }
+  sources.push(
+    ...(await buildCommonProjectNamingSources({
+      projectId: input.projectId,
+      project: input.project,
+      projectPath: input.project.repoPath,
+      settings,
+      excludeTaskId: input.taskId,
+    }))
+  );
 
-  if (settings.context.readme) {
-    const readme = await readProjectReadme(input.project);
-    addSource({ id: 'readme', label: readme?.path ?? 'README', content: readme?.content });
-  }
-
-  if (settings.context.recentTasks && settings.recentTaskLimit > 0) {
-    const recent = await db
-      .select({ name: tasks.name })
-      .from(tasks)
-      .where(and(eq(tasks.projectId, input.projectId), ne(tasks.id, input.taskId)))
-      .orderBy(desc(tasks.updatedAt))
-      .limit(settings.recentTaskLimit);
-    addSource({
-      id: 'recentTasks',
-      label: 'Recent task titles',
-      content: recent.map((task, index) => `${index + 1}. ${task.name}`).join('\n'),
-    });
-  }
-
-  return {
-    version: 1,
+  return createNamingContextSnapshot({
     taskId: input.taskId,
     projectId: input.projectId,
-    createdAt: new Date().toISOString(),
-    language: settings.language,
-    model: settings.model,
-    estimatedTokens: sources.reduce((sum, source) => sum + source.estimatedTokens, 0),
-    estimatedCharacters: sources.reduce((sum, source) => sum + source.content.length, 0),
-    sourceCount: sources.length,
+    settings,
     sources,
-  };
+  });
 }
 
 async function readProjectReadme(
@@ -448,33 +574,52 @@ async function requestNamingPayload(
   includeBranchName: boolean,
   settings: TaskNamingSettings,
   runtime: AgentNamingRuntime,
-  cwd: string
+  cwd: string,
+  prompt: string
 ): Promise<NamingPayloadResult> {
+  return requestAgentNamingPayload({
+    context,
+    prompt,
+    includeBranchName,
+    settings,
+    runtime,
+    cwd,
+  });
+}
+
+export async function requestAgentNamingPayload(input: {
+  context: TaskNamingContextSnapshot;
+  prompt: string;
+  promptBuildDurationMs?: number;
+  includeBranchName?: boolean;
+  settings: Pick<TaskNamingSettings, 'requestTimeoutMs'>;
+  runtime: AgentNamingRuntime;
+  cwd: string;
+}): Promise<NamingPayloadResult> {
   const startedAt = Date.now();
   const stages: TaskNamingDebugStage[] = [];
-  const prompt = buildAgentNamingPrompt(context, includeBranchName);
-  const promptDurationMs = Date.now() - startedAt;
+  const includeBranchName = Boolean(input.includeBranchName);
   stages.push({
     name: 'prompt',
-    durationMs: promptDurationMs,
+    durationMs: input.promptBuildDurationMs ?? 0,
     metadata: {
-      promptChars: prompt.length,
-      promptEstimatedTokens: estimateTokens(prompt),
+      promptChars: input.prompt.length,
+      promptEstimatedTokens: estimateTokens(input.prompt),
       includeBranchName,
     },
   });
-  console.log('[DEBUG][task-naming] prompt built:', {
-    taskId: context.taskId,
-    projectId: context.projectId,
+  console.log('[DEBUG][agent-naming] prompt built:', {
+    taskId: input.context.taskId,
+    projectId: input.context.projectId,
     durationMs: Date.now() - startedAt,
-    promptChars: prompt.length,
-    promptEstimatedTokens: estimateTokens(prompt),
+    promptChars: input.prompt.length,
+    promptEstimatedTokens: estimateTokens(input.prompt),
     includeBranchName,
   });
   const commandBuildStartedAt = Date.now();
   const command = withProviderStreamingMode(
-    buildAgentNamingCommand(runtime.providerConfig, prompt),
-    runtime.providerId
+    buildAgentNamingCommand(input.runtime.providerConfig, input.prompt),
+    input.runtime.runtimeId
   );
   stages.push({
     name: 'commandBuild',
@@ -484,31 +629,35 @@ async function requestNamingPayload(
       argCount: command.args.length,
       hasStdin: Boolean(command.stdin),
       stdinChars: command.stdin?.length ?? 0,
-      timeoutMs: settings.requestTimeoutMs,
+      timeoutMs: input.settings.requestTimeoutMs,
       jsonMode: isJsonModeCommand(command),
     },
   });
-  console.log('[DEBUG][task-naming] naming command built:', {
-    taskId: context.taskId,
-    projectId: context.projectId,
+  console.log('[DEBUG][agent-naming] naming command built:', {
+    taskId: input.context.taskId,
+    projectId: input.context.projectId,
     durationMs: Date.now() - startedAt,
     command: command.command,
     argCount: command.args.length,
     hasStdin: Boolean(command.stdin),
     stdinChars: command.stdin?.length ?? 0,
-    timeoutMs: settings.requestTimeoutMs,
-    providerName: runtime.providerName,
+    timeoutMs: input.settings.requestTimeoutMs,
+    runtimeName: input.runtime.runtimeName,
   });
   const commandStartedAt = Date.now();
   const commandResult = await runAgentNamingCommand({
     ...command,
-    cwd,
+    cwd: input.cwd,
     env: {
-      ...buildExternalToolEnv(),
-      ...resolveProviderEnv(runtime.providerConfig),
+      ...buildExternalToolEnv(
+        resolveRuntimeBaseEnv(process.env, input.runtime.providerConfig, input.runtime.runtimeId)
+      ),
+      ...resolveRuntimeEnv(input.runtime.providerConfig, {
+        runtimeId: input.runtime.runtimeId,
+      }),
     },
-    timeoutMs: settings.requestTimeoutMs,
-    providerName: runtime.providerName,
+    timeoutMs: input.settings.requestTimeoutMs,
+    runtimeName: input.runtime.runtimeName,
   });
   stages.push({
     name: 'agentCli',
@@ -525,9 +674,9 @@ async function requestNamingPayload(
       argCount: command.args.length,
     },
   });
-  console.log('[DEBUG][task-naming] naming command raw output:', {
-    taskId: context.taskId,
-    projectId: context.projectId,
+  console.log('[DEBUG][agent-naming] naming command raw output:', {
+    taskId: input.context.taskId,
+    projectId: input.context.projectId,
     durationMs: Date.now() - commandStartedAt,
     rawChars: commandResult.stdout.length,
     stderrChars: commandResult.stderrChars,
@@ -547,18 +696,34 @@ async function requestNamingPayload(
       hasBranchName: typeof payload.branchName === 'string',
     },
   });
-  console.log('[DEBUG][task-naming] naming payload parsed:', {
-    taskId: context.taskId,
-    projectId: context.projectId,
+  console.log('[DEBUG][agent-naming] naming payload parsed:', {
+    taskId: input.context.taskId,
+    projectId: input.context.projectId,
     durationMs: Date.now() - parseStartedAt,
     totalDurationMs: Date.now() - startedAt,
     hasTaskName: typeof payload.taskName === 'string',
     hasBranchName: typeof payload.branchName === 'string',
   });
-  return { payload, model: settings.model, method: 'agent-cli', stages };
+  return { payload, model: input.context.model, method: 'agent-cli', stages };
 }
 
-function buildSystemPrompt(includeBranchName: boolean, language: string): string {
+function buildNamingSystemPrompt(input: {
+  target: NamingTarget;
+  includeBranchName: boolean;
+  language: string;
+  customSystemPrompt?: string;
+}): string {
+  const builtInPrompt =
+    input.target === 'session'
+      ? buildSessionNamingSystemPrompt(input.language)
+      : buildTaskNamingSystemPrompt(input.includeBranchName, input.language);
+  const trimmedCustomSystemPrompt = input.customSystemPrompt?.trim();
+  return trimmedCustomSystemPrompt
+    ? `${trimmedCustomSystemPrompt}\n\n${builtInPrompt}`
+    : builtInPrompt;
+}
+
+function buildTaskNamingSystemPrompt(includeBranchName: boolean, language: string): string {
   const languageRule =
     language === 'zh-CN'
       ? 'Task name language: Simplified Chinese.'
@@ -585,31 +750,31 @@ function buildSystemPrompt(includeBranchName: boolean, language: string): string
   ].join('\n');
 }
 
-function buildAgentNamingPrompt(
-  context: TaskNamingContextSnapshot,
-  includeBranchName: boolean
-): string {
+function buildSessionNamingSystemPrompt(language: string): string {
+  const languageRule =
+    language === 'zh-CN'
+      ? 'Session title language: Simplified Chinese.'
+      : language === 'en'
+        ? 'Session title language: English.'
+        : language === 'prompt'
+          ? 'Session title language: follow the user prompt.'
+          : 'Session title language: follow the application UI language when obvious; otherwise follow the user prompt.';
   return [
-    buildSystemPrompt(includeBranchName, context.language),
-    '',
-    'Use this JSON context:',
-    JSON.stringify({
-      includeBranchName,
-      language: context.language,
-      sources: context.sources.map((source) => ({
-        id: source.id,
-        label: source.label,
-        content: source.content,
-      })),
-    }),
+    'You generate concise names for individual coding-agent sessions.',
+    'Return strict JSON only. Do not include markdown, code fences, comments, or explanations.',
+    languageRule,
+    'sessionTitle: human-readable, concise, and specific to this session only.',
+    `sessionTitle max length: ${MAX_SESSION_TITLE_CHARS} characters.`,
+    'Do not generate a task name, branch name, project name, or generic status label.',
+    'JSON schema: {"sessionTitle":"..."}',
   ].join('\n');
 }
 
 function withProviderStreamingMode(
   command: ReturnType<typeof buildAgentNamingCommand>,
-  providerId: AgentProviderId
+  runtimeId: RuntimeId
 ): ReturnType<typeof buildAgentNamingCommand> {
-  if (providerId !== 'codex' || command.command !== 'codex' || command.args.includes('--json')) {
+  if (runtimeId !== 'codex' || command.command !== 'codex' || command.args.includes('--json')) {
     return command;
   }
   return { ...command, args: [...command.args, '--json'] };
@@ -679,14 +844,17 @@ function normalizeGeneratedBranchName(value: unknown): string | undefined {
   return slug || undefined;
 }
 
-function buildDebugTrace(startedAt: number, stages: TaskNamingDebugStage[]): TaskNamingDebugTrace {
+export function buildDebugTrace(
+  startedAt: number,
+  stages: TaskNamingDebugStage[]
+): TaskNamingDebugTrace {
   return {
     totalDurationMs: Date.now() - startedAt,
     stages,
   };
 }
 
-function estimateTokens(value: string): number {
+export function estimateTokens(value: string): number {
   const trimmed = value.trim();
   if (!trimmed) return 0;
   const cjkChars = trimmed.match(/[\u3400-\u9fff\uf900-\ufaff]/g)?.length ?? 0;
@@ -702,6 +870,8 @@ async function saveNamingSnapshot(input: {
   context: TaskNamingContextSnapshot | null;
   generatedTaskName?: string;
   generatedBranchName?: string;
+  /** Assembled prompt parts to overlay on the live snapshot (not persisted). */
+  promptParts?: NamingPromptParts;
   error?: string;
 }): Promise<TaskNamingSnapshot> {
   const now = new Date().toISOString();
@@ -740,9 +910,25 @@ async function saveNamingSnapshot(input: {
       },
     })
     .returning();
-  const snapshot = mapNamingSnapshotRow(row);
+  const snapshot = withPromptParts(mapNamingSnapshotRow(row), input.promptParts);
   events.emit(taskNamingUpdatedChannel, snapshot);
   return snapshot;
+}
+
+/** Overlays the assembled (non-persisted) prompt parts onto a live snapshot. */
+function withPromptParts(
+  snapshot: TaskNamingSnapshot,
+  parts?: NamingPromptParts
+): TaskNamingSnapshot {
+  if (!parts) return snapshot;
+  return {
+    ...snapshot,
+    systemPrompt: parts.systemPrompt,
+    systemPromptEstimatedTokens: parts.systemPromptEstimatedTokens,
+    prompt: parts.prompt,
+    promptChars: parts.prompt.length,
+    promptEstimatedTokens: parts.promptEstimatedTokens,
+  };
 }
 
 function mapNamingSnapshotRow(row: typeof taskNamingSnapshots.$inferSelect): TaskNamingSnapshot {
@@ -800,7 +986,7 @@ async function runAgentNamingCommand(input: {
   cwd: string;
   env: NodeJS.ProcessEnv;
   timeoutMs: number;
-  providerName: string;
+  runtimeName: string;
 }): Promise<AgentNamingCommandResult> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now();
@@ -811,7 +997,7 @@ async function runAgentNamingCommand(input: {
       hasStdin: Boolean(input.stdin),
       stdinChars: input.stdin?.length ?? 0,
       timeoutMs: input.timeoutMs,
-      providerName: input.providerName,
+      runtimeName: input.runtimeName,
     });
     const child = spawn(input.command, input.args, {
       cwd: input.cwd,
@@ -929,12 +1115,12 @@ async function runAgentNamingCommand(input: {
       });
       if (settled) return;
       if (timedOut) {
-        rejectCommand(new Error(`${input.providerName} naming command timed out.`));
+        rejectCommand(new Error(`${input.runtimeName} naming command timed out.`));
         return;
       }
       if (code !== 0) {
         const detail = formatNamingCommandFailure(stdout, stderr, code);
-        rejectCommand(new Error(`${input.providerName} naming command failed: ${detail}`));
+        rejectCommand(new Error(`${input.runtimeName} naming command failed: ${detail}`));
         return;
       }
       resolveCommand();

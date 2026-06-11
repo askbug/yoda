@@ -1,10 +1,12 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useState } from 'react';
 import { AppMenuEvents } from './app/app-menu-events';
 import { WelcomeScreen } from './app/welcome';
 import { Workspace } from './app/workspace';
 import { IntegrationsProvider } from './features/integrations/integrations-provider';
 import { Onboarding } from './features/onboarding/onboarding';
+import { TaskTabWindow } from './features/tasks/task-window';
 import { useAccountSession } from './lib/hooks/useAccount';
 import { WorkspaceLayoutContextProvider } from './lib/layout/layout-provider';
 import { WorkspaceViewProvider } from './lib/layout/provider';
@@ -13,6 +15,7 @@ import { GithubContextProvider } from './lib/providers/github-context-provider';
 import { ThemeProvider } from './lib/providers/theme-provider';
 import { TerminalPoolProvider } from './lib/pty/pty-pool-provider';
 import { queryClient } from './lib/query-client';
+import { isTaskWindowLaunch } from './lib/task-window-launch-target';
 import { RightSidebarProvider } from './lib/ui/right-sidebar';
 import { TooltipProvider } from './lib/ui/tooltip';
 
@@ -21,7 +24,7 @@ export const HAS_SEEN_ONBOARDING = 'yoda:has-seen-onboarding:v1';
 type AppView = 'onboarding' | 'welcome' | 'workspace';
 type OnboardingStep = 'sign-in';
 
-function AppContent() {
+const AppContent = observer(function AppContent() {
   const [view, setView] = useState<AppView>(() =>
     localStorage.getItem(HAS_SEEN_ONBOARDING) === 'true' ? 'workspace' : 'onboarding'
   );
@@ -39,7 +42,7 @@ function AppContent() {
     if (!isLoading && view === 'onboarding' && frozenSteps === null) {
       const computed: OnboardingStep[] = [];
       if (!session?.isSignedIn) computed.push('sign-in');
-      setFrozenSteps(computed); // eslint-disable-line react-hooks/set-state-in-effect
+      setFrozenSteps(computed);
     }
   }, [view, isLoading, frozenSteps, session]);
 
@@ -51,12 +54,16 @@ function AppContent() {
   };
 
   const handleOpenSettingsFromMenu = useCallback(() => {
+    if (isTaskWindowLaunch) return false;
     if (view === 'onboarding' && stepsNeeded.length > 0) return false;
     setView('workspace');
     return true;
   }, [view, stepsNeeded.length]);
 
   const renderContent = () => {
+    if (isTaskWindowLaunch) {
+      return <TaskTabWindow />;
+    }
     if (isLoading || (view === 'onboarding' && frozenSteps === null)) {
       return null;
     }
@@ -89,7 +96,7 @@ function AppContent() {
       </WorkspaceLayoutContextProvider>
     </TooltipProvider>
   );
-}
+});
 
 export function App() {
   return (

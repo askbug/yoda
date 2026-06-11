@@ -40,7 +40,7 @@ export async function enrichHookExecEvent(raw: RawHookRequest): Promise<void> {
       projectId: conv.projectId,
       taskId: conv.taskId,
       conversationId: parsed.conversationId,
-      providerId: parsed.providerId,
+      runtimeId: parsed.runtimeId,
       hookId: typeof body.hookId === 'string' ? body.hookId : '',
       hookEvent: typeof body.hookEvent === 'string' ? body.hookEvent : '',
       command: typeof body.command === 'string' ? body.command : '',

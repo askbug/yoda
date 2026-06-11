@@ -1,4 +1,4 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { resolveCommandPath } from '@main/core/dependencies/probe';
 import type { IExecutionContext } from '@main/core/execution-context/types';
 import type { FileSystemProvider } from '@main/core/fs/types';
@@ -35,6 +35,12 @@ const CLAUDE_INTERACTIVE_TOOL_MATCHER = 'AskUserQuestion|ExitPlanMode';
 const HOOK_EVENT_MAP = [
   { eventType: 'notification', hookKey: 'Notification' },
   { eventType: 'stop', hookKey: 'Stop' },
+  // Precise turn-start: fires on every prompt submit, no matter whether the
+  // user typed in the terminal TUI or sent from Yoda's input box. There is NO
+  // counterpart hook for an Esc interrupt (Stop does not fire on user
+  // interrupt) — that side is covered by the transcript sentinel + the output
+  // silence reconciler.
+  { eventType: 'prompt-submit', hookKey: 'UserPromptSubmit' },
   {
     eventType: 'awaiting-input',
     hookKey: 'PreToolUse',
@@ -107,12 +113,12 @@ export class HookConfigWriter {
   }
 
   async writeForProvider(
-    providerId: AgentProviderId,
+    runtimeId: RuntimeId,
     options: HookConfigWriteOptions = {}
   ): Promise<void> {
     const writeGitIgnoreEntries = options.writeGitIgnoreEntries ?? true;
 
-    if (providerId === 'claude') {
+    if (runtimeId === 'claude') {
       const wroteConfig = await this.writeClaudeHooks();
       if (wroteConfig && writeGitIgnoreEntries) {
         await this.ensureGitIgnoreEntries([CLAUDE_SETTINGS_PATH]);
@@ -120,11 +126,11 @@ export class HookConfigWriter {
       return;
     }
 
-    if (providerId === 'codex') {
+    if (runtimeId === 'codex') {
       return;
     }
 
-    if (providerId === 'pi') {
+    if (runtimeId === 'pi') {
       const wroteConfig = await this.writePiExtension();
       if (wroteConfig && writeGitIgnoreEntries) {
         await this.ensureGitIgnoreEntries([PI_YODA_EXTENSION_PATH]);
@@ -132,7 +138,7 @@ export class HookConfigWriter {
       return;
     }
 
-    if (providerId === 'opencode') {
+    if (runtimeId === 'opencode') {
       const wroteConfig = await this.writeOpenCodePlugin();
       if (wroteConfig && writeGitIgnoreEntries) {
         await this.ensureGitIgnoreEntries([OPENCODE_PLUGIN_PATH]);
@@ -143,9 +149,9 @@ export class HookConfigWriter {
 
   async writeAll(options: HookConfigWriteOptions = {}): Promise<void> {
     await Promise.all(
-      (['claude', 'codex', 'pi', 'opencode'] as const).map((providerId) =>
-        this.writeForProvider(providerId, options).catch((err: Error) => {
-          log.warn(`Failed to write ${providerId} hook config`, { error: String(err) });
+      (['claude', 'codex', 'pi', 'opencode'] as const).map((runtimeId) =>
+        this.writeForProvider(runtimeId, options).catch((err: Error) => {
+          log.warn(`Failed to write ${runtimeId} hook config`, { error: String(err) });
         })
       )
     );

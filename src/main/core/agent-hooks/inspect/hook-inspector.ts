@@ -8,7 +8,7 @@ import type {
   InspectedHook,
   TaskHookOverrides,
 } from '@shared/agent-hooks';
-import { getProvider, type AgentProviderId } from '@shared/agent-provider-registry';
+import { getRuntime, type RuntimeId } from '@shared/runtime-registry';
 
 const YODA_MARKER = 'YODA_HOOK_PORT';
 
@@ -122,21 +122,21 @@ async function inspectCodex(): Promise<{ hooks: InspectedHook[]; sources: string
 
 export async function inspectHooks(
   cwd: string,
-  providerId: AgentProviderId,
+  runtimeId: RuntimeId,
   overrides: TaskHookOverrides
 ): Promise<HookInspectionResult> {
-  const supported = getProvider(providerId)?.supportsHooks === true;
+  const supported = getRuntime(runtimeId)?.supportsHooks === true;
   if (!supported) {
-    return { providerId, supported: false, sources: [], hooks: [] };
+    return { runtimeId, supported: false, sources: [], hooks: [] };
   }
 
   const { hooks, sources } =
-    providerId === 'codex' ? await inspectCodex() : await inspectClaude(cwd);
+    runtimeId === 'codex' ? await inspectCodex() : await inspectClaude(cwd);
 
   const disabled = new Set(overrides.disabled);
   for (const hook of hooks) {
     hook.enabled = !disabled.has(hook.id);
   }
 
-  return { providerId, supported: true, sources, hooks };
+  return { runtimeId, supported: true, sources, hooks };
 }

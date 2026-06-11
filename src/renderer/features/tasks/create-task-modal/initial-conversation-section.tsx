@@ -1,24 +1,24 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
-import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use-effective-provider';
-import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
+import type { RuntimeId } from '@shared/runtime-registry';
+import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
+import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { AgentSelector } from '@renderer/lib/components/agent-selector/agent-selector';
 import { Field, FieldLabel } from '@renderer/lib/ui/field';
 import { Switch } from '@renderer/lib/ui/switch';
 import { Textarea } from '@renderer/lib/ui/textarea';
 
 export type InitialConversationState = {
-  provider: AgentProviderId | null;
-  setProvider: (provider: AgentProviderId | null) => void;
+  runtime: RuntimeId | null;
+  setRuntime: (provider: RuntimeId | null) => void;
   prompt: string;
   setPrompt: (prompt: string) => void;
 };
 
 export function useInitialConversationState(connectionId?: string): InitialConversationState {
-  const { providerId, setProviderOverride } = useEffectiveProvider(connectionId);
+  const { runtimeId, setRuntimeOverride } = useEffectiveRuntime(connectionId);
   const [prompt, setPrompt] = useState('');
-  return { provider: providerId, setProvider: setProviderOverride, prompt, setPrompt };
+  return { runtime: runtimeId, setRuntime: setRuntimeOverride, prompt, setPrompt };
 }
 
 interface InitialConversationFieldProps {
@@ -28,7 +28,7 @@ interface InitialConversationFieldProps {
 
 export function InitialConversationField({ state, connectionId }: InitialConversationFieldProps) {
   const { t } = useTranslation();
-  const autoApproveDefaults = useAgentAutoApproveDefaults();
+  const autoApproveDefaults = useRuntimeAutoApproveDefaults();
 
   return (
     <>
@@ -36,8 +36,8 @@ export function InitialConversationField({ state, connectionId }: InitialConvers
         <FieldLabel>{t('tasks.create.initialConversation')}</FieldLabel>
         <div className="flex flex-col border border-border rounded-md">
           <AgentSelector
-            value={state.provider}
-            onChange={(provider) => state.setProvider(provider)}
+            value={state.runtime}
+            onChange={(provider) => state.setRuntime(provider)}
             connectionId={connectionId}
             className="rounded-none border-0 border-b"
           />
@@ -52,10 +52,10 @@ export function InitialConversationField({ state, connectionId }: InitialConvers
       <Field>
         <div className="flex items-center gap-2">
           <Switch
-            checked={state.provider ? autoApproveDefaults.getDefault(state.provider) : false}
-            disabled={!state.provider || autoApproveDefaults.loading || autoApproveDefaults.saving}
+            checked={state.runtime ? autoApproveDefaults.getDefault(state.runtime) : false}
+            disabled={!state.runtime || autoApproveDefaults.loading || autoApproveDefaults.saving}
             onCheckedChange={(checked) => {
-              if (state.provider) autoApproveDefaults.setDefault(state.provider, checked);
+              if (state.runtime) autoApproveDefaults.setDefault(state.runtime, checked);
             }}
           />
           <FieldLabel>{t('tasks.create.dangerouslySkipPermissions')}</FieldLabel>

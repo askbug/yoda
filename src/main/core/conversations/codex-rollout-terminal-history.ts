@@ -35,7 +35,7 @@ export async function loadCodexRolloutTerminalHistoryForConversation({
   conversation: Conversation;
   cwd: string;
 }): Promise<string | null> {
-  if (conversation.providerId !== 'codex') return null;
+  if (conversation.runtimeId !== 'codex') return null;
 
   const context = await getCodexSessionContext(
     cwd,
@@ -67,7 +67,7 @@ export async function loadCodexRolloutTranscriptForConversation({
   conversation: Conversation;
   cwd: string;
 }): Promise<CodexRolloutTranscriptEntry[] | null> {
-  if (conversation.providerId !== 'codex') return null;
+  if (conversation.runtimeId !== 'codex') return null;
 
   const context = await getCodexSessionContext(
     cwd,

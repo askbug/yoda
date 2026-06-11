@@ -2,7 +2,7 @@ import { access, copyFile, readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { HookSource, TaskHookOverrides } from '@shared/agent-hooks';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { log } from '@main/lib/logger';
 import { unwrapShim, wrapHookCommand } from './hook-exec-shim';
 
@@ -156,15 +156,15 @@ export async function applyClaudeHookOverrides(
 
 export async function applyHookOverrides(
   cwd: string,
-  providerId: AgentProviderId,
+  runtimeId: RuntimeId,
   overrides: TaskHookOverrides
 ): Promise<void> {
   try {
-    if (providerId === 'claude') {
+    if (runtimeId === 'claude') {
       await applyClaudeHookOverrides(cwd, overrides);
     }
     // codex notify is a single global entry; toggling it is out of scope.
   } catch (err) {
-    log.warn('applyHookOverrides failed', { error: String(err), providerId });
+    log.warn('applyHookOverrides failed', { error: String(err), runtimeId });
   }
 }

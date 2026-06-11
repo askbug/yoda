@@ -151,7 +151,7 @@ function makeConversation(id: string, lastInteractedAt: string, isInitialConvers
     id,
     projectId: 'project-1',
     taskId: 'task-1',
-    providerId: 'claude',
+    runtimeId: 'claude',
     title: id,
     lastInteractedAt,
     isInitialConversation,

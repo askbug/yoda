@@ -1,12 +1,24 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Copy, Pencil, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { taskNamingUpdatedChannel } from '@shared/events/taskEvents';
 import type { TaskNamingContextSnapshot, TaskNamingSnapshot } from '@shared/task-naming';
-import { NamingConfigFields } from '@renderer/features/tasks/components/naming-config-fields';
-import { PersistedDetails } from '@renderer/features/tasks/components/persisted-disclosure';
+import {
+  formatNamingDebugDurationMs,
+  getNamingDebugContextStats,
+  getNamingDebugDurationEstimate,
+  NamingDebugContent,
+} from '@renderer/features/tasks/components/naming-debug-ui';
+import {
+  buildNamingContextSection,
+  buildNamingSummaryItems,
+  buildNamingTextSections,
+  NamingPanel,
+  NamingPanelConfiguration,
+} from '@renderer/features/tasks/components/naming-panel-shared';
+import { useTaskSettings } from '@renderer/features/tasks/hooks/useTaskSettings';
 import {
   getRegisteredTaskData,
   getTaskManagerStore,
@@ -16,20 +28,20 @@ import {
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { events, rpc } from '@renderer/lib/ipc';
-import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
 import { MicroLabel } from '@renderer/lib/ui/label';
 import { cn } from '@renderer/utils/utils';
 
 const NAMING_PANEL_REFRESH_MS = 3_000;
-const MAX_REASONABLE_NAMING_DURATION_MS = 10 * 60 * 1000;
 
 export const RenamePanel = observer(function RenamePanel({
   active,
   chromeless = false,
+  onManualRenameSuccess,
 }: {
   active: boolean;
   chromeless?: boolean;
+  onManualRenameSuccess?: () => void;
 }) {
   const { t } = useTranslation();
   const { projectId, taskId } = useTaskViewContext();
@@ -37,14 +49,14 @@ export const RenamePanel = observer(function RenamePanel({
   const taskStore = getTaskStore(projectId, taskId);
   const taskPayload = getRegisteredTaskData(projectId, taskId);
   const taskManager = getTaskManagerStore(projectId);
-  const showRename = useShowModal('renameTaskModal');
+  const taskSettings = useTaskSettings();
   const queryClient = useQueryClient();
+  const taskName = taskDisplayName(taskStore) ?? taskPayload?.name ?? t('common.untitled');
+  const branchName = provisioned.workspace.git.branchName ?? '-';
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerationStartedAt, setRegenerationStartedAt] = useState<number | null>(null);
   const [lastRegenerationDurationMs, setLastRegenerationDurationMs] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const taskName = taskDisplayName(taskStore) ?? taskPayload?.name ?? t('common.untitled');
-  const branchName = provisioned.workspace.git.branchName ?? '-';
 
   const namingQuery = useQuery<TaskNamingSnapshot | null>({
     queryKey: ['taskNamingSnapshot', taskId],
@@ -78,12 +90,22 @@ export const RenamePanel = observer(function RenamePanel({
         duration: namingDuration.duration,
       })
     : t('tasks.rename.durationUnavailable');
-  const contextTitle = usingContextPreview
-    ? t('tasks.rename.currentContextSources')
-    : t('tasks.rename.contextSources');
+  const namingTimeoutLabel = `${Math.round(taskSettings.namingRequestTimeoutMs / 1_000)}s`;
+  const runningNamingDuration = namingDuration?.running ? namingDuration.duration : null;
+  const regenerateLabel =
+    isRegenerating || snapshotGenerating
+      ? t('tasks.rename.aiNaming', {
+          duration: runningNamingDuration ?? formatNamingDebugDurationMs(0),
+        })
+      : t('tasks.rename.aiName');
   const noContextDescription = t(getNoContextDescriptionKey(snapshot, contextPreviewQuery.data));
   const namingModel = snapshot?.model || namingContext?.model || t('tasks.rename.modelUnavailable');
-  const contextStats = getContextStats(namingContext);
+  const contextStats = getNamingDebugContextStats(namingContext);
+  const siblingNames = new Set(
+    Array.from(taskManager?.tasks.values() ?? [])
+      .filter((task) => task.state !== 'unregistered' && task.data.id !== taskId)
+      .map((task) => task.data.name)
+  );
 
   useEffect(() => {
     if (!active) return;
@@ -112,28 +134,8 @@ export const RenamePanel = observer(function RenamePanel({
     return () => window.clearInterval(interval);
   }, [active, isRegenerating, snapshotGenerating]);
 
-  useEffect(() => {
-    if (!active || !snapshot?.context?.debugTrace) return;
-    console.log('[DEBUG][rename-panel] naming trace:', {
-      taskId,
-      status: snapshot.status,
-      totalDurationMs: snapshot.context.debugTrace.totalDurationMs,
-      stages: snapshot.context.debugTrace.stages,
-      context: {
-        sourceCount: snapshot.context.sourceCount,
-        estimatedTokens: snapshot.context.estimatedTokens,
-        estimatedCharacters: snapshot.context.estimatedCharacters,
-        generationMethod: snapshot.context.generationMethod ?? null,
-      },
-    });
-  }, [active, snapshot, taskId]);
-
-  const openManualRename = () => {
-    showRename({ projectId, taskId, currentName: taskName });
-  };
-
   const regenerate = () => {
-    if (!taskManager || isRegenerating) return;
+    if (!taskManager || isRegenerating || snapshotGenerating || taskSettings.saving) return;
     const startedAt = Date.now();
     console.log('[DEBUG][rename-panel] regenerate click:', {
       projectId,
@@ -210,225 +212,109 @@ export const RenamePanel = observer(function RenamePanel({
     <div
       className={cn(
         'flex w-full flex-col overflow-hidden',
-        chromeless ? 'min-h-0' : 'h-full bg-background'
+        chromeless ? 'min-h-0 flex-1' : 'h-full bg-background'
       )}
     >
       <div
         className={cn(
-          'flex h-7 shrink-0 items-center gap-2 pr-1.5',
-          chromeless ? 'justify-end pl-3' : 'justify-between border-b border-border/70 pl-3'
+          'flex h-7 shrink-0 items-center justify-between gap-2 border-b border-border/70 pl-3 pr-1.5'
         )}
       >
-        {chromeless ? null : (
-          <MicroLabel className="truncate text-foreground-passive">
-            {t('tasks.rename.panelTitle')}
-          </MicroLabel>
-        )}
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          className="h-5 px-1.5 text-foreground-passive hover:text-foreground"
-          onClick={openManualRename}
-        >
-          <Pencil className="size-3" />
-          {t('common.rename')}
-        </Button>
+        <MicroLabel className="truncate text-foreground-passive">
+          {t('tasks.rename.panelTitle')}
+        </MicroLabel>
       </div>
 
-      <div
-        className={cn(
-          'px-2.5',
-          chromeless ? 'min-w-0 py-2' : 'min-h-0 flex-1 overflow-y-auto py-3'
-        )}
-      >
-        <div className={cn('flex min-w-0 flex-col', chromeless ? 'gap-2' : 'gap-3')}>
-          <section className="flex min-w-0 flex-col gap-1.5">
-            <div className="grid gap-1 rounded-md border border-border bg-background-1/40 px-2 py-1.5">
-              <NamingValue
-                label={t('tasks.rename.status')}
-                value={namingStatus}
-                accent={snapshotGenerating || isRegenerating}
-              />
-              <NamingValue label={t('tasks.panel.model')} value={namingModel} mono />
-              <NamingValue
-                label={t('tasks.rename.durationEstimate')}
-                value={namingDurationLabel}
-                mono
-              />
-              <NamingValue
-                label={t('tasks.rename.contextTokens')}
-                value={formatTokenCount(namingContext?.estimatedTokens)}
-                mono
-              />
-              <NamingDivider />
-              <NamingValue label={t('tasks.rename.currentTaskName')} value={taskName} />
-              <NamingValue
-                label={t('tasks.rename.generatedTaskName')}
-                value={snapshot?.generatedTaskName ?? t('tasks.panel.noGeneratedTaskName')}
-              />
-              <NamingValue
-                label={t('tasks.rename.generatedBranchName')}
-                value={snapshot?.generatedBranchName ?? branchName}
-                mono
-              />
-            </div>
-
-            {namingError ? (
-              <div className="rounded-md border border-border-destructive/60 bg-background-destructive/40 p-2 text-xs leading-relaxed text-foreground-destructive">
-                <div className="flex min-w-0 items-start justify-between gap-2">
-                  <span className="min-w-0 whitespace-pre-wrap break-words">{namingError}</span>
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="ghost"
-                    className="-mr-1 -mt-1 text-foreground-destructive hover:bg-background-destructive/60 hover:text-foreground-destructive"
-                    aria-label={t('common.copy')}
-                    title={t('common.copy')}
-                    onClick={() => void copyNamingError(namingError)}
-                  >
-                    <Copy className="size-3" />
-                  </Button>
-                </div>
+      <NamingDebugContent chromeless={chromeless}>
+        <NamingPanel
+          tabStateId="rename:tab"
+          manual={{
+            currentName: taskName,
+            onRename: async (name) => {
+              if (!taskStore) throw new Error(t('tasks.rename.renameFailed'));
+              await taskStore.rename(name);
+              onManualRenameSuccess?.();
+            },
+            getConflicts: () => siblingNames,
+            showBranchPreview: true,
+          }}
+          autoPanel={{
+            summaryItems: buildNamingSummaryItems(t, {
+              statusLabel: namingStatus,
+              accent: snapshotGenerating || isRegenerating,
+              model: namingModel,
+              durationLabel: namingDurationLabel,
+              timeoutLabel: namingTimeoutLabel,
+              contextTokens: namingContext?.estimatedTokens,
+              currentName: taskName,
+              generatedName: snapshot?.generatedTaskName ?? t('tasks.panel.noGeneratedTaskName'),
+              branchName: snapshot?.generatedBranchName ?? branchName,
+            }),
+            error: namingError
+              ? {
+                  message: namingError,
+                  copyLabel: t('common.copy'),
+                  onCopy: () => void copyNamingError(namingError),
+                }
+              : undefined,
+            actions: (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="default"
+                  className="flex-1"
+                  disabled={
+                    isRegenerating || snapshotGenerating || !taskManager || taskSettings.saving
+                  }
+                  onClick={regenerate}
+                >
+                  <RefreshCw
+                    className={cn(
+                      'size-3',
+                      (isRegenerating || snapshotGenerating) && 'animate-spin'
+                    )}
+                  />
+                  {regenerateLabel}
+                </Button>
               </div>
-            ) : null}
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="xs"
-                variant="default"
-                className="flex-1"
-                disabled={isRegenerating || !taskManager}
-                onClick={regenerate}
-              >
-                <RefreshCw className={cn('size-3', isRegenerating && 'animate-spin')} />
-                {isRegenerating ? t('common.loading') : t('tasks.panel.regenerateName')}
-              </Button>
-            </div>
-          </section>
-
-          <PersistedDetails
-            id="rename:configure"
-            className="group min-w-0 rounded-md border border-border"
-            summary={
-              <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2 py-1.5 text-xs text-foreground-passive transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
-                <ChevronRight className="size-3 transition-transform group-open:rotate-90" />
-                <SlidersHorizontal className="size-3" />
-                <span className="font-medium">{t('tasks.rename.configure')}</span>
-              </summary>
-            }
-          >
-            <div className="flex flex-col gap-2 border-t border-border/70 px-2 pb-2 pt-2">
-              <p className="text-[11px] leading-relaxed text-foreground-passive">
-                {t('tasks.rename.configureHint')}
-              </p>
-              <NamingConfigFields compact />
-            </div>
-          </PersistedDetails>
-
-          <section className="flex min-w-0 flex-col gap-1.5">
-            <div className="min-w-0 px-0.5">
-              <MicroLabel className="text-foreground-passive">{contextTitle}</MicroLabel>
-              <p className="mt-0.5 truncate text-[11px] text-foreground-passive">
-                {contextStats
-                  ? t('tasks.rename.contextStats', contextStats)
-                  : t('tasks.rename.contextStatsUnavailable')}
-              </p>
-            </div>
-
-            {namingQuery.isLoading || (!snapshot?.context && contextPreviewQuery.isLoading) ? (
-              <RenamePanelEmpty>{t('common.loading')}</RenamePanelEmpty>
-            ) : namingContext?.sources.length ? (
-              <div className="flex min-w-0 flex-col gap-1.5">
-                {usingContextPreview ? (
-                  <p className="rounded-md border border-border/70 bg-background-1/40 px-2 py-1.5 text-xs leading-relaxed text-foreground-passive">
-                    {t('tasks.rename.currentContextHint')}
-                  </p>
-                ) : null}
-                {namingContext.sources.map((source) => (
-                  <PersistedDetails
-                    key={source.id}
-                    id={`rename:source:${source.id}`}
-                    className="rounded-md border border-dashed border-border/80 bg-background-1/40 p-2"
-                    summary={
-                      <summary className="cursor-pointer text-xs text-foreground">
-                        <span>{source.label}</span>
-                        <span className="ml-1 text-foreground-passive">
-                          {t('tasks.rename.sourceTokens', {
-                            count: source.estimatedTokens,
-                          })}
-                        </span>
-                        {source.truncated ? (
-                          <span className="ml-1 text-foreground-passive">
-                            {t('tasks.panel.truncated')}
-                          </span>
-                        ) : null}
-                      </summary>
-                    }
-                  >
-                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-foreground-muted">
-                      {source.content}
-                    </pre>
-                  </PersistedDetails>
-                ))}
-              </div>
-            ) : (
-              <RenamePanelEmpty>
-                <span className="font-medium text-foreground-muted">
-                  {t('tasks.panel.noRenameContext')}
-                </span>
-                <span className="mt-1 block leading-relaxed">{noContextDescription}</span>
-              </RenamePanelEmpty>
-            )}
-          </section>
-        </div>
-      </div>
+            ),
+            configuration: <NamingPanelConfiguration id="rename:configure" t={t} />,
+            textSections: buildNamingTextSections(t, 'rename', {
+              systemPrompt: snapshot?.systemPrompt,
+              systemPromptTokens: snapshot?.systemPromptEstimatedTokens,
+              prompt: snapshot?.prompt,
+              promptTokens: snapshot?.promptEstimatedTokens,
+            }),
+            context: {
+              ...buildNamingContextSection(t, {
+                context: namingContext,
+                isLoading:
+                  namingQuery.isLoading || (!snapshot?.context && contextPreviewQuery.isLoading),
+                sourceIdPrefix: 'rename',
+                contextStats,
+                usingPreview: usingContextPreview,
+              }),
+              emptyContent: (
+                <>
+                  <span className="font-medium text-foreground-muted">
+                    {t('tasks.panel.noRenameContext')}
+                  </span>
+                  <span className="mt-1 block leading-relaxed">{noContextDescription}</span>
+                </>
+              ),
+              previewHint: usingContextPreview ? (
+                <p className="rounded-md border border-border/70 bg-background-1/40 px-2 py-1.5 text-xs leading-relaxed text-foreground-passive">
+                  {t('tasks.rename.currentContextHint')}
+                </p>
+              ) : null,
+            },
+          }}
+        />
+      </NamingDebugContent>
     </div>
   );
 });
-
-function NamingValue({
-  label,
-  value,
-  mono,
-  accent,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  accent?: boolean;
-}) {
-  return (
-    <div className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-2 text-[11px] leading-tight">
-      <span className="shrink-0 truncate text-foreground-passive" title={label}>
-        {label}
-      </span>
-      <span
-        className={cn(
-          'min-w-0 truncate text-foreground-muted',
-          mono && 'font-mono',
-          accent && 'font-medium text-foreground'
-        )}
-        title={value}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function NamingDivider() {
-  return <div className="my-0.5 h-px bg-border/60" />;
-}
-
-function RenamePanelEmpty({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-      {children}
-    </div>
-  );
-}
 
 function buildNamingDebugReport({
   errorMessage,
@@ -515,27 +401,20 @@ function getNamingDurationEstimate({
   nowMs: number;
 }): { duration: string; running: boolean } | null {
   if (isRegenerating && regenerationStartedAt !== null) {
-    return { duration: formatDurationMs(nowMs - regenerationStartedAt), running: true };
+    return getNamingDebugDurationEstimate({
+      isRunning: true,
+      nowMs,
+      fallbackDurationMs: nowMs - regenerationStartedAt,
+    });
   }
 
-  const snapshotStartedAt = parseTimestamp(snapshot?.createdAt);
-  if (snapshot?.status === 'generating' && snapshotStartedAt !== null) {
-    return { duration: formatDurationMs(nowMs - snapshotStartedAt), running: true };
-  }
-
-  if (lastRegenerationDurationMs !== null) {
-    return { duration: formatDurationMs(lastRegenerationDurationMs), running: false };
-  }
-
-  const snapshotUpdatedAt = parseTimestamp(snapshot?.updatedAt);
-  if (snapshotStartedAt !== null && snapshotUpdatedAt !== null) {
-    const durationMs = snapshotUpdatedAt - snapshotStartedAt;
-    if (durationMs >= 0 && durationMs <= MAX_REASONABLE_NAMING_DURATION_MS) {
-      return { duration: formatDurationMs(durationMs), running: false };
-    }
-  }
-
-  return null;
+  return getNamingDebugDurationEstimate({
+    status: snapshot?.status,
+    createdAt: snapshot?.createdAt,
+    updatedAt: snapshot?.updatedAt,
+    nowMs,
+    fallbackDurationMs: lastRegenerationDurationMs,
+  });
 }
 
 function getNoContextDescriptionKey(
@@ -551,43 +430,4 @@ function getNoContextDescriptionKey(
   }
   if (!snapshot.context) return 'tasks.rename.noContextNoRecord';
   return 'tasks.rename.noContextEmptySources';
-}
-
-function parseTimestamp(value: string | undefined): number | null {
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function formatDurationMs(durationMs: number): string {
-  if (durationMs < 1_000) return '<1s';
-  const totalSeconds = Math.max(1, Math.round(durationMs / 1_000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes === 0) return `${seconds}s`;
-  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
-}
-
-function formatTokenCount(value: number | undefined): string {
-  if (value === undefined) return '-';
-  return String(value);
-}
-
-function getContextStats(
-  context: TaskNamingContextSnapshot | null
-): { sources: number; tokens: number; characters: number; method: string } | null {
-  if (!context) return null;
-  const sources = context.sourceCount ?? context.sources.length;
-  const tokens =
-    context.estimatedTokens ??
-    context.sources.reduce((sum, source) => sum + source.estimatedTokens, 0);
-  const characters =
-    context.estimatedCharacters ??
-    context.sources.reduce((sum, source) => sum + source.content.length, 0);
-  return {
-    sources,
-    tokens,
-    characters,
-    method: context.generationMethod ?? '-',
-  };
 }

@@ -1,5 +1,5 @@
-import { type AgentProviderId } from '@shared/agent-provider-registry';
 import { type Conversation } from '@shared/conversations';
+import { type RuntimeId } from '@shared/runtime-registry';
 import { type ConversationRow } from '@main/db/schema';
 
 export function mapConversationRowToConversation(
@@ -11,7 +11,7 @@ export function mapConversationRowToConversation(
     title: row.title,
     taskId: row.taskId,
     projectId: row.projectId,
-    providerId: row.provider as AgentProviderId,
+    runtimeId: row.runtime as RuntimeId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     archivedAt: row.archivedAt,

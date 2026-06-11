@@ -26,9 +26,10 @@ import { pullRequestController } from './core/pull-requests/controller';
 import { repositoryController } from './core/repository/controller';
 import { searchController } from './core/search/controller';
 import { appSettingsController } from './core/settings/controller';
-import { providerSettingsController } from './core/settings/provider-settings-controller';
+import { runtimeSettingsController } from './core/settings/runtime-settings-controller';
 import { skillsController } from './core/skills/controller';
 import { sshController } from './core/ssh/controller';
+import { statsController } from './core/stats/controller';
 import { taskController } from './core/tasks/controller';
 import { telemetryController } from './core/telemetry/controller';
 import { terminalsController } from './core/terminals/controller';
@@ -44,7 +45,7 @@ export const rpcRouter = createRPCRouter({
   legacyPort: legacyPortController,
   app: appController,
   appSettings: appSettingsController,
-  providerSettings: providerSettingsController,
+  runtimeSettings: runtimeSettingsController,
   repository: repositoryController,
   fs: filesController,
   update: updateController,
@@ -64,6 +65,7 @@ export const rpcRouter = createRPCRouter({
   ssh: sshController,
   projects: projectController,
   workspaces: workspaceController,
+  stats: statsController,
   tasks: taskController,
   conversations: conversationController,
   terminals: terminalsController,

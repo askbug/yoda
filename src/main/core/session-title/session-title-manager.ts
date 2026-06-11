@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
 import { conversationRenamedChannel } from '@shared/events/conversationEvents';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { normalizeTaskDisplayName as normalizeSessionTitle } from '@shared/task-name';
 import { conversationEvents } from '@main/core/conversations/conversation-events';
 import { db } from '@main/db/client';
@@ -12,7 +12,7 @@ import { CodexSessionTitleSource } from './codex-title-source';
 import type { SessionTitleContext, SessionTitleSource, SessionTitleWatcher } from './types';
 
 class SessionTitleManager {
-  private readonly sources = new Map<AgentProviderId, SessionTitleSource>();
+  private readonly sources = new Map<RuntimeId, SessionTitleSource>();
   private readonly watchers = new Map<string, SessionTitleWatcher>();
 
   constructor() {
@@ -21,11 +21,11 @@ class SessionTitleManager {
   }
 
   register(source: SessionTitleSource): void {
-    this.sources.set(source.providerId, source);
+    this.sources.set(source.runtimeId, source);
   }
 
   start(ctx: SessionTitleContext): void {
-    const source = this.sources.get(ctx.providerId);
+    const source = this.sources.get(ctx.runtimeId);
     if (!source) return;
     const key = ctx.conversationId;
     this.stop(key);
@@ -33,7 +33,7 @@ class SessionTitleManager {
       void this.applyTitle(ctx, title).catch((err) => {
         log.warn('SessionTitleManager: applyTitle failed', {
           conversationId: ctx.conversationId,
-          providerId: ctx.providerId,
+          runtimeId: ctx.runtimeId,
           error: String(err),
         });
       });

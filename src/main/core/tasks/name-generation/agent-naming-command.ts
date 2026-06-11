@@ -1,4 +1,4 @@
-import type { ProviderCustomConfig } from '@shared/app-settings';
+import type { RuntimeCustomConfig } from '@shared/app-settings';
 import { parseShellWords } from '@main/core/conversations/impl/agent-command';
 
 const MODEL_FLAGS = new Set(['--model', '-m']);
@@ -11,7 +11,7 @@ export type AgentNamingCommand = {
 };
 
 export function buildAgentNamingCommand(
-  providerConfig: ProviderCustomConfig,
+  providerConfig: RuntimeCustomConfig,
   prompt: string
 ): AgentNamingCommand {
   const template = providerConfig.namingCommand?.trim();

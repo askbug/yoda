@@ -1,4 +1,4 @@
-import type { AgentProviderId } from './agent-provider-registry';
+import type { RuntimeId } from './runtime-registry';
 
 /** Where a hook definition was read from. */
 export type HookSource =
@@ -26,7 +26,7 @@ export interface InspectedHook {
 }
 
 export interface HookInspectionResult {
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   supported: boolean;
   /** Absolute paths that were read (existing ones only). */
   sources: string[];

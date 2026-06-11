@@ -1,10 +1,9 @@
-import { ptyInputChannel } from '@shared/events/ptyEvents';
 import { makePtySessionId } from '@shared/ptySessionId';
 import { ok } from '@shared/result';
 import { ptySessionRegistry } from '@main/core/pty/pty-session-registry';
-import { events } from '@main/lib/events';
 import { log } from '@main/lib/logger';
 import { agentSessionRuntimeStore } from './agent-session-runtime';
+import { agentSilenceReconciler } from './agent-silence-reconciler';
 import { markInterrupted } from './interrupt-marker';
 
 interface AgentSessionKey {
@@ -35,7 +34,8 @@ const CONFIRM_TIMEOUT_MS = 3_000;
  */
 export function interruptConversation(projectId: string, taskId: string, conversationId: string) {
   const session = { projectId, taskId, conversationId };
-  const pty = ptySessionRegistry.get(makePtySessionId(projectId, taskId, conversationId));
+  const ptySessionId = makePtySessionId(projectId, taskId, conversationId);
+  const pty = ptySessionRegistry.get(ptySessionId);
   if (!pty) {
     // No live CLI — nothing to interrupt; the `working` is stale by definition.
     markInterrupted(conversationId);
@@ -43,6 +43,20 @@ export function interruptConversation(projectId: string, taskId: string, convers
       session,
       { kind: 'watchdog-idle', at: Date.now() },
       'interrupt:no-pty'
+    );
+    return ok();
+  }
+  // Only poke the CLI when it is actually running. A working CLI redraws its
+  // spinner continuously; one that has been silent past the threshold is
+  // idling at its prompt — sending Esc there doesn't interrupt anything, it
+  // clears the user's unsent input ("Press esc again to clear"). Just drop the
+  // stale status instead.
+  if (agentSilenceReconciler.isStale(ptySessionId)) {
+    markInterrupted(conversationId);
+    agentSessionRuntimeStore.dispatch(
+      session,
+      { kind: 'watchdog-idle', at: Date.now() },
+      'interrupt:stale-silent'
     );
     return ok();
   }
@@ -71,30 +85,4 @@ function scheduleInterruptReconcile(session: AgentSessionKey): void {
       'interrupt:timeout'
     );
   }, CONFIRM_TIMEOUT_MS);
-}
-
-/**
- * Watch a session's PTY input stream for a bare Esc typed directly into the
- * terminal TUI while the session is `working`, and run the same reconciliation
- * as the stop button. Needed because an interrupt is not always observable in
- * the transcript: Esc before the first assistant output writes no interrupt
- * sentinel and fires no Stop hook, so the transcript stays frozen in a
- * `working` shape forever. A bare `\x1b` chunk is the Esc key itself — escape
- * sequences (arrows, etc.) arrive as multi-byte chunks and don't match.
- *
- * Returns a dispose function; call it when the PTY exits.
- */
-export function attachEscInterruptReconciler(
-  ptySessionId: string,
-  session: AgentSessionKey
-): () => void {
-  return events.on(
-    ptyInputChannel,
-    (data) => {
-      if (data !== INTERRUPT_INPUT) return;
-      if (agentSessionRuntimeStore.getStatus(session) !== 'working') return;
-      scheduleInterruptReconcile(session);
-    },
-    ptySessionId
-  );
 }

@@ -2,12 +2,8 @@ import { Settings2, Sparkles } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AGENT_PROVIDERS,
-  isValidProviderId,
-  type AgentProviderId,
-} from '@shared/agent-provider-registry';
 import type { DependencyState } from '@shared/dependencies';
+import { isValidRuntimeId, RUNTIMES, type RuntimeId } from '@shared/runtime-registry';
 import { type CliAgentStatus } from '@renderer/features/settings/components/connections';
 import CustomCommandModal from '@renderer/features/settings/components/CustomCommandModal';
 import IntegrationRow from '@renderer/features/settings/components/IntegrationRow';
@@ -20,7 +16,7 @@ import { appState } from '@renderer/lib/stores/app-state';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import { log } from '@renderer/utils/logger';
 
-export const BASE_CLI_AGENTS: CliAgentStatus[] = AGENT_PROVIDERS.filter(
+export const BASE_CLI_AGENTS: CliAgentStatus[] = RUNTIMES.filter(
   (provider) => provider.detectable !== false
 ).map((provider) => ({
   id: provider.id,
@@ -55,7 +51,7 @@ const ICON_BUTTON =
   'rounded-md p-1.5 text-muted-foreground transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
 type AgentRowActions = {
-  isInstalling: (id: AgentProviderId) => boolean;
+  isInstalling: (id: RuntimeId) => boolean;
   onInstallClick: (agent: CliAgentStatus) => void;
   onSettingsClick: (id: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -64,7 +60,7 @@ type AgentRowActions = {
 const renderAgentRow = (agent: CliAgentStatus, actions: AgentRowActions) => {
   const { t } = actions;
   const logo = agentMeta[agent.id as keyof typeof agentMeta]?.icon;
-  const providerId = isValidProviderId(agent.id) ? agent.id : null;
+  const runtimeId = isValidRuntimeId(agent.id) ? agent.id : null;
 
   const handleNameClick = agent.docUrl
     ? async () => {
@@ -124,12 +120,12 @@ const renderAgentRow = (agent: CliAgentStatus, actions: AgentRowActions) => {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        ) : providerId ? (
+        ) : runtimeId ? (
           <AgentInstallButton
-            agentId={providerId}
+            agentId={runtimeId}
             canInstall={!!agent.installCommand}
             isInstalled={isDetected}
-            isInstalling={actions.isInstalling(providerId)}
+            isInstalling={actions.isInstalling(runtimeId)}
             tooltipSide="top"
             onInstall={() => actions.onInstallClick(agent)}
           />
@@ -155,7 +151,7 @@ export const CliAgentsList: React.FC = observer(() => {
 
   const handleInstall = useCallback(
     async (agent: CliAgentStatus) => {
-      if (!isValidProviderId(agent.id) || appState.dependencies.isInstalling(agent.id)) {
+      if (!isValidRuntimeId(agent.id) || appState.dependencies.isInstalling(agent.id)) {
         return;
       }
 
@@ -199,7 +195,7 @@ export const CliAgentsList: React.FC = observer(() => {
       <CustomCommandModal
         isOpen={customModalAgentId !== null}
         onClose={() => setCustomModalAgentId(null)}
-        providerId={customModalAgentId ?? ''}
+        runtimeId={customModalAgentId ?? ''}
       />
     </div>
   );

@@ -1,11 +1,11 @@
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 import { agentConfig } from '@renderer/utils/agentConfig';
 import { getAgentInstallActionState } from './agent-install';
 
 export interface AgentOption {
   value: string;
   label: string;
-  agentId: AgentProviderId;
+  agentId: RuntimeId;
   disabled: boolean;
 }
 
@@ -22,7 +22,7 @@ export function buildAgentGroups(
   const installedSet = new Set(
     [...installedAgents, ...assumedInstalledAgents].filter((id) => id in agentConfig)
   );
-  const allAgentIds = Object.keys(agentConfig) as AgentProviderId[];
+  const allAgentIds = Object.keys(agentConfig) as RuntimeId[];
 
   const installedOptions: AgentOption[] = allAgentIds
     .filter((id) => installedSet.has(id))
@@ -43,9 +43,9 @@ export function canInstallAgentOption(item: AgentOption, allowInstall: boolean):
 }
 
 export function getAssumedInstalledAgents(
-  value: AgentProviderId | null,
+  value: RuntimeId | null,
   dependencyData: Record<string, unknown> | null
-): AgentProviderId[] {
+): RuntimeId[] {
   return value && dependencyData?.[value] === undefined ? [value] : [];
 }
 
@@ -56,7 +56,7 @@ export function isComboboxOptionDisabled(item: AgentOption): boolean {
 export function getInstallButtonState(
   item: AgentOption,
   allowInstall: boolean,
-  installingAgents: ReadonlySet<AgentProviderId>
+  installingAgents: ReadonlySet<RuntimeId>
 ): { render: boolean; disabled: boolean; installing: boolean; label: string } {
   return getAgentInstallActionState({
     agentId: item.agentId,

@@ -7,7 +7,7 @@ import { Switch } from '@renderer/lib/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@renderer/lib/ui/tooltip';
 import IntegrationRow from './IntegrationRow';
 
-export default function HiddenToolsSettingsCard() {
+export default function OpenInAppsSettingsCard() {
   const { t } = useTranslation();
   const { value: openIn, update, isLoading, isSaving } = useAppSettingsKey('openIn');
   const { icons, labels, availability } = useOpenInApps();

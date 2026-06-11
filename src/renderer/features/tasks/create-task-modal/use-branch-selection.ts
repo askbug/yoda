@@ -8,8 +8,7 @@ export function useBranchSelection(
   selectedProjectId: string | undefined,
   defaultBranch: Branch | undefined,
   isUnborn: boolean,
-  currentBranchName?: string | null,
-  initialBranch?: Branch
+  currentBranchName?: string | null
 ) {
   const { value: project, update: updateProject } = useAppSettingsKey('project');
   const pushBranch = project?.pushOnCreate ?? true;
@@ -18,15 +17,9 @@ export function useBranchSelection(
   // Store the user's branch override alongside the project it belongs to.
   // When the project changes the override is for a different project and is
   // ignored, so defaultBranch takes effect automatically — no effect needed.
-  // `initialBranch` (e.g. a parent task's branch when creating a subtask)
-  // seeds the override for the opening project; the user can still change it.
   const [branchOverride, setBranchOverride] = useState<
     { projectId: string; branch: Branch } | undefined
-  >(() =>
-    initialBranch && selectedProjectId
-      ? { projectId: selectedProjectId, branch: initialBranch }
-      : undefined
-  );
+  >(undefined);
 
   const selectedBranch: Branch | undefined =
     !createBranchAndWorktree && currentBranchName

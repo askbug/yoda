@@ -52,7 +52,7 @@ describe('buildTaskBasicInfo', () => {
         {
           taskName: 'Fix task menu',
           taskId: 'task-1',
-          providerName: 'Codex',
+          runtimeName: 'Codex',
           sessionId: 'session-1',
           contentSourcePath: '/Users/me/.codex/sessions/rollout-session-1.jsonl',
         },

@@ -11,8 +11,8 @@ import {
   getRepositoryStore,
 } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
-import { useEffectiveProvider } from '@renderer/features/tasks/conversations/use-effective-provider';
-import { useAgentAutoApproveDefaults } from '@renderer/features/tasks/hooks/useAgentAutoApproveDefaults';
+import { useEffectiveRuntime } from '@renderer/features/tasks/conversations/use-effective-runtime';
+import { useRuntimeAutoApproveDefaults } from '@renderer/features/tasks/hooks/useRuntimeAutoApproveDefaults';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { Button } from '@renderer/lib/ui/button';
@@ -32,8 +32,8 @@ export const QuickActionsCard = observer(function QuickActionsCard({
 
   const { value: homeDraft } = useAppSettingsKey('homeDraft');
   const connectionId = project?.data?.type === 'ssh' ? project.data.connectionId : undefined;
-  const { providerId } = useEffectiveProvider(connectionId);
-  const autoApproveDefaults = useAgentAutoApproveDefaults();
+  const { runtimeId } = useEffectiveRuntime(connectionId);
+  const autoApproveDefaults = useRuntimeAutoApproveDefaults();
 
   const projectActions = settingsStore?.settings?.quickActions;
   const globalDefaults = homeDraft?.defaultQuickActions ?? [];
@@ -46,15 +46,15 @@ export const QuickActionsCard = observer(function QuickActionsCard({
   };
 
   const handleRun = async (action: QuickAction) => {
-    if (!project || !providerId) return;
+    if (!project || !runtimeId) return;
     setRunningId(action.id);
     try {
       const taskId = await runProjectCommand({
         project,
         action,
-        providerId,
+        runtimeId,
         defaultBranch: repo?.defaultBranch,
-        autoApprove: autoApproveDefaults.getDefault(providerId),
+        autoApprove: autoApproveDefaults.getDefault(runtimeId),
       });
       if (taskId) navigate('task', { projectId, taskId });
     } catch (err) {
@@ -88,7 +88,7 @@ export const QuickActionsCard = observer(function QuickActionsCard({
             key={action.id}
             variant="outline"
             size="sm"
-            disabled={!project || !providerId || runningId !== null}
+            disabled={!project || !runtimeId || runningId !== null}
             onClick={() => void handleRun(action)}
           >
             <Play className="size-3.5" />

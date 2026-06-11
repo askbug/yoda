@@ -21,6 +21,9 @@ export type SessionPanelSection =
   | 'overview'
   // Harness blinds (the agent runtime view), migrated from the retired
   // harness tab into the same accordion as first-class sections.
+  // `persona` = human-authored standing instructions (system prompt +
+  // CLAUDE.md / AGENTS.md); `memory` = the agent's self-maintained memories.
+  | 'persona'
   | 'memory'
   | 'tools'
   | 'mcp-servers'
@@ -39,6 +42,7 @@ export const SESSION_PANEL_UNITS = [
   'conversation',
   'transcript',
   'tasks',
+  'persona',
   'memory',
   'tools',
   'mcp-servers',
@@ -66,6 +70,8 @@ export function sessionPanelUnitLabelKey(unit: SessionPanelUnit): string {
       return 'tasks.sessionPanel.transcript';
     case 'tasks':
       return 'tasks.sessionPanel.tasks';
+    case 'persona':
+      return 'tasks.panel.persona';
     case 'memory':
       return 'tasks.panel.memory';
     case 'tools':
@@ -138,7 +144,7 @@ export function sessionSectionForTab(tab: SidebarTab): SessionPanelSection | nul
     case 'conversations':
       return 'conversation';
     case 'context':
-      return 'memory';
+      return 'persona';
     case 'hooks':
       return 'hooks';
     default:

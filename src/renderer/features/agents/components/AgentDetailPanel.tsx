@@ -1,31 +1,38 @@
-import { Cpu, ExternalLink, FileText, Hammer, Layers, Settings2, Wrench } from 'lucide-react';
+import {
+  Cpu,
+  ExternalLink,
+  FileText,
+  Hammer,
+  Layers,
+  Settings2,
+  UserCircle,
+  Wrench,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  getProvider,
-  type AgentProviderDefinition,
-  type AgentProviderId,
-} from '@shared/agent-provider-registry';
+import { getRuntime, type RuntimeDefinition, type RuntimeId } from '@shared/runtime-registry';
 import { rpc } from '@renderer/lib/ipc';
 import { agentMeta } from '@renderer/lib/providers/meta';
 import { appState } from '@renderer/lib/stores/app-state';
 import { Button } from '@renderer/lib/ui/button';
 import { cn } from '@renderer/utils/utils';
+import { AgentTabAccount } from './AgentTabAccount';
 import { AgentTabHooks } from './AgentTabHooks';
-import { AgentTabMaaS } from './AgentTabMaaS';
 import { AgentTabMemory } from './AgentTabMemory';
 import { AgentTabModels } from './AgentTabModels';
+import { AgentTabRuntime } from './AgentTabRuntime';
 import { AgentTabSettings } from './AgentTabSettings';
 import { AgentTabSkills } from './AgentTabSkills';
 
-type TabId = 'maas' | 'models' | 'memory' | 'hooks' | 'skills' | 'settings';
+type TabId = 'account' | 'maas' | 'models' | 'memory' | 'hooks' | 'skills' | 'settings';
 
 const TABS: Array<{
   id: TabId;
   icon: React.ComponentType<{ className?: string }>;
   labelKey: string;
 }> = [
+  { id: 'account', icon: UserCircle, labelKey: 'agents.tabs.account' },
   { id: 'maas', icon: Layers, labelKey: 'agents.tabs.maas' },
   { id: 'models', icon: Cpu, labelKey: 'agents.tabs.models' },
   { id: 'memory', icon: FileText, labelKey: 'agents.tabs.memory' },
@@ -34,11 +41,11 @@ const TABS: Array<{
   { id: 'settings', icon: Settings2, labelKey: 'agents.tabs.settings' },
 ];
 
-export const AgentDetailPanel: React.FC<{ agentId: AgentProviderId }> = observer(
+export const AgentDetailPanel: React.FC<{ agentId: RuntimeId }> = observer(
   function AgentDetailPanel({ agentId }) {
     const { t } = useTranslation();
-    const provider = getProvider(agentId);
-    const [activeTab, setActiveTab] = useState<TabId>('maas');
+    const provider = getRuntime(agentId);
+    const [activeTab, setActiveTab] = useState<TabId>('account');
 
     if (!provider) {
       return (
@@ -74,7 +81,8 @@ export const AgentDetailPanel: React.FC<{ agentId: AgentProviderId }> = observer
           })}
         </div>
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'maas' && <AgentTabMaaS agentId={agentId} />}
+          {activeTab === 'account' && <AgentTabAccount agentId={agentId} />}
+          {activeTab === 'maas' && <AgentTabRuntime agentId={agentId} />}
           {activeTab === 'models' && <AgentTabModels agentId={agentId} />}
           {activeTab === 'memory' && <AgentTabMemory agentId={agentId} />}
           {activeTab === 'hooks' && <AgentTabHooks agentId={agentId} />}
@@ -86,7 +94,7 @@ export const AgentDetailPanel: React.FC<{ agentId: AgentProviderId }> = observer
   }
 );
 
-const AgentHeader: React.FC<{ provider: AgentProviderDefinition }> = observer(function AgentHeader({
+const AgentHeader: React.FC<{ provider: RuntimeDefinition }> = observer(function AgentHeader({
   provider,
 }) {
   const { t } = useTranslation();

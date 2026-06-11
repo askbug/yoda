@@ -1,4 +1,4 @@
-import type { AgentProviderId } from './agent-provider-registry';
+import type { RuntimeId } from './runtime-registry';
 
 export const MOBILE_GATEWAY_DEFAULT_PORT = 3879;
 export const MOBILE_GATEWAY_DEFAULT_DEV_TOKEN = 'dev-mobile-token';
@@ -96,7 +96,7 @@ export type MobileTaskSummary = {
   needsReview: boolean;
   isPinned: boolean;
   conversationCount: number;
-  providerCounts: Record<string, number>;
+  runtimeCounts: Record<string, number>;
 };
 
 export type MobileDashboardMetrics = {
@@ -138,7 +138,7 @@ export type MobileSessionSummary = {
   projectId: string;
   taskId: string;
   title: string;
-  providerId: AgentProviderId;
+  runtimeId: RuntimeId;
   createdAt?: string;
   updatedAt?: string;
   lastInteractedAt: string | null;
@@ -191,9 +191,13 @@ export type MobileSessionInputResponse = {
   generatedAt: string;
 };
 
+export type MobileGatewayMode = 'development' | 'production';
+
 export type MobileGatewayConnectionInfo = {
   enabled: boolean;
   running: boolean;
+  /** Runtime mode of the host app — drives the default Dev/Prod view selection. */
+  mode: MobileGatewayMode;
   host: string;
   port: number;
   token: string | null;

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { AgentProviderId } from '@shared/agent-provider-registry';
+import type { RuntimeId } from '@shared/runtime-registry';
 import type { IExecutionContext } from '@main/core/execution-context/types';
 import {
   FileSystemError,
@@ -12,7 +12,7 @@ import { appSettingsService } from '@main/core/settings/settings-service';
 import { resolveRemoteHome } from '@main/core/ssh/utils';
 import { log } from '@main/lib/logger';
 
-const CLAUDE_PROVIDER_ID: AgentProviderId = 'claude';
+const CLAUDE_PROVIDER_ID: RuntimeId = 'claude';
 const CLAUDE_CONFIG_NAME = '.claude.json';
 const CLAUDE_CONFIG_MAX_BYTES = 2 * 1024 * 1024;
 
@@ -26,16 +26,16 @@ export class ClaudeTrustService {
   ) {}
 
   async maybeAutoTrustLocal({
-    providerId,
+    runtimeId,
     cwd,
     homedir,
   }: {
-    providerId: AgentProviderId;
+    runtimeId: RuntimeId;
     cwd?: string;
     homedir: string;
   }): Promise<void> {
     if (!cwd) return;
-    if (!(await this.shouldAutoTrust(providerId))) return;
+    if (!(await this.shouldAutoTrust(runtimeId))) return;
     const normalizedPath = path.resolve(cwd);
     const configPath = path.join(homedir, CLAUDE_CONFIG_NAME);
     await this.withLock(configPath, () =>
@@ -47,18 +47,18 @@ export class ClaudeTrustService {
   }
 
   async maybeAutoTrustSsh({
-    providerId,
+    runtimeId,
     cwd,
     ctx,
     remoteFs,
   }: {
-    providerId: AgentProviderId;
+    runtimeId: RuntimeId;
     cwd?: string;
     ctx: IExecutionContext;
     remoteFs: Pick<FileSystemProvider, 'realPath' | 'read' | 'write'>;
   }): Promise<void> {
     if (!cwd) return;
-    if (!(await this.shouldAutoTrust(providerId))) return;
+    if (!(await this.shouldAutoTrust(runtimeId))) return;
 
     const normalizedPath = await remoteFs.realPath(cwd).catch(() => path.posix.resolve('/', cwd));
     const homeDir = await resolveRemoteHome(ctx);
@@ -72,8 +72,8 @@ export class ClaudeTrustService {
     );
   }
 
-  private async shouldAutoTrust(providerId: AgentProviderId): Promise<boolean> {
-    if (providerId !== CLAUDE_PROVIDER_ID) return false;
+  private async shouldAutoTrust(runtimeId: RuntimeId): Promise<boolean> {
+    if (runtimeId !== CLAUDE_PROVIDER_ID) return false;
     const { autoTrustWorktrees } = await this.deps.getTaskSettings();
     return autoTrustWorktrees;
   }

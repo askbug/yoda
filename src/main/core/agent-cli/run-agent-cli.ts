@@ -24,7 +24,13 @@ export function runAgentCli(input: {
   cwd: string;
   env: NodeJS.ProcessEnv;
   timeoutMs: number;
-  providerName: string;
+  runtimeName: string;
+  /**
+   * Optional streaming callback. Fires with incremental answer text as the CLI
+   * produces it — plain stdout for text-mode runs, or the growing tail of the
+   * Codex `agent_message` for `--json` runs. Used for SSE-style summaries.
+   */
+  onDelta?: (delta: string) => void;
 }): Promise<AgentCliResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.command, input.args, {
@@ -39,6 +45,7 @@ export function runAgentCli(input: {
     let stdoutLineBuffer = '';
     let timedOut = false;
     let settled = false;
+    let emittedAgentMessage = '';
     const canResolveOnAgentMessage = input.command === 'codex' && input.args.includes('--json');
 
     const finish = (run: () => void) => {
@@ -61,11 +68,31 @@ export function runAgentCli(input: {
     child.stdout.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf8');
       stdout = (stdout + text).slice(-MAX_COMMAND_OUTPUT_CHARS);
-      if (!canResolveOnAgentMessage) return;
-      stdoutLineBuffer = inspectCodexJsonlChunk(stdoutLineBuffer + text, () => {
-        succeed();
-        child.kill();
-      });
+      if (!canResolveOnAgentMessage) {
+        // Text-mode (e.g. Claude --output-format text): stdout IS the answer.
+        input.onDelta?.(text);
+        return;
+      }
+      stdoutLineBuffer = inspectCodexJsonlChunk(
+        stdoutLineBuffer + text,
+        () => {
+          succeed();
+          child.kill();
+        },
+        input.onDelta
+          ? (agentMessage) => {
+              // Codex re-emits the full agent_message each tick; forward only
+              // the newly-added tail so the renderer can append cleanly.
+              if (agentMessage.startsWith(emittedAgentMessage)) {
+                const delta = agentMessage.slice(emittedAgentMessage.length);
+                if (delta) input.onDelta?.(delta);
+              } else {
+                input.onDelta?.(agentMessage);
+              }
+              emittedAgentMessage = agentMessage;
+            }
+          : undefined
+      );
     });
     child.stderr.on('data', (chunk: Buffer) => {
       stderr = append(stderr, chunk);
@@ -74,13 +101,13 @@ export function runAgentCli(input: {
     child.on('close', (code) => {
       if (settled) return;
       if (timedOut) {
-        fail(new Error(`${input.providerName} command timed out.`));
+        fail(new Error(`${input.runtimeName} command timed out.`));
         return;
       }
       if (code !== 0) {
         fail(
           new Error(
-            `${input.providerName} command failed: ${formatCommandFailure(stdout, stderr, code)}`
+            `${input.runtimeName} command failed: ${formatCommandFailure(stdout, stderr, code)}`
           )
         );
         return;
@@ -101,7 +128,11 @@ export function extractAgentMessageText(raw: string): string {
   return (codexMessage ?? raw).trim();
 }
 
-function inspectCodexJsonlChunk(buffer: string, onFinalAgentMessage: () => void): string {
+function inspectCodexJsonlChunk(
+  buffer: string,
+  onFinalAgentMessage: () => void,
+  onAgentMessageText?: (text: string) => void
+): string {
   const lines = buffer.split(/\r?\n/);
   const tail = lines.pop() ?? '';
   for (const line of lines) {
@@ -113,9 +144,21 @@ function inspectCodexJsonlChunk(buffer: string, onFinalAgentMessage: () => void)
     } catch {
       continue;
     }
-    if (isCodexAgentMessageEvent(event)) onFinalAgentMessage();
+    if (isCodexAgentMessageEvent(event)) {
+      const text = codexAgentMessageText(event);
+      if (text && onAgentMessageText) onAgentMessageText(text);
+      onFinalAgentMessage();
+    }
   }
   return tail;
+}
+
+function codexAgentMessageText(event: unknown): string | null {
+  if (!event || typeof event !== 'object') return null;
+  const item = (event as { item?: unknown }).item;
+  if (!item || typeof item !== 'object') return null;
+  const typed = item as { type?: unknown; text?: unknown };
+  return typed.type === 'agent_message' && typeof typed.text === 'string' ? typed.text : null;
 }
 
 function extractCodexJsonlAgentMessage(raw: string): string | null {

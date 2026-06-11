@@ -188,7 +188,7 @@ describe('portLegacySettings', () => {
       'notifications.sound',
       'notifications.osNotifications',
       'notifications.soundFocusMode',
-      'defaultAgent',
+      'defaultRuntime',
       'reviewPrompt',
       'theme',
       'terminal.fontFamily',
@@ -211,7 +211,7 @@ describe('portLegacySettings', () => {
       osNotifications: false,
       soundFocusMode: 'unfocused',
     });
-    expect(readRawSetting(appSqlite, 'defaultAgent')).toBe('codex');
+    expect(readRawSetting(appSqlite, 'defaultRuntime')).toBe('codex');
     expect(readRawSetting(appSqlite, 'reviewPrompt')).toBe('Review this worktree carefully.');
     expect(readRawSetting(appSqlite, 'theme')).toBe('ydark');
 

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
-import { isValidProviderId } from '@shared/agent-provider-registry';
 import type { Agent, AgentDraft, AgentSource } from '@shared/agents';
+import { isValidRuntimeId } from '@shared/runtime-registry';
 import { db } from '@main/db/client';
 import { agents, type AgentRow } from '@main/db/schema';
 
@@ -25,9 +25,7 @@ function rowToAgent(row: AgentRow): Agent {
     icon: row.icon,
     systemPrompt: row.systemPrompt,
     enabledSkillIds: Array.isArray(row.enabledSkillIds) ? row.enabledSkillIds : [],
-    preferredRuntimeProvider: isValidProviderId(row.preferredRuntimeProvider)
-      ? row.preferredRuntimeProvider
-      : null,
+    preferredRuntime: isValidRuntimeId(row.preferredRuntime) ? row.preferredRuntime : null,
     model: row.model ?? null,
     source: row.source === 'imported' ? 'imported' : 'local',
     createdAt: row.createdAt,
@@ -42,9 +40,7 @@ function sanitizeDraft(draft: AgentDraft): Omit<AgentDraft, 'name'> & { name: st
     icon: draft.icon.trim(),
     systemPrompt: draft.systemPrompt,
     enabledSkillIds: [...new Set(draft.enabledSkillIds)],
-    preferredRuntimeProvider: isValidProviderId(draft.preferredRuntimeProvider)
-      ? draft.preferredRuntimeProvider
-      : null,
+    preferredRuntime: isValidRuntimeId(draft.preferredRuntime) ? draft.preferredRuntime : null,
     model: draft.model?.trim() ? draft.model.trim() : null,
   };
 }
@@ -93,7 +89,7 @@ class AgentsConfigService {
         icon: clean.icon,
         systemPrompt: clean.systemPrompt,
         enabledSkillIds: clean.enabledSkillIds,
-        preferredRuntimeProvider: clean.preferredRuntimeProvider,
+        preferredRuntime: clean.preferredRuntime,
         model: clean.model,
         source,
       })
@@ -113,7 +109,7 @@ class AgentsConfigService {
         icon: clean.icon,
         systemPrompt: clean.systemPrompt,
         enabledSkillIds: clean.enabledSkillIds,
-        preferredRuntimeProvider: clean.preferredRuntimeProvider,
+        preferredRuntime: clean.preferredRuntime,
         model: clean.model,
         updatedAt: new Date().toISOString(),
       })
@@ -138,7 +134,7 @@ class AgentsConfigService {
         icon: source.icon,
         systemPrompt: source.systemPrompt,
         enabledSkillIds: source.enabledSkillIds,
-        preferredRuntimeProvider: source.preferredRuntimeProvider,
+        preferredRuntime: source.preferredRuntime,
         model: source.model,
       },
       'local'

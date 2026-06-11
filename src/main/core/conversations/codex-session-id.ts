@@ -25,7 +25,7 @@ export function resolveAgentResumeSession(
   conversation: Conversation,
   cwd?: string
 ): AgentResumeSession {
-  if (conversation.providerId !== 'codex') {
+  if (conversation.runtimeId !== 'codex') {
     return { sessionId: conversation.id, sessionTitle: conversation.title };
   }
 

@@ -30,7 +30,7 @@ export function hasKnownNetworkErrorCode(error: unknown): boolean {
 export function assertRemoteHostMatchesInstance(
   remoteHost: string,
   instanceUrl: string,
-  providerName: string
+  runtimeName: string
 ): void {
   const instanceHost = new URL(instanceUrl).hostname.toLowerCase();
   if (remoteHost === instanceHost) {
@@ -38,6 +38,6 @@ export function assertRemoteHostMatchesInstance(
   }
 
   throw new Error(
-    `Git remote host "${remoteHost}" does not match configured ${providerName} instance "${instanceHost}".`
+    `Git remote host "${remoteHost}" does not match configured ${runtimeName} instance "${instanceHost}".`
   );
 }

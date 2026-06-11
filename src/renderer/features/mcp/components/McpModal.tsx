@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@renderer/lib/ui/select';
 import { KeyValueSection, type KVEntry } from './KeyValueSection';
-import { ProviderSelect } from './ProviderSelect';
+import { RuntimeSelect } from './RuntimeSelect';
 
 export type McpModalMode =
   | { type: 'add-catalog'; entry: McpCatalogEntry }
@@ -265,7 +265,7 @@ export const McpModal: React.FC<McpModalProps> = ({
             {(field) => (
               <form.Subscribe selector={(state) => state.values.transport}>
                 {(transport) => (
-                  <ProviderSelect
+                  <RuntimeSelect
                     providers={providers}
                     selectedProviders={field.state.value}
                     transport={transport}
