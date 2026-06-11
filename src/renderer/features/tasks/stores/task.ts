@@ -263,7 +263,7 @@ export class TaskStore {
   }
 
   async rename(name: string): Promise<void> {
-    if (this.state !== 'provisioned') return;
+    if (this.state === 'unregistered') return;
     const task = registeredTaskData(this);
     if (!task) return;
     const previousIsUserNamed = (this.data as Task).isUserNamed;
