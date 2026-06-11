@@ -28,6 +28,7 @@ import {
   AutoGenerateTaskNamesRow,
   AutoTrustWorktreesRow,
   EnableTmuxRow,
+  InitTaskNameFromSessionRow,
   PreArchiveCommandRow,
 } from './TaskSettingsRows';
 import TelemetryCard from './TelemetryCard';
@@ -139,6 +140,10 @@ export function SettingsPage({
       title: t('settings.tabs.tasks'),
       description: t('settings.tasksTab.description'),
       sections: [
+        {
+          id: 'init-task-name-from-session',
+          component: <InitTaskNameFromSessionRow />,
+        },
         {
           id: 'auto-trust-worktrees',
           component: <AutoTrustWorktreesRow />,
