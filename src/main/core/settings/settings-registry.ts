@@ -39,6 +39,7 @@ export const SETTINGS_DEFAULTS = {
   tasks: {
     autoGenerateName: true,
     initTaskNameFromSession: true,
+    branchNaming: 'hash' as const,
     namingAgentId: '',
     summaryAgentId: '',
     summaryLanguage: 'app' as const,
