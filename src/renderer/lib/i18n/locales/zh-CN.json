@@ -1444,6 +1444,11 @@
     "noSkills": "暂无可用技能。",
     "disabled": "已禁用",
     "usageTitle": "手动调用 {{manual}} 次 / Agent 调用 {{auto}} 次",
+    "layout": {
+      "ariaLabel": "切换布局",
+      "grid": "卡片视图",
+      "tree": "树状视图"
+    },
     "sort": {
       "ariaLabel": "技能排序",
       "name": "名称字母序",
