@@ -342,7 +342,6 @@ const SkillDetailContent: React.FC<{
                         <DropdownMenuSubContent className="w-52">
                           <GlobalFileMenuItems
                             absolutePath={localSkillFilePath}
-                            currentSurface="main"
                             components={{
                               Item: DropdownMenuItem,
                               Separator: DropdownMenuSeparator,
@@ -497,12 +496,7 @@ const SkillDetailContent: React.FC<{
                   <ValueRow
                     label={t('skills.detail.skillFile')}
                     value={localSkillFilePath}
-                    extraAction={
-                      <GlobalFileActionsDropdown
-                        absolutePath={localSkillFilePath}
-                        currentSurface="main"
-                      />
-                    }
+                    extraAction={<GlobalFileActionsDropdown absolutePath={localSkillFilePath} />}
                   />
                 )}
               </>
