@@ -2,37 +2,24 @@ import { Archive, ChevronRight, GitBranch, Loader2, MoreHorizontal } from 'lucid
 import { observer } from 'mobx-react-lite';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { buildTaskDeepLink } from '@shared/deep-links';
-import { INTERNAL_PROJECT_ID } from '@shared/projects';
 import { selectCurrentPr } from '@shared/pull-requests';
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { TaskSidebarAgentStatus } from '@renderer/features/sidebar/task-sidebar-agent-status';
-import { useArchiveTask } from '@renderer/features/tasks/archive-task';
 import {
-  copyTaskLink,
   TaskActionsMenu,
   TaskContextMenu,
 } from '@renderer/features/tasks/components/task-context-menu';
-import {
-  buildTaskMenuSessionFields,
-  getTaskMenuConversation,
-  resolveTaskMenuSessionFields,
-  selectPreferredConversation,
-} from '@renderer/features/tasks/components/task-menu-session-info';
-import { registeredTaskData, type TaskStore } from '@renderer/features/tasks/stores/task';
+import { useTaskMenuActions } from '@renderer/features/tasks/components/use-task-menu-actions';
+import { type TaskStore } from '@renderer/features/tasks/stores/task';
 import {
   asProvisioned,
   getTaskManagerStore,
   getTaskStore,
   taskDisplayStatus,
 } from '@renderer/features/tasks/stores/task-selectors';
-import { OVERVIEW_TAB_ID } from '@renderer/features/tasks/tabs/tab-manager-store';
-import { rpc } from '@renderer/lib/ipc';
 import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider';
-import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { sidebarStore } from '@renderer/lib/stores/app-state';
 import { Badge } from '@renderer/lib/ui/badge';
-import { log } from '@renderer/utils/logger';
 import { cn } from '@renderer/utils/utils';
 import { PrBadge } from '../../lib/components/pr-badge';
 import { SidebarItemMiniButton, SidebarMenuRow } from './sidebar-primitives';
@@ -68,10 +55,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
 }: SidebarTaskItemProps) {
   const { t } = useTranslation();
   const { navigate } = useNavigate();
-  const showRename = useShowModal('renameTaskModal');
-  const showArchiveWithNote = useShowModal('archiveTaskWithNoteModal');
-  const showCreateSubtask = useShowModal('newSubtaskModal');
-  const showSetParent = useShowModal('setParentTaskModal');
 
   const { params } = useParams('task');
   // The selected task stays highlighted even after navigating to a non-task view
@@ -88,10 +71,13 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
 
   const task = getTaskStore(projectId, taskId)!;
   const taskManager = getTaskManagerStore(projectId);
-  const { archiveTask, hasPreArchiveCommand } = useArchiveTask(projectId);
+  // Shared task-entity menu wiring (same items as every other task surface).
+  const menuActions = useTaskMenuActions(projectId, taskId);
   // Driven by the store so any archive entry point (sidebar, tabs, modal)
   // shows the same loading state while the archive flow is in flight.
   const isArchiving = taskManager?.archivingTaskIds.has(taskId) ?? false;
+
+  if (!menuActions) return null;
 
   const isBootstrapping =
     task.state === 'unregistered' ||
@@ -134,30 +120,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     void taskManager?.provisionTask(taskId);
   };
 
-  // Archiving a task archives all of its conversations first, running the
-  // pre-archive command against each live session by default.
-  const handleArchive = (options?: { skipPreCommand?: boolean }) => {
-    if (isArchiving) return;
-    void archiveTask(taskId, options).catch((error: unknown) => {
-      log.warn('SidebarTaskItem: archive task failed', { projectId, taskId, error });
-    });
-  };
-
-  // Direct archive from the menu: note dialog, no pre-archive skill.
-  const handleArchiveWithNote = () => {
-    showArchiveWithNote({
-      projectId,
-      taskId,
-      taskName,
-      skipPreCommand: true,
-    });
-  };
-
-  const handleRename = () => showRename({ projectId, taskId, currentName: taskName });
-
-  const canPin = task.state !== 'unregistered';
-  const canMarkReview = task.state !== 'unregistered';
-  const canAssignWorkspace = projectId === INTERNAL_PROJECT_ID || task.data.isPinned;
   const needsReview = task.data.needsReview;
 
   const provisionedTask = asProvisioned(task);
@@ -172,49 +134,9 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const compactBranchName = branchName
     ? (/-([0-9a-z]{5})$/.exec(branchName)?.[1] ?? branchName.slice(branchName.lastIndexOf('/') + 1))
     : undefined;
-  const workspace = provisionedTask?.workspace;
-  const handleReconnect =
-    workspace?.connectionState != null ? () => workspace.reconnect() : undefined;
-
   const project = getProjectStore(projectId);
   const projectName =
     project?.state === 'unregistered' ? projectId : (project?.displayName ?? projectId);
-  const projectPath = project?.data?.path;
-
-  const menuConversation = getTaskMenuConversation(provisionedTask);
-  const sessionInfoCwd = provisionedTask?.path ?? projectPath;
-  const sessionFields = menuConversation
-    ? buildTaskMenuSessionFields(menuConversation, sessionInfoCwd)
-    : {};
-  const hasStoredConversations = Object.values(task.conversationStats).some((count) => count > 0);
-  const resolveSessionInfo = menuConversation
-    ? () => resolveTaskMenuSessionFields(menuConversation, sessionInfoCwd)
-    : hasStoredConversations && task.state !== 'unregistered'
-      ? async () => {
-          const conversations = await rpc.conversations.getConversationsForTask(projectId, taskId);
-          const conversation = selectPreferredConversation(conversations);
-          return conversation
-            ? resolveTaskMenuSessionFields(conversation, sessionInfoCwd)
-            : undefined;
-        }
-      : undefined;
-
-  const handleCopyYodaLink = () => {
-    const link = buildTaskDeepLink({
-      projectId,
-      taskId,
-    });
-    void copyTaskLink(link, t);
-  };
-  const handleRestartSession =
-    provisionedTask && menuConversation
-      ? (tmuxOverride?: boolean) =>
-          void provisionedTask.conversations.restartConversation(
-            menuConversation.id,
-            undefined,
-            tmuxOverride
-          )
-      : undefined;
 
   const openPreferredConversationIfEmpty = () => {
     if (!provisionedTask) return;
@@ -229,66 +151,6 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
     handleProvision();
     openPreferredConversationIfEmpty();
     navigate('task', { projectId, taskId });
-  };
-
-  // The context-menu "open details" entry enters the task and activates its
-  // fixed Overview tab (task info / sessions / sub-tasks), distinguishing it from
-  // a plain row click which only enters the task view on the last-active tab.
-  const handleOpenOverview = () => {
-    handleProvision();
-    navigate('task', { projectId, taskId });
-    asProvisioned(task)?.taskView.tabManager.setActiveTab(OVERVIEW_TAB_ID);
-  };
-
-  const menuActions = {
-    projectId,
-    projectName,
-    taskId,
-    taskName,
-    isPinned: task.data.isPinned,
-    canPin,
-    isArchived: false,
-    needsReview,
-    canMarkReview,
-    branchName,
-    ...sessionFields,
-    resolveSessionInfo,
-    projectPath,
-    workingDirectory: provisionedTask?.path,
-    openDetailsLabel: t('tasks.context.openDetails'),
-    onOpenDetails: handleOpenOverview,
-    onPin: () => void task.setPinned(true),
-    onUnpin: () => void task.setPinned(false),
-    onMarkNeedsReview: () => void task.setNeedsReview(true),
-    onUnmarkNeedsReview: () => void task.setNeedsReview(false),
-    onRename: handleRename,
-    onArchive: handleArchiveWithNote,
-    onArchiveWithSkill: () => handleArchive(),
-    hasArchiveSkill: hasPreArchiveCommand,
-    onConfigureArchiveSkill: () => navigate('settings', { tab: 'sessions' }),
-    onCopyYodaLink: handleCopyYodaLink,
-    onReconnect: handleReconnect,
-    onRestartSession: handleRestartSession,
-    // Projectless Drafts tasks belong directly to a workspace, and pinned tasks
-    // appear standalone in the workspace-scoped pinned strip — both can be moved
-    // individually. Other project-bound tasks follow their project's workspace.
-    currentWorkspaceId: canAssignWorkspace
-      ? (registeredTaskData(task)?.sidebarWorkspaceId ??
-        getProjectStore(projectId)?.data?.workspaceId ??
-        null)
-      : undefined,
-    onAssignWorkspace: canAssignWorkspace
-      ? (workspaceId: string | null) => void task.setSidebarWorkspaceId(workspaceId)
-      : undefined,
-    // Subtask tree entries — projectless Drafts tasks stay flat for now.
-    onCreateSubtask:
-      projectId !== INTERNAL_PROJECT_ID && task.state !== 'unregistered'
-        ? () => showCreateSubtask({ projectId, parentTaskId: taskId })
-        : undefined,
-    onSetParent:
-      projectId !== INTERNAL_PROJECT_ID && task.state !== 'unregistered'
-        ? () => showSetParent({ projectId, taskId })
-        : undefined,
   };
 
   return (
@@ -320,7 +182,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
         }}
         onDoubleClick={(e) => {
           e.stopPropagation();
-          handleRename();
+          menuActions.onRename();
         }}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 self-stretch overflow-hidden">
@@ -461,7 +323,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
                   onClick={(e) => {
                     e.stopPropagation();
                     setArchiveConfirming(false);
-                    handleArchive();
+                    menuActions.onArchiveWithSkill?.();
                   }}
                 />
               }

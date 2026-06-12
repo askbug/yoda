@@ -26,7 +26,11 @@ import {
 import { getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { archiveConversationFlow } from '@renderer/features/tasks/archive-task';
-import { copyTaskLink } from '@renderer/features/tasks/components/task-context-menu';
+import {
+  copyTaskLink,
+  TaskContextMenuItems,
+} from '@renderer/features/tasks/components/task-context-menu';
+import { useTaskMenuActions } from '@renderer/features/tasks/components/use-task-menu-actions';
 import type { ProvisionedTask } from '@renderer/features/tasks/stores/task';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import {
@@ -76,6 +80,21 @@ export const AppTabContextMenu = observer(function AppTabContextMenu({
   children: ReactNode;
 }) {
   const { t } = useTranslation();
+
+  // A task's overview tab is the task entity itself on the strip — it gets the
+  // shared task menu (identical to the sidebar row and the kanban row).
+  if (tab.viewId === 'task') {
+    const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
+    const target = (tab.params.tab as TaskWindowTabTarget | undefined) ?? { kind: 'overview' };
+    if (projectId && taskId && target.kind === 'overview') {
+      return (
+        <TaskOverviewTabMenu tab={tab} projectId={projectId} taskId={taskId}>
+          {children}
+        </TaskOverviewTabMenu>
+      );
+    }
+  }
+
   const sections = buildTabSections(tab, t).filter((section) => section.length > 0);
 
   if (sections.length === 0) return <>{children}</>;
@@ -129,28 +148,68 @@ function buildGlobalPinItem(tab: AppTabEntry, t: Translate): ReactNode {
 // Task tabs (sessions, worktree files, diffs)
 // ---------------------------------------------------------------------------
 
+/**
+ * Right-click menu for a task's overview tab — the task entity itself on the
+ * strip. Reuses the shared task menu wiring (same items as the sidebar row and
+ * the kanban row, see agents/conventions/reuse.md), then appends the tab
+ * placement and close groups. The index tab itself isn't closeable, but it's a
+ * natural place to sweep the rest of the strip from; its shell-pane pin is a
+ * copy — the overview stays the scope's fixed index tab.
+ */
+const TaskOverviewTabMenu = observer(function TaskOverviewTabMenu({
+  tab,
+  projectId,
+  taskId,
+  children,
+}: {
+  tab: AppTabEntry;
+  projectId: string;
+  taskId: string;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const actions = useTaskMenuActions(projectId, taskId);
+  const tabSections: ReactNode[][] = [
+    [
+      <ContextMenuItem
+        key="global-pin"
+        className="whitespace-nowrap"
+        onClick={() => appState.sidePane.pinTask(projectId, taskId, OVERVIEW_TAB_ID)}
+      >
+        <PanelRightOpen className="size-4" />
+        {t('appTabs.openInGlobalSidePane')}
+      </ContextMenuItem>,
+    ],
+    buildCloseSection(tab, t),
+  ].filter((section) => section.length > 0);
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{children}</ContextMenuTrigger>
+      <ContextMenuContent className="w-max overflow-x-visible">
+        {actions ? (
+          <>
+            <TaskContextMenuItems {...actions} />
+            <ContextMenuSeparator />
+          </>
+        ) : null}
+        {tabSections.map((section, index) => (
+          // Sections are stable per tab kind — index keys are fine here.
+          <Fragment key={index}>
+            {index > 0 ? <ContextMenuSeparator /> : null}
+            {section}
+          </Fragment>
+        ))}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+});
+
 function buildTaskSections(tab: AppTabEntry, t: Translate): ReactNode[][] {
   const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
   const target = (tab.params.tab as TaskWindowTabTarget | undefined) ?? { kind: 'overview' };
-  if (!projectId || !taskId) return [];
-  // The index tab itself isn't closeable, but it's a natural place to sweep
-  // the rest of the strip from. Its shell-pane pin is a copy — the overview
-  // stays the scope's fixed index tab.
-  if (target.kind === 'overview') {
-    return [
-      [
-        <ContextMenuItem
-          key="global-pin"
-          className="whitespace-nowrap"
-          onClick={() => appState.sidePane.pinTask(projectId, taskId, OVERVIEW_TAB_ID)}
-        >
-          <PanelRightOpen className="size-4" />
-          {t('appTabs.openInGlobalSidePane')}
-        </ContextMenuItem>,
-      ],
-      buildCloseSection(tab, t),
-    ];
-  }
+  // Overview tabs are intercepted by TaskOverviewTabMenu before reaching here.
+  if (!projectId || !taskId || target.kind === 'overview') return [];
 
   const provisioned = asProvisioned(getTaskStore(projectId, taskId));
 

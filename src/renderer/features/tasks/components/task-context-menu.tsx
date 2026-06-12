@@ -64,7 +64,7 @@ interface TaskMenuInfoFields extends TaskBasicInfoFields, TaskSessionInfoFields 
   workingDirectory?: string;
 }
 
-interface TaskMenuActions extends TaskMenuInfoFields {
+export interface TaskMenuActions extends TaskMenuInfoFields {
   isPinned: boolean;
   canPin: boolean;
   isArchived: boolean;
@@ -464,68 +464,81 @@ interface TaskContextMenuProps extends TaskMenuActions {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function TaskContextMenu({ children, onOpenChange, ...actions }: TaskContextMenuProps) {
+/**
+ * The task menu's items without the surrounding context-menu wrapper, for
+ * surfaces that compose the task entity's actions into a larger menu (e.g.
+ * the top-level tab strip, which appends tab placement and close groups).
+ */
+export function TaskContextMenuItems(actions: TaskMenuActions) {
   const items = useMenuItems(actions);
+  return (
+    <>
+      {items.map((item, index) => {
+        const prev = items[index - 1];
+        const showSeparator = prev && prev.group !== item.group;
+        const Icon = item.icon;
+        return (
+          <React.Fragment key={item.key}>
+            {showSeparator && <ContextMenuSeparator />}
+            {item.submenu ? (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger className="whitespace-nowrap" disabled={item.disabled}>
+                  <Icon className="size-4" />
+                  {item.label}
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent>
+                  {item.submenu.map((sub) => {
+                    const SubIcon = sub.icon;
+                    return (
+                      <ContextMenuItem
+                        key={sub.key}
+                        disabled={sub.disabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sub.onSelect();
+                        }}
+                        className="whitespace-nowrap"
+                      >
+                        <SubIcon className="size-4" />
+                        {sub.label}
+                      </ContextMenuItem>
+                    );
+                  })}
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            ) : (
+              <ContextMenuItem
+                disabled={item.disabled}
+                variant={item.variant}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  item.onSelect?.();
+                }}
+                className="whitespace-nowrap"
+              >
+                <Icon className="size-4" />
+                {item.label}
+              </ContextMenuItem>
+            )}
+          </React.Fragment>
+        );
+      })}
+      {actions.onAssignWorkspace && (
+        <WorkspaceAssignContextSubmenu
+          currentWorkspaceId={actions.currentWorkspaceId ?? null}
+          onAssign={actions.onAssignWorkspace}
+        />
+      )}
+    </>
+  );
+}
+
+export function TaskContextMenu({ children, onOpenChange, ...actions }: TaskContextMenuProps) {
   return (
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-max overflow-x-visible">
-        {items.map((item, index) => {
-          const prev = items[index - 1];
-          const showSeparator = prev && prev.group !== item.group;
-          const Icon = item.icon;
-          return (
-            <React.Fragment key={item.key}>
-              {showSeparator && <ContextMenuSeparator />}
-              {item.submenu ? (
-                <ContextMenuSub>
-                  <ContextMenuSubTrigger className="whitespace-nowrap" disabled={item.disabled}>
-                    <Icon className="size-4" />
-                    {item.label}
-                  </ContextMenuSubTrigger>
-                  <ContextMenuSubContent>
-                    {item.submenu.map((sub) => {
-                      const SubIcon = sub.icon;
-                      return (
-                        <ContextMenuItem
-                          key={sub.key}
-                          disabled={sub.disabled}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            sub.onSelect();
-                          }}
-                          className="whitespace-nowrap"
-                        >
-                          <SubIcon className="size-4" />
-                          {sub.label}
-                        </ContextMenuItem>
-                      );
-                    })}
-                  </ContextMenuSubContent>
-                </ContextMenuSub>
-              ) : (
-                <ContextMenuItem
-                  disabled={item.disabled}
-                  variant={item.variant}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    item.onSelect?.();
-                  }}
-                  className="whitespace-nowrap"
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </ContextMenuItem>
-              )}
-            </React.Fragment>
-          );
-        })}
-        {actions.onAssignWorkspace && (
-          <WorkspaceAssignContextSubmenu
-            currentWorkspaceId={actions.currentWorkspaceId ?? null}
-            onAssign={actions.onAssignWorkspace}
-          />
-        )}
+        <TaskContextMenuItems {...actions} />
       </ContextMenuContent>
     </ContextMenu>
   );
