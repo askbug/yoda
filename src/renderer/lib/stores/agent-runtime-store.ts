@@ -104,6 +104,31 @@ export class AgentRuntimeStore {
   }
 
   /**
+   * Task status for the sidebar indicator, in display priority: awaiting-input
+   * → unread error/completed (needs the user's verdict, even while another
+   * session still works) → working. Differs from {@link taskStatus}, which
+   * ranks working above finished states for run-state semantics.
+   */
+  taskDisplayStatus(projectId: string, taskId: string): AgentSessionRuntimeStatus | null {
+    const prefix = `${taskKey(projectId, taskId)}\0`;
+    let hasWorking = false;
+    let hasError = false;
+    let hasCompleted = false;
+    for (const [key, status] of this.statuses) {
+      if (!key.startsWith(prefix)) continue;
+      if (status === 'awaiting-input') return 'awaiting-input';
+      if (status === 'working') hasWorking = true;
+      else if (status === 'error') hasError = true;
+      else if (status === 'completed') hasCompleted = true;
+    }
+    const unread = !this.seenTaskIds.has(taskKey(projectId, taskId));
+    if (unread && hasError) return 'error';
+    if (unread && hasCompleted) return 'completed';
+    if (hasWorking) return 'working';
+    return null;
+  }
+
+  /**
    * Conversation ids of this task that want the user's attention, ordered
    * awaiting-input first, then error/completed. Drives the sidebar's
    * "jump to next pending session" affordance for tasks that aren't mounted

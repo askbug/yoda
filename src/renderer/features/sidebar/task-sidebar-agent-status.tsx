@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { openTaskTarget } from '@renderer/app/open-task-target';
 import { AgentStatusIndicator } from '@renderer/features/tasks/components/agent-status-indicator';
 import { CLISpinner } from '@renderer/features/tasks/components/cliSpinner';
+import { interruptTaskSessions } from '@renderer/features/tasks/interrupt-task-sessions';
 import {
   isUnprovisioned,
   isUnregistered,
@@ -12,7 +13,7 @@ import {
 import {
   asProvisioned,
   nextAttentionConversationId,
-  taskNotificationStatus,
+  taskDisplayStatus,
 } from '@renderer/features/tasks/stores/task-selectors';
 import { useDelayedBoolean } from '@renderer/lib/hooks/use-delay-boolean';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
@@ -22,11 +23,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/lib/ui/toolti
 import { getSortInstant } from './sidebar-store';
 
 /**
- * Sidebar tail: spinner while bootstrapping, otherwise the task's notification
- * signal — only statuses that need the user (awaiting-input / unread
- * error/completed; running state lives on the session tabs instead). Clicking
- * the signal jumps to the next session that needs consuming, cycling past the
- * one already in view.
+ * Sidebar tail: spinner while bootstrapping, otherwise the task's agent status
+ * in display priority — awaiting-input → unread error/completed → working →
+ * manual needs-review flag → idle (relative time). Notification statuses are a
+ * click target jumping to the next session that needs consuming (cycling past
+ * the one in view); working keeps the hover-to-interrupt affordance.
  */
 export const TaskSidebarAgentStatus = observer(function TaskSidebarAgentStatus({
   task,
@@ -42,7 +43,7 @@ export const TaskSidebarAgentStatus = observer(function TaskSidebarAgentStatus({
     (isUnprovisioned(task) && (task.phase === 'provision' || task.phase === 'provision-error'));
 
   const delayedIsBootstrapping = useDelayedBoolean(isBootstrapping, 500);
-  const status = taskNotificationStatus(task);
+  const status = taskDisplayStatus(task);
 
   if (delayedIsBootstrapping) {
     return (
@@ -54,6 +55,16 @@ export const TaskSidebarAgentStatus = observer(function TaskSidebarAgentStatus({
         </TooltipTrigger>
         <TooltipContent>{t('sidebar.creatingWorkspace')}</TooltipContent>
       </Tooltip>
+    );
+  }
+
+  if (status === 'working') {
+    const data = registeredTaskData(task);
+    return (
+      <AgentStatusIndicator
+        status={status}
+        onInterrupt={data ? () => interruptTaskSessions(data.projectId, data.id) : undefined}
+      />
     );
   }
 

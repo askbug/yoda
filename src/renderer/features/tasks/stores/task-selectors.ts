@@ -116,13 +116,37 @@ export function taskAgentStatus(store: TaskStore): AgentStatus | null {
 }
 
 /**
- * Task-level notification signal: only statuses that need the user
- * (awaiting-input, or unread error/completed). `working` is a session-level
- * concern — the session tabs spin on their own — so it never surfaces here.
+ * Task status for the sidebar indicator, in display priority:
+ *
+ *   1. awaiting-input — a session needs the user's input
+ *   2. unread error/completed — a finished session awaits the user's verdict
+ *      (outranks working: don't hide a pending verdict behind a spinner)
+ *   3. working — sessions still running
+ *
+ * Below these the sidebar falls back to the manual needs-review flag, then
+ * idle (relative time). Prefers the per-conversation `seen` flags of a mounted
+ * task; unmounted tasks use the runtime mirror's task-level unread bit.
  */
-export function taskNotificationStatus(store: TaskStore): AgentStatus | null {
-  const status = taskAgentStatus(store);
-  return status === 'working' || status === 'idle' ? null : status;
+export function taskDisplayStatus(store: TaskStore): AgentStatus | null {
+  const provisioned = asProvisioned(store);
+  if (provisioned && provisioned.conversations.conversations.size > 0) {
+    let hasWorking = false;
+    let hasError = false;
+    let hasCompleted = false;
+    for (const conversation of provisioned.conversations.conversations.values()) {
+      const status = conversation.indicatorStatus;
+      if (status === 'awaiting-input') return 'awaiting-input';
+      if (status === 'working') hasWorking = true;
+      else if (status === 'error') hasError = true;
+      else if (status === 'completed') hasCompleted = true;
+    }
+    if (hasError) return 'error';
+    if (hasCompleted) return 'completed';
+    if (hasWorking) return 'working';
+    return null;
+  }
+  const task = registeredTaskData(store);
+  return task ? appState.agentRuntime.taskDisplayStatus(task.projectId, task.id) : null;
 }
 
 /**
