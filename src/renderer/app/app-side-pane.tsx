@@ -1,9 +1,21 @@
-import { X } from 'lucide-react';
+import { AppWindow, ArrowLeftToLine, PanelRight, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { Activity, useEffect, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  buildConversationSections,
+  fileTarget,
+  moveTopTabToShellPane,
+} from '@renderer/app/app-tab-context-menu';
 import { describeTab } from '@renderer/app/app-tab-strip';
 import { openTaskTopTab } from '@renderer/app/open-task-target';
+import {
+  activeTabDrag,
+  tabDragSource,
+  tabDropIndex,
+  useTabDropZone,
+  type TabDragPayload,
+} from '@renderer/app/tab-drag';
 import {
   views,
   type ViewDefinition,
@@ -13,21 +25,30 @@ import {
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { asProvisioned, getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { OVERVIEW_TAB_ID } from '@renderer/features/tasks/tabs/tab-manager-store';
-import { buildTaskWindowTarget, getTabMeta } from '@renderer/features/tasks/tabs/tab-meta';
+import {
+  buildTaskWindowTarget,
+  getTabMeta,
+  openTaskTabInWindow,
+} from '@renderer/features/tasks/tabs/tab-meta';
 import {
   ProvisionedTaskProvider,
   TaskViewWrapper,
   useProvisionedTask,
 } from '@renderer/features/tasks/task-view-context';
 import { SidebarPinnedContent } from '@renderer/features/tasks/view/sidebar-pinned-content';
+import { ChipContextMenu } from '@renderer/lib/components/chip-context-menu';
+import { FilePathMenuItems } from '@renderer/lib/components/file-path-actions';
 import { SidebarChip } from '@renderer/lib/components/sidebar-chip';
 import {
+  useNavigate,
   ViewParamsOverrideProvider,
   type ViewParamsOverride,
 } from '@renderer/lib/layout/navigation-provider';
 import type { SidePanePin } from '@renderer/lib/stores/app-side-pane-store';
 import { appState } from '@renderer/lib/stores/app-state';
 import type { AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
+import { ContextMenuItem, ContextMenuSeparator } from '@renderer/lib/ui/context-menu';
+import { cn } from '@renderer/utils/utils';
 
 /**
  * Shell-level (cross-route) side pane: hosts pins of any top-level tab — task
@@ -38,6 +59,7 @@ import type { AppTabEntry } from '@renderer/lib/stores/app-tabs-store';
  */
 export const AppSidePane = observer(function AppSidePane() {
   const { t } = useTranslation();
+  const { navigate } = useNavigate();
   const { value: projectSettings } = useAppSettingsKey('project');
   const branchPrefix = projectSettings?.branchPrefix ?? '';
   const { pins, activePinId, activePin } = appState.sidePane;
@@ -100,26 +122,201 @@ export const AppSidePane = observer(function AppSidePane() {
     return describeTab(entry, t, branchPrefix);
   };
 
+  // Moved task entities drag as such (placeable in any area); copy-semantics
+  // pins (views, overview) drag for in-pane reorder only.
+  const dragPayload = (pin: SidePanePin): TabDragPayload => {
+    if (pin.kind === 'task' && pin.tabId !== OVERVIEW_TAB_ID) {
+      const resolved = asProvisioned(
+        getTaskStore(pin.projectId, pin.taskId)
+      )?.taskView.tabManager.resolveTab(pin.tabId);
+      if (resolved && resolved.kind !== 'overview') {
+        return {
+          kind: 'task-entity',
+          from: 'shellPane',
+          projectId: pin.projectId,
+          taskId: pin.taskId,
+          tabId: pin.tabId,
+          pinId: pin.id,
+          target: buildTaskWindowTarget(pin.projectId, pin.taskId, resolved).tab,
+        };
+      }
+    }
+    return { kind: 'shell-pin', pinId: pin.id };
+  };
+
+  // Right-click menu for a moved task entity pin, mirroring the task sidebar's
+  // pinned chips: placement (back to strip / task sidebar / window), then
+  // kind-specific actions. Copy-semantics pins keep the plain chip.
+  const pinSections = (pin: SidePanePin): ReactNode[][] => {
+    if (pin.kind !== 'task' || pin.tabId === OVERVIEW_TAB_ID) return [];
+    const provisioned = asProvisioned(getTaskStore(pin.projectId, pin.taskId));
+    const tabManager = provisioned?.taskView.tabManager;
+    const resolved = tabManager?.resolveTab(pin.tabId);
+    if (!provisioned || !tabManager || !resolved || resolved.kind === 'overview') return [];
+    const target = buildTaskWindowTarget(pin.projectId, pin.taskId, resolved);
+
+    const placement: ReactNode[] = [
+      <ContextMenuItem
+        key="move-back"
+        className="whitespace-nowrap"
+        onClick={() => {
+          tabManager.moveShellPinBack(pin.tabId);
+          appState.sidePane.unpin(pin.id);
+          openTaskTopTab(pin.projectId, pin.taskId, target.tab, { activate: false });
+        }}
+      >
+        <ArrowLeftToLine className="size-4" />
+        {t('tasks.sidePane.moveBack')}
+      </ContextMenuItem>,
+      <ContextMenuItem
+        key="task-sidebar"
+        className="whitespace-nowrap"
+        onClick={() => {
+          tabManager.moveShellPinBack(pin.tabId);
+          tabManager.moveTabToSidebar(pin.tabId);
+          appState.sidePane.unpin(pin.id);
+          provisioned.taskView.setSidebarCollapsed(false);
+          // The task sidebar is route-scoped — surface the destination.
+          navigate('task', { projectId: pin.projectId, taskId: pin.taskId });
+        }}
+      >
+        <PanelRight className="size-4" />
+        {t('tasks.tabs.openInSidePane')}
+      </ContextMenuItem>,
+      <ContextMenuItem
+        key="window"
+        className="whitespace-nowrap"
+        onClick={() => {
+          void openTaskTabInWindow(target).then((opened) => {
+            if (!opened) return;
+            tabManager.closeTab(pin.tabId);
+            appState.sidePane.unpin(pin.id);
+          });
+        }}
+      >
+        <AppWindow className="size-4" />
+        {t('tasks.tabs.openInWindow')}
+      </ContextMenuItem>,
+    ];
+
+    if (resolved.kind === 'conversation') {
+      const [management, copy, maintenance] = buildConversationSections(
+        provisioned,
+        pin.projectId,
+        pin.taskId,
+        resolved.conversationId,
+        t
+      );
+      return [management ?? [], copy ?? [], placement, maintenance ?? []];
+    }
+
+    // file / diff — path actions plus the plain close.
+    return [
+      placement,
+      [
+        <FilePathMenuItems
+          key="file-actions"
+          target={fileTarget(
+            provisioned.path,
+            resolved.path,
+            provisioned.workspace.sshConnectionId
+          )}
+          components={{ Item: ContextMenuItem, Separator: ContextMenuSeparator }}
+        />,
+      ],
+      [
+        <ContextMenuItem key="close" className="whitespace-nowrap" onClick={() => closePin(pin)}>
+          <X className="size-4" />
+          {t('common.close')}
+        </ContextMenuItem>,
+      ],
+    ];
+  };
+
+  // The pane accepts task entities from anywhere (and its own pins for
+  // reorder); non-task tabs land as copy pins, same as their context menu.
+  const dropZone = useTabDropZone({
+    canDrop: (payload) => payload.kind !== 'sidebar-group',
+    onDrop: (payload, event) => {
+      const index = tabDropIndex(event, 'shell-pin');
+      if (payload.kind === 'shell-pin') {
+        appState.sidePane.reorderPin(payload.pinId, index);
+        return;
+      }
+      if (payload.kind === 'view') {
+        const tab = payload.appTab;
+        const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
+        if (tab.viewId === 'task' && projectId && taskId) {
+          appState.sidePane.pinTask(projectId, taskId, OVERVIEW_TAB_ID);
+        } else {
+          appState.sidePane.pinView(tab.viewId, tab.params);
+        }
+        // pinView/pinTask select the (possibly pre-existing) pin — position it.
+        const pinId = appState.sidePane.activePinId;
+        if (pinId) appState.sidePane.reorderPin(pinId, index);
+        return;
+      }
+      // canDrop already excludes sidebar-group; this narrows the type.
+      if (payload.kind !== 'task-entity') return;
+      if (payload.from === 'shellPane' && payload.pinId) {
+        appState.sidePane.reorderPin(payload.pinId, index);
+        return;
+      }
+      const provisioned = asProvisioned(getTaskStore(payload.projectId, payload.taskId));
+      if (!provisioned) return;
+      if (payload.from === 'taskSidebar' && payload.tabId) {
+        provisioned.taskView.tabManager.moveTabToShellPin(payload.tabId);
+        appState.sidePane.pinTask(payload.projectId, payload.taskId, payload.tabId);
+        const pinId = appState.sidePane.activePinId;
+        if (pinId) appState.sidePane.reorderPin(pinId, index);
+        return;
+      }
+      if (payload.from === 'strip' && payload.appTab) {
+        void moveTopTabToShellPane(
+          payload.appTab,
+          provisioned,
+          payload.projectId,
+          payload.taskId,
+          payload.target
+        ).then((tabId) => {
+          if (!tabId) return;
+          const pinId = appState.sidePane.activePinId;
+          if (pinId) appState.sidePane.reorderPin(pinId, index);
+        });
+      }
+    },
+  });
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-background-secondary px-2 [-webkit-app-region:drag] dark:bg-background">
         <div
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-md',
+            // Lift the window drag region while a tab drag runs so the strip's
+            // blank space receives drop events.
+            activeTabDrag() ? '[-webkit-app-region:no-drag]' : null,
+            dropZone.isOver && 'bg-primary/10'
+          )}
           style={{ scrollbarWidth: 'none' }}
+          {...dropZone.dropProps}
         >
           {pins.map((pin) => {
             const meta = chipMeta(pin);
             return (
-              <SidebarChip
-                key={pin.id}
-                label={meta.label}
-                title={meta.title}
-                icon={meta.icon}
-                isActive={activePinId === pin.id}
-                closeLabel={t('common.close')}
-                onSelect={() => appState.sidePane.setActivePin(pin.id)}
-                onClose={() => closePin(pin)}
-              />
+              <ChipContextMenu key={pin.id} sections={pinSections(pin)}>
+                <SidebarChip
+                  label={meta.label}
+                  title={meta.title}
+                  icon={meta.icon}
+                  isActive={activePinId === pin.id}
+                  closeLabel={t('common.close')}
+                  onSelect={() => appState.sidePane.setActivePin(pin.id)}
+                  onClose={() => closePin(pin)}
+                  drag={tabDragSource(() => dragPayload(pin))}
+                  dropMarker="shell-pin"
+                />
+              </ChipContextMenu>
             );
           })}
         </div>

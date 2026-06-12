@@ -11,16 +11,22 @@ import {
   Minimize2,
   PanelBottom,
   PanelRight,
+  PanelRightOpen,
   Plus,
   RotateCcw,
   SlidersHorizontal,
   X,
 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { Activity, Fragment } from 'react';
+import { Activity } from 'react';
 import { useTranslation } from 'react-i18next';
-import { buildConversationSections, fileTarget } from '@renderer/app/app-tab-context-menu';
+import {
+  buildConversationSections,
+  fileTarget,
+  moveTopTabToSidebar,
+} from '@renderer/app/app-tab-context-menu';
 import { openTaskTopTab } from '@renderer/app/open-task-target';
+import { activeTabDrag, tabDragSource, tabDropIndex, useTabDropZone } from '@renderer/app/tab-drag';
 import { BrowserPane } from '@renderer/features/tasks/browser/browser-pane';
 import type { ResolvedTab } from '@renderer/features/tasks/tabs/tab-manager-store';
 import {
@@ -29,18 +35,17 @@ import {
   openTaskTabInWindow,
 } from '@renderer/features/tasks/tabs/tab-meta';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
+import { ChipContextMenu } from '@renderer/lib/components/chip-context-menu';
 import { FilePathMenuItems } from '@renderer/lib/components/file-path-actions';
 import { SidebarChip } from '@renderer/lib/components/sidebar-chip';
+import { appState } from '@renderer/lib/stores/app-state';
 import { Checkbox } from '@renderer/lib/ui/checkbox';
 import {
-  ContextMenu,
-  ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-  ContextMenuTrigger,
 } from '@renderer/lib/ui/context-menu';
 import {
   DropdownMenu,
@@ -170,6 +175,17 @@ export const TaskSidebar = observer(function TaskSidebar() {
     }
     placement.push(
       <ContextMenuItem
+        key="global-pin"
+        className="whitespace-nowrap"
+        onClick={() => {
+          tabManager.moveTabToShellPin(tab.tabId);
+          appState.sidePane.pinTask(projectId, taskId, tab.tabId);
+        }}
+      >
+        <PanelRightOpen className="size-4" />
+        {t('appTabs.openInGlobalSidePane')}
+      </ContextMenuItem>,
+      <ContextMenuItem
         key="window"
         className="whitespace-nowrap"
         onClick={() => {
@@ -222,6 +238,43 @@ export const TaskSidebar = observer(function TaskSidebar() {
     return [placement];
   };
 
+  // The strip accepts this task's entities (from the top strip, the shell
+  // pane, or itself for reorder) and its own feature cards for reorder.
+  const dropZone = useTabDropZone({
+    canDrop: (payload) =>
+      payload.kind === 'sidebar-group' ||
+      (payload.kind === 'task-entity' &&
+        payload.projectId === projectId &&
+        payload.taskId === taskId),
+    onDrop: (payload, event) => {
+      if (payload.kind === 'sidebar-group') {
+        taskSidebarPreferenceStore.reorderSidebarGroup(
+          payload.group,
+          tabDropIndex(event, 'sidebar-group')
+        );
+        return;
+      }
+      if (payload.kind !== 'task-entity') return;
+      const index = tabDropIndex(event, 'sidebar-pin');
+      if (payload.from === 'taskSidebar' && payload.tabId) {
+        tabManager.reorderSidebarTab(payload.tabId, index);
+        return;
+      }
+      if (payload.from === 'shellPane' && payload.tabId) {
+        tabManager.moveShellPinBack(payload.tabId);
+        tabManager.moveTabToSidebar(payload.tabId);
+        tabManager.reorderSidebarTab(payload.tabId, index);
+        if (payload.pinId) appState.sidePane.unpin(payload.pinId);
+        return;
+      }
+      if (payload.from === 'strip' && payload.appTab) {
+        void moveTopTabToSidebar(payload.appTab, provisioned, payload.target).then((tabId) => {
+          if (tabId) tabManager.reorderSidebarTab(tabId, index);
+        });
+      }
+    },
+  });
+
   return (
     <Activity mode={isSidebarCollapsed ? 'hidden' : 'visible'}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
@@ -230,8 +283,15 @@ export const TaskSidebar = observer(function TaskSidebar() {
             pinned out of the top-level strip. */}
         <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-background-secondary px-2 [-webkit-app-region:drag] dark:bg-background">
           <div
-            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            className={cn(
+              'flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-md',
+              // Lift the window drag region while a tab drag runs so the
+              // strip's blank space receives drop events.
+              activeTabDrag() ? '[-webkit-app-region:no-drag]' : null,
+              dropZone.isOver && 'bg-primary/10'
+            )}
             style={{ scrollbarWidth: 'none' }}
+            {...dropZone.dropProps}
           >
             {openSidebarGroups.map((group) => (
               <ChipContextMenu
@@ -271,6 +331,8 @@ export const TaskSidebar = observer(function TaskSidebar() {
                   closeLabel={t('tasks.sidePane.removeCard')}
                   onSelect={() => selectGroup(group)}
                   onClose={() => closeGroup(group)}
+                  drag={tabDragSource(() => ({ kind: 'sidebar-group', group }))}
+                  dropMarker="sidebar-group"
                 />
               </ChipContextMenu>
             ))}
@@ -290,6 +352,15 @@ export const TaskSidebar = observer(function TaskSidebar() {
                     )}
                     onSelect={() => tabManager.setActiveSidebarTab(tab.tabId)}
                     onClose={() => closePinned(tab)}
+                    drag={tabDragSource(() => ({
+                      kind: 'task-entity',
+                      from: 'taskSidebar',
+                      projectId,
+                      taskId,
+                      tabId: tab.tabId,
+                      target: buildTaskWindowTarget(projectId, taskId, tab).tab,
+                    }))}
+                    dropMarker="sidebar-pin"
                   />
                 </ChipContextMenu>
               );
@@ -421,33 +492,6 @@ export const TaskSidebar = observer(function TaskSidebar() {
     </Activity>
   );
 });
-
-/** Right-click menu around a sidebar chip; sections render separated like AppTabContextMenu. */
-function ChipContextMenu({
-  sections,
-  children,
-}: {
-  sections: React.ReactNode[][];
-  children: React.ReactNode;
-}) {
-  const filtered = sections.filter((section) => section.length > 0);
-  if (filtered.length === 0) return <>{children}</>;
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
-        {filtered.map((section, index) => (
-          // Sections are stable per chip kind — index keys are fine here.
-          <Fragment key={index}>
-            {index > 0 ? <ContextMenuSeparator /> : null}
-            {section}
-          </Fragment>
-        ))}
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-}
 
 /**
  * Visibility + order manager for the Session panel units, hosted in the 会话
