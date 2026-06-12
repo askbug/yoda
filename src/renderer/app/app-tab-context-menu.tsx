@@ -495,42 +495,46 @@ function ConversationArchiveSubmenu({
  * Pins a top-level task tab into the task sidebar strip: ensures the internal
  * tab entry exists (replaying the target below the bridge), moves it into the
  * sidebar, then closes the top-level tab — the entity now lives in the
- * sidebar, not the strip.
+ * sidebar, not the strip. Returns the internal tab id (shared with the
+ * sidebar's drop zone, which positions the new chip afterwards).
  */
-async function moveTopTabToSidebar(
+export async function moveTopTabToSidebar(
   tab: AppTabEntry,
   provisioned: ProvisionedTask,
   target: TaskWindowTabTarget
-): Promise<void> {
+): Promise<string | undefined> {
   const tabManager = provisioned.taskView.tabManager;
   const internalId = await ensureInternalTab(provisioned, tabManager, target);
-  if (!internalId) return;
+  if (!internalId) return undefined;
 
   tabManager.moveTabToSidebar(internalId);
   // Pinning while the sidebar is hidden would silently swallow the tab.
   provisioned.taskView.setSidebarCollapsed(false);
   appState.appTabs.closeTab(tab.id);
+  return internalId;
 }
 
 /**
  * Pins a top-level task tab into the shell-level side pane: same move
  * semantics as the task-sidebar pin, but the entity lands in the cross-route
- * pane — it stays visible while the main area navigates anywhere.
+ * pane — it stays visible while the main area navigates anywhere. Returns the
+ * internal tab id (shared with the pane's drop zone).
  */
-async function moveTopTabToShellPane(
+export async function moveTopTabToShellPane(
   tab: AppTabEntry,
   provisioned: ProvisionedTask,
   projectId: string,
   taskId: string,
   target: TaskWindowTabTarget
-): Promise<void> {
+): Promise<string | undefined> {
   const tabManager = provisioned.taskView.tabManager;
   const internalId = await ensureInternalTab(provisioned, tabManager, target);
-  if (!internalId) return;
+  if (!internalId) return undefined;
 
   tabManager.moveTabToShellPin(internalId);
   appState.sidePane.pinTask(projectId, taskId, internalId);
   appState.appTabs.closeTab(tab.id);
+  return internalId;
 }
 
 /**

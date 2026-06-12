@@ -298,6 +298,24 @@ export class TaskSidebarPreferenceStore {
     this.persist();
   }
 
+  /**
+   * Reorder a feature card to a raw insertion index (computed before removal,
+   * as drop zones do).
+   */
+  reorderSidebarGroup(group: SidebarTabGroup, toIndex: number): void {
+    const from = this.openSidebarGroups.indexOf(group);
+    if (from === -1) return;
+    const insert = Math.max(
+      0,
+      Math.min(toIndex > from ? toIndex - 1 : toIndex, this.openSidebarGroups.length - 1)
+    );
+    if (insert === from) return;
+    const next = this.openSidebarGroups.filter((g) => g !== group);
+    next.splice(insert, 0, group);
+    this.openSidebarGroups = next;
+    this.persist();
+  }
+
   setSessionPanelOpenSectionIds(sectionIds: string[]): void {
     const next = normalizeOpenSectionIds(sectionIds);
     if (arraysEqual(this.sessionPanelOpenSectionIds, next)) return;

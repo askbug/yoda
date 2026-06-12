@@ -29,7 +29,14 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TaskWindowTabTarget } from '@shared/task-window';
 import { AppTabContextMenu } from '@renderer/app/app-tab-context-menu';
-import { closeTaskTopTab } from '@renderer/app/open-task-target';
+import { closeTaskTopTab, openTaskTopTab } from '@renderer/app/open-task-target';
+import {
+  activeTabDrag,
+  tabDragSource,
+  useTabDropZone,
+  type TabDragPayload,
+  type TabDragSourceProps,
+} from '@renderer/app/tab-drag';
 import type { ViewId } from '@renderer/app/view-registry';
 import {
   getProjectStore,
@@ -116,8 +123,35 @@ export const AppTabStrip = observer(function AppTabStrip() {
   const newSessionLabel = taskId ? t('tasks.tabs.newConversation') : t('sidebar.newTask');
   const newSessionDisabled = Boolean(taskId && !provisionedTask);
 
+  // Dropping a pinned entity (task sidebar / shell pane chip) on the strip
+  // moves it back here and activates it — the inverse of pinning it aside.
+  const dropZone = useTabDropZone({
+    canDrop: (payload) => payload.kind === 'task-entity' && payload.from !== 'strip',
+    onDrop: (payload) => {
+      if (payload.kind !== 'task-entity' || !payload.tabId) return;
+      const tabManager = asProvisioned(getTaskStore(payload.projectId, payload.taskId))?.taskView
+        .tabManager;
+      if (!tabManager) return;
+      if (payload.from === 'taskSidebar') tabManager.moveSidebarTabBack(payload.tabId);
+      if (payload.from === 'shellPane') {
+        tabManager.moveShellPinBack(payload.tabId);
+        if (payload.pinId) appState.sidePane.unpin(payload.pinId);
+      }
+      openTaskTopTab(payload.projectId, payload.taskId, payload.target, { activate: true });
+    },
+  });
+
   return (
-    <div className="flex items-center gap-1 overflow-x-auto">
+    <div
+      className={cn(
+        'flex items-center gap-1 overflow-x-auto rounded-md',
+        // Lift the window drag region while a tab drag runs so the strip's
+        // blank space receives drop events.
+        activeTabDrag() ? '[-webkit-app-region:no-drag]' : null,
+        dropZone.isOver && 'bg-primary/10'
+      )}
+      {...dropZone.dropProps}
+    >
       {visibleTabs.map((tab) => {
         const dismiss = describeDismiss(tab, t);
         return (
@@ -131,6 +165,7 @@ export const AppTabStrip = observer(function AppTabStrip() {
               closePending={dismiss.pending}
               onSelect={() => appState.appTabs.activateTab(tab.id)}
               onClose={dismiss.onDismiss}
+              drag={tabDragSource(() => stripDragPayload(tab))}
             />
           </AppTabContextMenu>
         );
@@ -150,6 +185,22 @@ export const AppTabStrip = observer(function AppTabStrip() {
     </div>
   );
 });
+
+/**
+ * Drag payload for a top-level tab: task entities move across areas; every
+ * other tab (views, project pages, the task overview index) copy-pins into
+ * the shell pane on drop.
+ */
+function stripDragPayload(tab: AppTabEntry): TabDragPayload {
+  if (tab.viewId === 'task') {
+    const { projectId, taskId } = tab.params as { projectId?: string; taskId?: string };
+    const target = (tab.params.tab as TaskWindowTabTarget | undefined) ?? { kind: 'overview' };
+    if (projectId && taskId && target.kind !== 'overview') {
+      return { kind: 'task-entity', from: 'strip', projectId, taskId, target, appTab: tab };
+    }
+  }
+  return { kind: 'view', from: 'strip', appTab: tab };
+}
 
 /**
  * Per-tab dismiss behavior for the × slot. Session tabs dismiss by archiving
@@ -201,6 +252,7 @@ const AppTab = observer(function AppTab({
   closePending = false,
   onSelect,
   onClose,
+  drag,
 }: {
   tab: AppTabEntry;
   isActive: boolean;
@@ -210,6 +262,7 @@ const AppTab = observer(function AppTab({
   closePending?: boolean;
   onSelect: () => void;
   onClose: () => void;
+  drag?: TabDragSourceProps;
 }) {
   const { t } = useTranslation();
   // Branch prefix is display noise on the index tab ("yoda / yoda/feat-x" →
@@ -223,6 +276,7 @@ const AppTab = observer(function AppTab({
       aria-selected={isActive}
       tabIndex={0}
       title={label}
+      {...drag}
       className={cn(
         'group flex h-7 max-w-44 min-w-0 cursor-default select-none items-center gap-1.5 rounded-md border border-transparent py-1 px-2 text-xs [-webkit-app-region:no-drag]',
         isActive

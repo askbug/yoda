@@ -263,6 +263,7 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
       setTabActiveIndex: action,
       moveTabToSidebar: action,
       moveSidebarTabBack: action,
+      reorderSidebarTab: action,
       moveTabToShellPin: action,
       moveShellPinBack: action,
       setActiveSidebarTab: action,
@@ -872,6 +873,22 @@ export class TabManagerStore implements Snapshottable<TabManagerSnapshot> {
     if (!this._unpinSidebarTab(tabId)) return;
     if (!this.entries.has(tabId)) return;
     addTabId(this, tabId);
+  }
+
+  /**
+   * Reorder a sidebar-pinned chip to a raw insertion index (computed before
+   * removal, as drop zones do).
+   */
+  reorderSidebarTab(tabId: string, toIndex: number): void {
+    const from = this.sidebarTabIds.indexOf(tabId);
+    if (from === -1) return;
+    const insert = Math.max(
+      0,
+      Math.min(toIndex > from ? toIndex - 1 : toIndex, this.sidebarTabIds.length - 1)
+    );
+    if (insert === from) return;
+    this.sidebarTabIds.splice(from, 1);
+    this.sidebarTabIds.splice(insert, 0, tabId);
   }
 
   /** Select a pinned tab in the sidebar strip; undefined yields to the builtin panels. */

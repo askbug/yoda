@@ -13,6 +13,8 @@ export function SidebarChip({
   closeLabel,
   onSelect,
   onClose,
+  drag,
+  dropMarker,
 }: {
   label: string;
   title?: string;
@@ -21,6 +23,10 @@ export function SidebarChip({
   closeLabel?: string;
   onSelect: () => void;
   onClose?: () => void;
+  /** Drag-source props (see app/tab-drag.ts) — chips stay presentation-only. */
+  drag?: Pick<React.HTMLAttributes<HTMLDivElement>, 'draggable' | 'onDragStart' | 'onDragEnd'>;
+  /** Marks the chip for drop-index math in its strip's drop zone. */
+  dropMarker?: string;
 }) {
   return (
     <div
@@ -28,6 +34,8 @@ export function SidebarChip({
       aria-selected={isActive}
       tabIndex={0}
       title={title ?? label}
+      data-tab-drop-marker={dropMarker}
+      {...drag}
       className={cn(
         'group flex h-7 max-w-44 shrink-0 cursor-default select-none items-center gap-1.5 rounded-md border border-transparent py-1 px-2 text-xs [-webkit-app-region:no-drag]',
         isActive

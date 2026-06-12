@@ -36,6 +36,7 @@ export class AppSidePaneStore implements Snapshottable<AppSidePaneSnapshot> {
       pinView: action,
       pinTask: action,
       unpin: action,
+      reorderPin: action,
       setActivePin: action,
       updatePinParams: action,
       restoreSnapshot: action,
@@ -96,6 +97,22 @@ export class AppSidePaneStore implements Snapshottable<AppSidePaneSnapshot> {
     if (this.activePinId === pinId) {
       this.activePinId = this.pins[idx]?.id ?? this.pins[idx - 1]?.id ?? null;
     }
+  }
+
+  /**
+   * Reorder a pin to a raw insertion index (computed before removal, as drop
+   * zones do).
+   */
+  reorderPin(pinId: string, toIndex: number): void {
+    const from = this.pins.findIndex((pin) => pin.id === pinId);
+    if (from === -1) return;
+    const insert = Math.max(
+      0,
+      Math.min(toIndex > from ? toIndex - 1 : toIndex, this.pins.length - 1)
+    );
+    if (insert === from) return;
+    const [pin] = this.pins.splice(from, 1);
+    this.pins.splice(insert, 0, pin);
   }
 
   setActivePin(pinId: string): void {
