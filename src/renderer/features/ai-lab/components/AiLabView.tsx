@@ -8,37 +8,51 @@ import { AI_LAB_APPS, type AiLabAppDefinition } from '../app-registry';
  * AI Lab — the in-app hub for vibe-coded mini-apps. The landing view is an
  * app-store-style launcher grid; clicking a tile opens that app full-page
  * with a back affordance. Apps register in `app-registry.tsx`.
+ *
+ * `embedded` drops the outer scroll shell + launcher header for hosting
+ * inside settings, which provides title/description and scrolling itself.
  */
-export const AiLabView: React.FC = () => {
+export const AiLabView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const [activeAppId, setActiveAppId] = useState<string | null>(null);
   const activeApp = AI_LAB_APPS.find((app) => app.id === activeAppId) ?? null;
+
+  const content = activeApp ? (
+    <AppHost app={activeApp} onBack={() => setActiveAppId(null)} />
+  ) : (
+    <Launcher onOpen={(app) => setActiveAppId(app.id)} showHeader={!embedded} />
+  );
+
+  if (embedded) {
+    return <div className="@container space-y-6">{content}</div>;
+  }
 
   return (
     <div className="@container flex h-full min-h-0 flex-col bg-background text-foreground">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-6 px-6 py-8">
-          {activeApp ? (
-            <AppHost app={activeApp} onBack={() => setActiveAppId(null)} />
-          ) : (
-            <Launcher onOpen={(app) => setActiveAppId(app.id)} />
-          )}
-        </div>
+        <div className="mx-auto w-full max-w-3xl space-y-6 px-6 py-8">{content}</div>
       </div>
     </div>
   );
 };
 
-const Launcher: React.FC<{ onOpen: (app: AiLabAppDefinition) => void }> = ({ onOpen }) => {
+const Launcher: React.FC<{ onOpen: (app: AiLabAppDefinition) => void; showHeader?: boolean }> = ({
+  onOpen,
+  showHeader = true,
+}) => {
   const { t } = useTranslation();
   return (
     <>
-      <header>
-        <div className="flex items-center gap-2">
-          <FlaskConical className="h-4 w-4 text-foreground-muted" />
-          <h1 className="text-sm font-semibold">{t('aiLab.title')}</h1>
-        </div>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('aiLab.subtitle')}</p>
-      </header>
+      {showHeader && (
+        <header>
+          <div className="flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-foreground-muted" />
+            <h1 className="text-sm font-semibold">{t('aiLab.title')}</h1>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            {t('aiLab.subtitle')}
+          </p>
+        </header>
+      )}
 
       <div className="grid grid-cols-1 gap-3 @md:grid-cols-2">
         {AI_LAB_APPS.map((app) => (
