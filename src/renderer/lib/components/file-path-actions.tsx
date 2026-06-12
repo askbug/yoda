@@ -14,6 +14,7 @@ import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { useOpenInApps } from '@renderer/lib/hooks/useOpenInApps';
 import { rpc } from '@renderer/lib/ipc';
+import { useIsPinHosted } from '@renderer/lib/layout/navigation-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 import {
   DropdownMenu,
@@ -240,27 +241,27 @@ export function FilePathActionsDropdown({
   );
 }
 
-/** In-app surface a global file can be placed in (used for the "current" marker). */
-export type GlobalFileSurface = 'main' | 'globalSidePane';
+type GlobalFileSurface = 'main' | 'globalSidePane';
 
 /**
  * Full menu for standalone files outside any project/task (agent-home files:
  * SKILL.md, user CLAUDE.md, …), via injected menu primitives so dropdowns,
  * submenus, and context menus share it. Groups: in-app placement (main area /
- * global side pane, the current surface marked), then the base path actions.
+ * global side pane, the menu's own surface marked as current), then the base
+ * path actions.
  */
 export function GlobalFileMenuItems({
   absolutePath,
-  currentSurface,
   components,
 }: {
   absolutePath: string;
-  /** Surface the menu is shown from; its placement item gets a "current" marker. */
-  currentSurface?: GlobalFileSurface;
   components: MenuPrimitives;
 }) {
   const { t } = useTranslation();
   const { Item, Separator } = components;
+  // Detected, not passed in: the same view (e.g. a skill detail) renders both
+  // in the routed main area and pinned into the shell side pane.
+  const currentSurface: GlobalFileSurface = useIsPinHosted() ? 'globalSidePane' : 'main';
   const placementLabel = (label: string, surface: GlobalFileSurface) =>
     currentSurface === surface ? t('fileActions.currentLabel', { label }) : label;
 
@@ -299,11 +300,9 @@ export function GlobalFileMenuItems({
  */
 export function GlobalFileActionsDropdown({
   absolutePath,
-  currentSurface,
   className,
 }: {
   absolutePath: string;
-  currentSurface?: GlobalFileSurface;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -329,7 +328,6 @@ export function GlobalFileActionsDropdown({
       <DropdownMenuContent align="end" className="w-52">
         <GlobalFileMenuItems
           absolutePath={absolutePath}
-          currentSurface={currentSurface}
           components={{ Item: DropdownMenuItem, Separator: DropdownMenuSeparator }}
         />
       </DropdownMenuContent>
