@@ -56,6 +56,17 @@ type DropZone = {
 
 const zones = new Set<DropZone>();
 
+// Dev-only introspection: the strips live in unrelated subtrees and module
+// duplication (HMR ?t= URLs) is invisible from outside — a window hook is the
+// only reliable way to inspect the live registry when debugging drags.
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>).__tabDragDebug = {
+    zones,
+    active: () => active,
+    pending: () => pending,
+  };
+}
+
 /** Movement (px) from mousedown before the gesture becomes a drag, not a click. */
 const DRAG_THRESHOLD_PX = 4;
 
