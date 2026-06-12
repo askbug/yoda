@@ -2,9 +2,8 @@ import { Loader2, Plus, RefreshCw, Search } from 'lucide-react';
 import React from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { CatalogSkill } from '@shared/skills/types';
-import { useParams } from '@renderer/lib/layout/navigation-provider';
+import { useOpenViewTab, useParams } from '@renderer/lib/layout/navigation-provider';
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
-import { appState } from '@renderer/lib/stores/app-state';
 import { Button } from '@renderer/lib/ui/button';
 import { Input } from '@renderer/lib/ui/input';
 import { cn } from '@renderer/utils/utils';
@@ -42,9 +41,11 @@ const SkillsView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
     []
   );
 
-  // Skill click opens (or focuses) the detail as a top-level app tab.
+  // Skill click opens (or focuses) the detail as a tab of the hosting surface:
+  // a side-pane pin when this view is pin-hosted, a top-level app tab otherwise.
+  const { openViewTab } = useOpenViewTab();
   const openDetail = (skill: CatalogSkill) => {
-    appState.appTabs.openTab('skill', { skillId: skill.id, displayName: skill.displayName });
+    openViewTab('skill', { skillId: skill.id, displayName: skill.displayName });
   };
 
   React.useEffect(() => {
