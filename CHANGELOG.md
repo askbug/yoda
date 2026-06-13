@@ -5,6 +5,25 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.10.4 — 2026-06-13
+
+### Added
+
+- Warp Preview detection plus a CLI PATH fallback scan for runtime discovery.
+- View menu gains a "Toggle Left Sidebar" checkbox.
+
+### Fixed
+
+- macOS: closing the last window now hides the app so reopening from the dock
+  doesn't replay the boot screen; clicking the dock reopens the main window.
+- Titlebar nav no longer occasionally disappears from `isLeftOpen` mirror-state
+  drift; collapsing the sidebar falls back to the default titlebar with nav
+  buttons intact.
+- Font picker: hover feedback restored (uses `background-1`), and the popover
+  widens to 260px so the placeholder isn't truncated.
+- Home: the inert "+" button is hidden when the app tab strip is hidden.
+- Boot screen: the bottom-right code block aligns with the left boot log.
+
 ## 0.10.3 — 2026-06-13
 
 ### Added
