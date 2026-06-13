@@ -3,7 +3,6 @@ import type { Issue } from '@shared/tasks';
 import {
   buildDraftCommentsContextAction,
   buildLinkedIssueContextAction,
-  buildReviewPromptContextAction,
   buildTaskContextActions,
 } from '@renderer/features/tasks/conversations/context-actions';
 
@@ -64,23 +63,6 @@ describe('buildLinkedIssueContextAction', () => {
   });
 });
 
-describe('buildReviewPromptContextAction', () => {
-  it('returns null for empty review prompt', () => {
-    expect(buildReviewPromptContextAction('   ')).toBeNull();
-  });
-
-  it('builds review prompt action', () => {
-    const action = buildReviewPromptContextAction('Review this worktree for issues.');
-    expect(action).not.toBeNull();
-    expect(action).toMatchObject({
-      id: 'review-prompt',
-      kind: 'review-prompt',
-      label: 'Review prompt',
-      text: 'Review this worktree for issues.',
-    });
-  });
-});
-
 describe('buildDraftCommentsContextAction', () => {
   it('returns null when there are no comments', () => {
     expect(
@@ -116,14 +98,13 @@ describe('buildDraftCommentsContextAction', () => {
 });
 
 describe('buildTaskContextActions', () => {
-  it('includes linked issue context, then draft comments, then review prompt', () => {
-    const actions = buildTaskContextActions(makeIssue(), 'Review this worktree for issues.', {
+  it('includes linked issue context, then draft comments', () => {
+    const actions = buildTaskContextActions(makeIssue(), {
       count: 1,
       formattedComments: '<user_comments>test</user_comments>',
     });
-    expect(actions).toHaveLength(3);
+    expect(actions).toHaveLength(2);
     expect(actions[0]?.id).toBe('linked-issue:github:EMD-123');
     expect(actions[1]?.id).toBe('draft-comments');
-    expect(actions[2]?.id).toBe('review-prompt');
   });
 });

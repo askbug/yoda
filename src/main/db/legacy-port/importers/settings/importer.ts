@@ -212,19 +212,6 @@ export async function portLegacySettings(
     }
   }
 
-  const review = isPlainObject(legacyRaw.review) ? legacyRaw.review : null;
-  if (review) {
-    const prompt = readTrimmedString(review.prompt);
-    if (prompt) {
-      try {
-        await updateScalarSetting(settingsStore, 'reviewPrompt', prompt);
-        summary.imported.push('reviewPrompt');
-      } catch {
-        summary.skipped.push('reviewPrompt:validation-failed');
-      }
-    }
-  }
-
   const interfaceSettings = isPlainObject(legacyRaw.interface) ? legacyRaw.interface : null;
   if (interfaceSettings) {
     const mappedTheme = mapLegacyTheme(interfaceSettings.theme);

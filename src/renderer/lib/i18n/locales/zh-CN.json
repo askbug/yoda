@@ -316,7 +316,6 @@
     },
     "agentsTab": {
       "description": "管理 CLI 运行环境（Runtime）与模型配置。",
-      "reviewPrompt": "审查 Prompt",
       "cliAgents": "Runtime",
       "runtimeDetail": "Runtime 详情",
       "agentInstalled": "Runtime 已安装",
@@ -327,6 +326,10 @@
       "executionSettingsAria": "{{name}} 执行设置",
       "executionSettings": "执行设置",
       "rescan": "重新探测"
+    },
+    "defaultRuntime": {
+      "title": "默认 Runtime",
+      "description": "新建会话时默认使用的 Runtime（CLI 运行环境）。"
     },
     "promptsTab": {
       "description": "原子化的运行原则。勾选的原则会在会话启动时追加到 Runtime 的 system prompt 之后。"

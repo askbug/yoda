@@ -130,7 +130,6 @@ describe('portLegacySettings', () => {
           soundFocusMode: 'unfocused',
         },
         defaultProvider: 'codex',
-        review: { prompt: '  Review this worktree carefully.  ' },
         interface: {
           autoRightSidebarBehavior: true,
           taskHoverAction: 'archive',
@@ -189,7 +188,6 @@ describe('portLegacySettings', () => {
       'notifications.osNotifications',
       'notifications.soundFocusMode',
       'defaultRuntime',
-      'reviewPrompt',
       'theme',
       'terminal.fontFamily',
     ]);
@@ -212,7 +210,6 @@ describe('portLegacySettings', () => {
       soundFocusMode: 'unfocused',
     });
     expect(readRawSetting(appSqlite, 'defaultRuntime')).toBe('codex');
-    expect(readRawSetting(appSqlite, 'reviewPrompt')).toBe('Review this worktree carefully.');
     expect(readRawSetting(appSqlite, 'theme')).toBe('ydark');
 
     const terminal = readRawSetting(appSqlite, 'terminal') as Record<string, unknown>;

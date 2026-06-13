@@ -22,7 +22,7 @@ import {
   MAX_TERMINAL_SCROLLBACK_LINES,
   MIN_TERMINAL_SCROLLBACK_LINES,
 } from '@shared/terminal-settings';
-import { DEFAULT_REVIEW_PROMPT, DEFAULT_RUNTIME_ID } from './settings-registry';
+import { DEFAULT_RUNTIME_ID } from './settings-registry';
 
 export const projectSettingsSchema = z.object({
   pushOnCreate: z.boolean(),
@@ -228,8 +228,6 @@ export const systemThemesSchema = z
   .default({ light: 'ylight', dark: 'ydark' });
 
 export const defaultRuntimeSchema = z.optional(z.enum(RUNTIME_IDS)).default(DEFAULT_RUNTIME_ID);
-
-export const reviewPromptSchema = z.string().default(DEFAULT_REVIEW_PROMPT);
 
 export const keyboardSettingsSchema = z
   .optional(
@@ -442,7 +440,6 @@ export const APP_SETTINGS_SCHEMA_MAP = {
   maas: maasSettingsSchema,
   runtimeModelCandidates: runtimeModelCandidatesSettingsSchema,
   defaultRuntime: defaultRuntimeSchema,
-  reviewPrompt: reviewPromptSchema,
   keyboard: keyboardSettingsSchema,
   notifications: notificationSettingsSchema,
   theme: themeSchema,
@@ -467,7 +464,6 @@ export const appSettingsSchema = z.object({
   maas: maasSettingsSchema,
   runtimeModelCandidates: runtimeModelCandidatesSettingsSchema,
   defaultRuntime: defaultRuntimeSchema,
-  reviewPrompt: reviewPromptSchema,
   keyboard: keyboardSettingsSchema,
   notifications: notificationSettingsSchema,
   theme: themeSchema,

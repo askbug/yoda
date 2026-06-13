@@ -3,7 +3,7 @@ import { ISSUE_PROVIDER_META } from '@renderer/features/integrations/issue-provi
 
 const MAX_LABEL_TITLE_LENGTH = 24;
 
-export type ContextActionKind = 'linked-issue' | 'draft-comments' | 'review-prompt';
+export type ContextActionKind = 'linked-issue' | 'draft-comments';
 
 export interface ContextAction {
   id: string;
@@ -65,17 +65,6 @@ export function buildLinkedIssueContextAction(issue?: Issue): ContextAction | nu
   };
 }
 
-export function buildReviewPromptContextAction(reviewPrompt?: string): ContextAction | null {
-  const text = (reviewPrompt ?? '').trim();
-  if (!text) return null;
-  return {
-    id: 'review-prompt',
-    kind: 'review-prompt',
-    label: 'Review prompt',
-    text,
-  };
-}
-
 export function buildDraftCommentsContextAction(args: {
   count: number;
   formattedComments?: string;
@@ -93,15 +82,12 @@ export function buildDraftCommentsContextAction(args: {
 
 export function buildTaskContextActions(
   linkedIssue?: Issue,
-  reviewPrompt?: string,
   draftComments?: { count: number; formattedComments?: string }
 ): ContextAction[] {
   const linkedIssueAction = buildLinkedIssueContextAction(linkedIssue);
   const draftCommentsAction = draftComments ? buildDraftCommentsContextAction(draftComments) : null;
-  const reviewPromptAction = buildReviewPromptContextAction(reviewPrompt);
   const actions: ContextAction[] = [];
   if (linkedIssueAction) actions.push(linkedIssueAction);
   if (draftCommentsAction) actions.push(draftCommentsAction);
-  if (reviewPromptAction) actions.push(reviewPromptAction);
   return actions;
 }

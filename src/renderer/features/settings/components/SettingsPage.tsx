@@ -38,7 +38,6 @@ import LanguageCard from './LanguageCard';
 import NotificationSettingsCard from './NotificationSettingsCard';
 import OpenInAppsSettingsCard from './OpenInAppsSettingsCard';
 import PromptsSettingsCard from './PromptsSettingsCard';
-import { ReviewPromptResetButton, ReviewPromptSettingsCard } from './ReviewPromptSettingsCard';
 import StatuslineSettingsCard from './StatuslineSettingsCard';
 import {
   AutoGenerateTaskNamesRow,
@@ -294,12 +293,6 @@ export function SettingsPage({
       sections: [
         { id: 'default-agent', component: <DefaultRuntimeSettingsCard /> },
         {
-          id: 'review-prompt',
-          title: t('settings.agentsTab.reviewPrompt'),
-          action: <ReviewPromptResetButton />,
-          component: <ReviewPromptSettingsCard />,
-        },
-        {
           id: 'statusline-templates',
           title: t('settings.statusline.title'),
           component: <StatuslineSettingsCard />,
@@ -455,11 +448,13 @@ export function SettingsPage({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1060px] flex-col gap-6 px-8 @max-md:px-4">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1060px] flex-col gap-6 px-8 @max-lg:px-6 @max-md:px-4">
         {/* Narrow containers (shell side pane, slim windows) hide the nav
-            column; tab switching moves into the content header's dropdown. */}
-        <div className="grid min-h-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden @max-md:grid-cols-1">
-          <div className="flex min-h-0 flex-col py-10 @max-md:hidden">
+            column; tab switching moves into the content header's dropdown.
+            The collapse happens at @max-lg so the two-column layout never
+            shows while too cramped to be usable. */}
+        <div className="grid min-h-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-6 overflow-hidden @max-lg:grid-cols-1 @max-lg:gap-4">
+          <div className="flex min-h-0 flex-col py-10 @max-lg:hidden">
             <nav className="flex min-h-0 w-max min-w-28 flex-col gap-0.5 overflow-y-auto pr-2 [scrollbar-gutter:stable]">
               {tabGroups.map((group, groupIndex) => (
                 <React.Fragment key={group[0]?.id ?? groupIndex}>
@@ -509,7 +504,7 @@ export function SettingsPage({
                       <SettingsTabsDropdown
                         tab={activeTab}
                         onTabChange={onTabChange}
-                        className="hidden @max-md:flex"
+                        className="hidden @max-lg:flex"
                       />
                     )}
                   </div>

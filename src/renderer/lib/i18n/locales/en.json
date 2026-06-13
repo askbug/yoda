@@ -316,7 +316,6 @@
     },
     "agentsTab": {
       "description": "Manage runtimes and model configurations.",
-      "reviewPrompt": "Review Prompt",
       "cliAgents": "Runtimes",
       "runtimeDetail": "Runtime details",
       "agentInstalled": "Runtime installed",
@@ -327,6 +326,10 @@
       "executionSettingsAria": "{{name}} execution settings",
       "executionSettings": "Execution settings",
       "rescan": "Rescan"
+    },
+    "defaultRuntime": {
+      "title": "Default runtime",
+      "description": "The runtime used by default when starting a new session."
     },
     "promptsTab": {
       "description": "Atomic operating principles. Enabled principles are appended after the runtime's system prompt when a session starts."

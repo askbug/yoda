@@ -17,8 +17,6 @@ import { DEFAULT_TERMINAL_SCROLLBACK_LINES } from '@shared/terminal-settings';
 import { getDefaultLocalWorktreeDirectory } from './worktree-defaults';
 
 export const DEFAULT_RUNTIME_ID = 'claude';
-export const DEFAULT_REVIEW_PROMPT =
-  'Review all changes in this worktree. Focus on correctness, regressions, edge cases, and missing tests. List concrete issues first, then note residual risks.';
 
 type SettingsDefaultsMap = {
   [K in AppSettingsKey]: AppSettings[K] | (() => AppSettings[K]);
@@ -87,7 +85,6 @@ export const SETTINGS_DEFAULTS = {
     items: [],
   },
   defaultRuntime: DEFAULT_RUNTIME_ID,
-  reviewPrompt: DEFAULT_REVIEW_PROMPT,
   keyboard: {},
   openIn: {
     default: 'terminal' as const,
