@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useState } from 'react';
 import { AppMenuEvents } from './app/app-menu-events';
 import { BootScreen } from './app/boot-screen';
+import { ReviewOrchestrationEvents } from './app/review-orchestration-events';
 import { WelcomeScreen } from './app/welcome';
 import { Workspace } from './app/workspace';
 import { IntegrationsProvider } from './features/integrations/integrations-provider';
@@ -90,6 +91,7 @@ const AppContent = observer(function AppContent() {
             <IntegrationsProvider>
               <WorkspaceViewProvider>
                 <AppMenuEvents onOpenSettings={handleOpenSettingsFromMenu} />
+                <ReviewOrchestrationEvents />
                 <RightSidebarProvider>
                   <ThemeProvider>
                     {renderContent()}
