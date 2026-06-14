@@ -5,6 +5,22 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.11.3 — 2026-06-15
+
+### Added
+
+- **Installed-plugin manager** alongside skills, with a prominent header tab
+  control switching between Skills and Plugins (styled as native app tab chips).
+- Project view defaults to overview-only tabs, with on-demand pages and a Docs
+  view.
+- Workspace footer badge counts review-needed tasks and swaps to a gear on
+  hover.
+
+### Changed
+
+- The archive command pre-fills the full skill instead of stitching it in the
+  background; the archive submenu is removed from the task menu.
+
 ## 0.11.2 — 2026-06-14
 
 ### Added
