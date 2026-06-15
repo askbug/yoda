@@ -13,7 +13,6 @@ import {
   TaskViewWrapper,
 } from '@renderer/features/tasks/task-view-context';
 import { useNavigate } from '@renderer/lib/layout/navigation-provider';
-import { appState } from '@renderer/lib/stores/app-state';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@renderer/lib/ui/resizable';
 import { cn } from '@renderer/utils/utils';
 import { splitViewStore } from './split-view-store';
@@ -106,12 +105,8 @@ const ExtraPaneHeader = observer(function ExtraPaneHeader({
  * strip; extras bring their own self-contained providers.
  */
 export const TiledTaskGrid = observer(function TiledTaskGrid({ primary }: { primary: ReactNode }) {
-  const params = appState.navigation.viewParamsStore.task as
-    | { projectId?: string; taskId?: string }
-    | undefined;
-  const primaryTaskId = params?.taskId;
-  // Never tile the routed task against itself.
-  const extras = splitViewStore.panes.filter((pane) => pane.taskId !== primaryTaskId);
+  // Already scoped to the current primary task and de-duped against it.
+  const extras = splitViewStore.panes;
 
   return (
     <ResizablePanelGroup
