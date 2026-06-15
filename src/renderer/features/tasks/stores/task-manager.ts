@@ -16,11 +16,10 @@ import {
   type Task,
   type TaskLifecycleStatus,
 } from '@shared/tasks';
-import type { TaskSidebarViewSnapshot, TaskViewSnapshot } from '@shared/view-state';
+import type { TaskViewSnapshot } from '@shared/view-state';
 import { getProjectManagerStore } from '@renderer/features/projects/stores/project-selectors';
 import type { ProjectSettingsStore } from '@renderer/features/projects/stores/project-settings-store';
 import type { RepositoryStore } from '@renderer/features/projects/stores/repository-store';
-import { TASK_SIDEBAR_VIEW_STATE_KEY } from '@renderer/features/tasks/stores/task-sidebar-preferences';
 import { toast } from '@renderer/lib/hooks/use-toast';
 import { events, rpc } from '@renderer/lib/ipc';
 import { appState } from '@renderer/lib/stores/app-state';
@@ -436,7 +435,6 @@ export class TaskManagerStore {
     const promise = Promise.all([
       rpc.tasks.provisionTask(taskId),
       viewStateCache.get(`task:${taskId}`),
-      viewStateCache.get(TASK_SIDEBAR_VIEW_STATE_KEY),
       rpc.conversations.getConversationsForTask(this.projectId, taskId).catch((err: unknown) => {
         log.warn('TaskManagerStore: failed to pre-load conversations during provision', {
           taskId,
@@ -446,7 +444,7 @@ export class TaskManagerStore {
         return [] as Conversation[];
       }),
     ])
-      .then(([result, savedSnapshot, sharedSidebarSnapshot, preloadedConversations]) => {
+      .then(([result, savedSnapshot, preloadedConversations]) => {
         runInAction(() => {
           const current = this.tasks.get(taskId);
           if (current && isUnprovisioned(current)) {
@@ -457,7 +455,6 @@ export class TaskManagerStore {
               this._settingsStore,
               this._baseRef,
               savedSnapshot as TaskViewSnapshot | undefined,
-              sharedSidebarSnapshot as TaskSidebarViewSnapshot | undefined,
               result.sshConnectionId ?? undefined,
               preloadedConversations
             );
