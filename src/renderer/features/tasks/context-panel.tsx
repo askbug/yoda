@@ -310,6 +310,7 @@ function CodexHarnessSection({
             developerMessages: data.developerMessages,
             sourcePath: data.rolloutPath,
           }}
+          showPromptPrinciples
         />
       );
     case 'memory':
