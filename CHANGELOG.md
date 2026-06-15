@@ -5,6 +5,19 @@ All notable changes to Yoda will be documented in this file.
 The public Yoda changelog starts at **0.1.0**. Earlier non-Yoda release history
 is preserved in git tags only.
 
+## 0.11.5 — 2026-06-15
+
+### Added
+
+- **Antigravity CLI** runtime provider.
+- A manual refresh button on the token usage card.
+
+### Fixed
+
+- Usage recovers for sessions whose worktree was pruned.
+- The token-usage refresh spinner holds for a perceptible minimum.
+- Split view scopes beside-panes to their primary task.
+
 ## 0.11.4 — 2026-06-15
 
 ### Added
