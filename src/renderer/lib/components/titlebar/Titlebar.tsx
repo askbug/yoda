@@ -12,6 +12,7 @@ export function Titlebar({
   leftSlot,
   rightSlot,
   hosted = false,
+  centerSlot,
 }: {
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
@@ -21,6 +22,11 @@ export function Titlebar({
    * keeps only its own task controls (rightSlot) and stays draggable.
    */
   hosted?: boolean;
+  /**
+   * Replaces the global AppTabStrip in the center region when `hosted` — a
+   * hosted pane supplies its own per-task tab strip here instead.
+   */
+  centerSlot?: ReactNode;
 }) {
   const { t } = useTranslation();
   const { setCollapsed, isLeftOpen } = useWorkspaceLayoutContext();
@@ -61,9 +67,9 @@ export function Titlebar({
             {leftSlot}
           </div>
           {/* App tabs share the titlebar row (browser model); blank space stays
-              draggable. Hosted panes drop the global strip — they switch tabs
-              via their own sidebar — keeping only a draggable spacer. */}
-          <div className="min-w-0 flex-1 px-2">{hosted ? null : <AppTabStrip />}</div>
+              draggable. Hosted panes drop the global strip (which always tracks
+              the routed task) and render their own per-task strip via centerSlot. */}
+          <div className="min-w-0 flex-1 px-2">{hosted ? centerSlot : <AppTabStrip />}</div>
           <div className="flex shrink-0 items-center justify-end [-webkit-app-region:no-drag]">
             {rightSlot}
           </div>

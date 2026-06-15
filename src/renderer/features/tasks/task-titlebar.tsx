@@ -4,11 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { TaskFinishControl } from '@renderer/features/tasks/finish-flow/finish-control';
 import { getTaskStore, taskViewKind } from '@renderer/features/tasks/stores/task-selectors';
+import { getTabMeta } from '@renderer/features/tasks/tabs/tab-meta';
 import {
   useIsHostedTaskView,
   useProvisionedTask,
   useTaskViewContext,
 } from '@renderer/features/tasks/task-view-context';
+import { SidebarChip } from '@renderer/lib/components/sidebar-chip';
 import { OpenInMenu } from '@renderer/lib/components/titlebar/open-in-menu';
 import { Titlebar } from '@renderer/lib/components/titlebar/Titlebar';
 import { ShortcutHint } from '@renderer/lib/ui/shortcut-hint';
@@ -52,6 +54,7 @@ export const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
   return (
     <Titlebar
       hosted={hosted}
+      centerSlot={hosted ? <HostedTaskTabStrip /> : undefined}
       rightSlot={
         <div className="flex items-center gap-2">
           <DevServerPills projectId={projectId} taskId={taskId} />
@@ -104,5 +107,41 @@ export const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
         </div>
       }
     />
+  );
+});
+
+/**
+ * Per-pane tab strip for a hosted (split-view extra) task. A hosted pane drops
+ * the top-level bridge, so its `tabManager` tabs never reach the global
+ * AppTabStrip — render them here, scoped to THIS pane's task, so the pane can
+ * switch between its own overview / conversations / files / diffs.
+ */
+const HostedTaskTabStrip = observer(function HostedTaskTabStrip() {
+  const { t } = useTranslation();
+  const { tabManager } = useProvisionedTask().taskView;
+  const activeId = tabManager.resolvedActiveTabId;
+
+  return (
+    <div
+      className="flex min-w-0 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]"
+      style={{ scrollbarWidth: 'none' }}
+    >
+      {tabManager.resolvedTabs.map((tab) => {
+        const meta = getTabMeta(tab);
+        const isOverview = tab.kind === 'overview';
+        return (
+          <SidebarChip
+            key={tab.tabId}
+            label={meta.label}
+            title={meta.title}
+            icon={meta.icon}
+            isActive={activeId === tab.tabId}
+            closeLabel={t('common.close')}
+            onSelect={() => tabManager.setActiveTab(tab.tabId)}
+            onClose={isOverview ? undefined : () => tabManager.closeTab(tab.tabId)}
+          />
+        );
+      })}
+    </div>
   );
 });
