@@ -160,7 +160,7 @@ const WorkspaceChoice = observer(function WorkspaceChoice({
   onSelect: () => void;
 }) {
   return (
-    <DropdownMenuRadioItem value={workspaceId} onClick={onSelect}>
+    <DropdownMenuRadioItem value={workspaceId} closeOnClick onClick={onSelect}>
       <span className="truncate">{label}</span>
       <WorkspaceCounts counts={workspaceTaskCounts(workspaceId)} className="ml-auto" />
     </DropdownMenuRadioItem>
