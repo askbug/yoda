@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { asMounted, getProjectStore } from '@renderer/features/projects/stores/project-selectors';
 import { AgentStatusIndicator } from '@renderer/features/tasks/components/agent-status-indicator';
 import { useIsActiveTask } from '@renderer/features/tasks/hooks/use-is-active-task';
+import { splitViewStore } from '@renderer/features/tasks/split-view/split-view-store';
 import { getTaskStore } from '@renderer/features/tasks/stores/task-selectors';
 import { useProvisionedTask, useTaskViewContext } from '@renderer/features/tasks/task-view-context';
 import { useWorkspaceWebLinks } from '@renderer/features/tasks/terminals/use-workspace-web-links';
@@ -63,6 +64,11 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
   const { tabManager: tm } = provisioned.taskView;
   const showNewConversationModal = useShowModal('newConversationModal');
   const isActive = useIsActiveTask(taskId);
+  // Split-view extra panes are visible but not the routed (active) task. They
+  // still need their PTY session resumed so input can be sent — gating resume on
+  // isActive alone leaves comparison panes dead (can't send). Focus, however,
+  // stays tied to isActive so extra panes don't steal the keyboard.
+  const isVisible = isActive || splitViewStore.has(taskId);
   const mountedProject = asMounted(getProjectStore(projectId));
   const remoteConnectionId =
     mountedProject?.data.type === 'ssh' ? mountedProject.data.connectionId : undefined;
@@ -132,7 +138,7 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
 
   const sessionStatus = activeSession?.status;
   useEffect(() => {
-    if (!isActive) {
+    if (!isVisible) {
       lastAutoResumeSessionRef.current = null;
       return;
     }
@@ -148,7 +154,7 @@ export const ConversationsPanel = observer(function ConversationsPanel() {
     lastAutoResumeSessionRef.current = activeSessionId;
     const initialSize = getResumeInitialSize(activeSession.pty, terminalContainerRef.current);
     void conversations.resumeConversation(activeConversation.data.id, initialSize);
-  }, [activeConversation, activeSession, activeSessionId, conversations, isActive, sessionStatus]);
+  }, [activeConversation, activeSession, activeSessionId, conversations, isVisible, sessionStatus]);
 
   useEffect(() => {
     if (sessionStatus === 'ready' && focusPendingRef.current) {
