@@ -134,6 +134,11 @@ class RoomConductor {
   }
 
   private async onMessage(roomId: string, message: RoomMessage): Promise<void> {
+    // System lines are display-only narration (referee transitions, standups,
+    // notices). They have no author, so they must NEVER re-enter routing —
+    // otherwise each one would re-trigger the referee and loop infinitely.
+    if (message.kind === 'system') return;
+
     const snapshot = await getRoom(roomId);
     if (!snapshot || snapshot.room.status !== 'active') return;
     const { room, members } = snapshot;
@@ -141,7 +146,10 @@ class RoomConductor {
     const author = message.authorMemberId
       ? members.find((m) => m.id === message.authorMemberId)
       : undefined;
-    const fromHuman = !author || !author.runtime;
+    // Only the human lead (a member with no runtime) starts/refills the loop. An
+    // authorless non-system message (shouldn't happen) is NOT treated as human,
+    // so it can't spuriously kick the referee.
+    const fromHuman = !!author && !author.runtime;
     // A fresh human prompt refills the cascade budget and resets the review
     // round counter; agent-authored messages spend the budget so a back-and-forth
     // can't run away.
