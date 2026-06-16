@@ -419,7 +419,7 @@
       "keyboardShortcuts": "键盘快捷键"
     },
     "terminalTab": {
-      "description": "配置终端字体、历史行数与剪贴板行为。"
+      "description": "配置终端字体、历史行数、剪贴板行为与 tmux 会话复用。"
     },
     "keyboardShortcutsTab": {
       "description": "自定义应用操作的键盘快捷键。"

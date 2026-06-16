@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@renderer/lib/ui/select';
+import { Separator } from '@renderer/lib/ui/separator';
 import { Switch } from '@renderer/lib/ui/switch';
 import { isImeComposing } from '@renderer/utils/ime';
 import { cn } from '@renderer/utils/utils';
@@ -237,11 +238,14 @@ export const EnableTmuxRow: React.FC = observer(() => {
 });
 
 /**
- * Terminal tab: tmux detection (status / version / path / error), install when
- * missing, and on-demand re-check. The enable toggle lives in
+ * Terminal tab: tmux as its own delimited sub-section — a divider + heading with
+ * inline detection status (dot + version), a description and resolved path, and
+ * install / re-check actions aligned to the heading. Deliberately NOT a
+ * {@link SettingRow}: that mold is for single toggles, and forcing this richer
+ * block into it read as an orphaned 4th row. The enable toggle lives in
  * {@link EnableTmuxRow} under the Sessions tab.
  */
-export const TmuxStatusRow: React.FC = observer(() => {
+export const TmuxSettingsSection: React.FC = observer(() => {
   const { t } = useTranslation();
   const installTmux = useInstallTmux();
 
@@ -261,8 +265,8 @@ export const TmuxStatusRow: React.FC = observer(() => {
     void appState.dependencies.probeAll().finally(() => setRechecking(false));
   }, []);
 
-  // Mirror the dependency-status language used by RuntimeAccordion: a calm
-  // status dot + muted tabular label, not multi-colored prose lines.
+  // Calm dependency-status language (matches RuntimeAccordion): a status dot +
+  // muted tabular label, never multi-colored prose.
   const statusLabel = tmuxAvailable
     ? tmuxState?.version
       ? `v${tmuxState.version}`
@@ -272,54 +276,43 @@ export const TmuxStatusRow: React.FC = observer(() => {
       : t('settings.agentsTab.notDetected');
 
   return (
-    <SettingRow
-      title={
-        <span className="flex items-center gap-2">
-          {t('settings.terminal.tmux')}
-          <span
-            className={cn(
-              'h-1.5 w-1.5 shrink-0 rounded-full',
-              tmuxAvailable
-                ? 'bg-emerald-500'
-                : tmuxErrored
-                  ? 'bg-amber-500'
-                  : 'bg-muted-foreground/40'
-            )}
-            aria-hidden="true"
-          />
-          <span className="text-xs font-normal tabular-nums text-foreground-passive">
-            {statusLabel}
-          </span>
-        </span>
-      }
-      description={
-        <span className="flex flex-col gap-0.5">
-          <span>{t('settings.tasks.enableTmuxDescription')}</span>
+    <div className="flex flex-col gap-3">
+      <Separator />
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-normal text-foreground">{t('settings.terminal.tmux')}</h3>
+            <span
+              className={cn(
+                'h-1.5 w-1.5 shrink-0 rounded-full',
+                tmuxAvailable
+                  ? 'bg-emerald-500'
+                  : tmuxErrored
+                    ? 'bg-amber-500'
+                    : 'bg-muted-foreground/40'
+              )}
+              aria-hidden="true"
+            />
+            <span className="text-xs tabular-nums text-foreground-passive">{statusLabel}</span>
+          </div>
+          <p className="text-xs text-foreground-passive">
+            {t('settings.tasks.enableTmuxDescription')}
+          </p>
           {tmuxAvailable && tmuxState?.path && (
-            <span className="truncate font-mono text-foreground-passive" title={tmuxState.path}>
+            <p
+              className="truncate font-mono text-xs text-foreground-passive"
+              title={tmuxState.path}
+            >
               {tmuxState.path}
-            </span>
+            </p>
           )}
           {tmuxErrored && tmuxState?.error && (
-            <span className="text-destructive">
+            <p className="text-xs text-destructive">
               {t('settings.tasks.tmuxError', { error: tmuxState.error })}
-            </span>
+            </p>
           )}
-        </span>
-      }
-      control={
-        <>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1.5"
-            disabled={rechecking}
-            onClick={handleRecheck}
-          >
-            <RefreshCw className={cn('h-3.5 w-3.5', rechecking && 'animate-spin')} />
-            {rechecking ? t('settings.tasks.recheckingTmux') : t('settings.tasks.recheckTmux')}
-          </Button>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
           {tmuxMissing && (
             <Button
               type="button"
@@ -334,8 +327,19 @@ export const TmuxStatusRow: React.FC = observer(() => {
                 : t('settings.tasks.installTmux')}
             </Button>
           )}
-        </>
-      }
-    />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            disabled={rechecking}
+            onClick={handleRecheck}
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', rechecking && 'animate-spin')} />
+            {rechecking ? t('settings.tasks.recheckingTmux') : t('settings.tasks.recheckTmux')}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 });

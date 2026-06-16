@@ -46,7 +46,7 @@ import {
   EnableTmuxRow,
   InitTaskNameFromSessionRow,
   PreArchiveCommandRow,
-  TmuxStatusRow,
+  TmuxSettingsSection,
 } from './TaskSettingsRows';
 import TelemetryCard from './TelemetryCard';
 import TerminalSettingsCard from './TerminalSettingsCard';
@@ -395,7 +395,7 @@ export function SettingsPage({
       description: t('settings.terminalTab.description'),
       sections: [
         { id: 'terminal', component: <TerminalSettingsCard /> },
-        { id: 'tmux', component: <TmuxStatusRow /> },
+        { id: 'tmux', component: <TmuxSettingsSection /> },
       ],
     },
     'keyboard-shortcuts': {
