@@ -418,7 +418,7 @@
       "keyboardShortcuts": "Keyboard shortcuts"
     },
     "terminalTab": {
-      "description": "Configure terminal font, history, and clipboard behavior."
+      "description": "Configure terminal font, history, clipboard behavior, and tmux session reuse."
     },
     "keyboardShortcutsTab": {
       "description": "Customize keyboard shortcuts for app actions."
