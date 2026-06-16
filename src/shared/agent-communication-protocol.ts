@@ -12,12 +12,18 @@
  * Review is just one typical mode — this protocol is the substrate they share.
  */
 
-/** Path (relative to the worktree) of the bundled team-at script. */
-export const TEAM_AT_SCRIPT = '.yoda/team-at';
-/** Path (relative to the worktree) of the bundled team-status (progress broadcast) script. */
-export const TEAM_STATUS_SCRIPT = '.yoda/team-status';
-/** Path (relative to the worktree) of the bundled team-verdict (structured PASS/FAIL) script. */
-export const TEAM_VERDICT_SCRIPT = '.yoda/team-verdict';
+/**
+ * Placeholder for a member's per-conversation scripts directory. The conductor
+ * substitutes it with the real `.yoda/<conversationId>` path when it assembles
+ * the member's prompt (the directory isn't known until the session is created).
+ */
+export const TEAM_SCRIPT_DIR_TOKEN = '__YODA_SCRIPTS_DIR__';
+/** Prompt-facing path of the team-at script (resolved per member via the token). */
+export const TEAM_AT_SCRIPT = `${TEAM_SCRIPT_DIR_TOKEN}/team-at`;
+/** Prompt-facing path of the team-status (progress broadcast) script. */
+export const TEAM_STATUS_SCRIPT = `${TEAM_SCRIPT_DIR_TOKEN}/team-status`;
+/** Prompt-facing path of the team-verdict (structured PASS/FAIL) script. */
+export const TEAM_VERDICT_SCRIPT = `${TEAM_SCRIPT_DIR_TOKEN}/team-verdict`;
 
 export interface RosterEntry {
   handle: string;

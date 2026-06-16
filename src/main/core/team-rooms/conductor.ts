@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import {
   buildMemberTurnPrompt,
   buildTeammateSystemPrompt,
+  TEAM_SCRIPT_DIR_TOKEN,
+  TEAM_VERDICT_SCRIPT,
   type RosterEntry,
 } from '@shared/agent-communication-protocol';
 import type { AgentSessionRuntimeStatus } from '@shared/events/agentEvents';
@@ -24,7 +26,7 @@ import {
   setMemberConversation,
   setMemberStatus,
 } from './store';
-import { installTeamAtScript } from './team-at-script';
+import { installTeamScripts } from './team-at-script';
 import { teamRoomEvents } from './team-room-events';
 
 const STATUS_POLL_MS = 1_500;
@@ -50,8 +52,8 @@ const ALL_HANDLE = 'all';
  */
 const REVIEW_REQUEST =
   'The implementer just finished a round. Review the current worktree against the original requirement (do NOT modify files). ' +
-  'When done, record your verdict by running: `.yoda/team-verdict pass "<why it meets the requirement>"` ' +
-  'or `.yoda/team-verdict fail "<the concrete fixes the implementer should make>"`.';
+  `When done, record your verdict by running: \`${TEAM_VERDICT_SCRIPT} pass "<why it meets the requirement>"\` ` +
+  `or \`${TEAM_VERDICT_SCRIPT} fail "<the concrete fixes the implementer should make>"\`.`;
 
 /**
  * How many FAIL rounds the review loop runs before escalating to the human,
@@ -236,25 +238,27 @@ class RoomConductor {
       body: incoming.body.replace(/^(?:\s*@[a-z0-9][a-z0-9_-]*)+[ \t]*/i, '').trimStart(),
     });
 
-    let conversationId = member.conversationId;
-    const existingSessionId = conversationId
-      ? makePtySessionId(projectId, taskId, conversationId)
+    const existingSessionId = member.conversationId
+      ? makePtySessionId(projectId, taskId, member.conversationId)
       : null;
     const alive =
       existingSessionId !== null && ptySessionRegistry.get(existingSessionId) !== undefined;
     // Baseline the reviewer's marker count BEFORE this round so a stale verdict
     // left in its reused PTY buffer isn't mistaken for a fresh one.
     const baselineMarkers =
-      incoming.reviewLoop && existingSessionId
+      alive && incoming.reviewLoop && existingSessionId
         ? parseReviewResult(ptySessionRegistry.snapshot(existingSessionId)).markerCount
         : 0;
+    // Final conversation id: reuse the live one, else a fresh session.
+    const conversationId = alive && member.conversationId ? member.conversationId : randomUUID();
 
     try {
-      // Make sure the team-at script is present in the worktree before the
-      // agent could try to run it.
-      await installTeamAtScript(projectId, taskId);
+      // Install this member's own team-* scripts (ptyId baked in) and resolve the
+      // per-member scripts dir its prompt should reference.
+      const scriptsDir = await installTeamScripts(projectId, taskId, conversationId, runtime);
+      const subst = (s: string) => s.split(TEAM_SCRIPT_DIR_TOKEN).join(scriptsDir);
+      const turnPromptFinal = subst(turnPrompt);
       if (!alive) {
-        conversationId = randomUUID();
         const teammatePrompt = buildTeammateSystemPrompt({
           displayName: member.displayName,
           handle: member.handle,
@@ -271,16 +275,16 @@ class RoomConductor {
           runtime,
           title: member.displayName,
           autoApprove: member.autoApprove,
-          initialPrompt: `${systemPrompt}\n\n${turnPrompt}`,
+          initialPrompt: subst(`${systemPrompt}\n\n${turnPrompt}`),
         });
         await setMemberConversation(member.id, conversationId);
         events.emit(teamRoomUpdatedChannel, { roomId }, roomId);
-      } else if (conversationId && existingSessionId) {
+      } else if (existingSessionId) {
         const ok = await injectPrompt(
           existingSessionId,
           { projectId, taskId, conversationId },
           runtime,
-          turnPrompt
+          turnPromptFinal
         );
         if (!ok) {
           await setMemberStatus(roomId, member.id, 'idle', conversationId);
@@ -295,17 +299,12 @@ class RoomConductor {
       const review: ReviewWatch | undefined = incoming.reviewLoop
         ? {
             role: member.role === 'leader' ? 'leader' : 'worker',
-            sessionId: makePtySessionId(projectId, taskId, conversationId!),
+            sessionId: makePtySessionId(projectId, taskId, conversationId),
             baselineMarkers,
             onFinish: (verdict) => void this.advanceReviewLoop(roomId, member, verdict),
           }
         : undefined;
-      this.watchStatus(
-        roomId,
-        member.id,
-        { projectId, taskId, conversationId: conversationId! },
-        review
-      );
+      this.watchStatus(roomId, member.id, { projectId, taskId, conversationId }, review);
       this.ensureStandup(roomId);
     } catch (error) {
       await setMemberStatus(roomId, member.id, 'error', member.conversationId).catch(() => {});
