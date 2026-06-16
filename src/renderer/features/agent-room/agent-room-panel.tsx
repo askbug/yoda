@@ -480,21 +480,26 @@ function MessageRow({
   );
 }
 
-/** Render @handles as colored pills; preserve the rest as text. */
+/** Render @handles as colored pills; an agent pill opens that agent's detail. */
 function renderBody(body: string, byHandle: Map<string, RoomMember>) {
   const parts = body.split(/(@[a-z0-9_-]+)/gi);
   return parts.map((part, i) => {
     if (part.startsWith('@')) {
       const member = byHandle.get(part.slice(1).toLowerCase());
       if (member) {
-        return (
-          <span
+        const cls = cn('rounded px-1 py-px text-[13px] font-medium', ACCENT_MENTION[member.accent]);
+        // Real agents open their detail pane; the human lead (@you) is a plain pill.
+        return member.runtime ? (
+          <button
             key={i}
-            className={cn(
-              'rounded px-1 py-px text-[13px] font-medium',
-              ACCENT_MENTION[member.accent]
-            )}
+            type="button"
+            onClick={() => agentRoomStore.setInspectedMember(member.id)}
+            className={cn(cls, 'hover:underline')}
           >
+            @{member.displayName}
+          </button>
+        ) : (
+          <span key={i} className={cls}>
             @{member.displayName}
           </span>
         );
