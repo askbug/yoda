@@ -492,10 +492,9 @@ class RoomConductor {
     if (finished.id === leader.id) {
       if (!this.spend(roomId)) return this.pauseRouting(roomId);
       const round = (this.reviewRounds.get(roomId) ?? 0) + 1;
-      await this.transition(
-        roomId,
-        `@${leader.handle} finished — @${reviewer.handle} is reviewing (round ${round}).`
-      );
+      // One line per status change.
+      await this.transition(roomId, `@${leader.handle} finished.`);
+      await this.transition(roomId, `@${reviewer.handle} is reviewing (round ${round}).`);
       await this.deliverTo(room.projectId, room.taskId, roomId, reviewer, roster, {
         fromName: leader.displayName,
         body: REVIEW_REQUEST,
@@ -507,7 +506,8 @@ class RoomConductor {
     if (finished.id === reviewer.id) {
       if (verdict?.passed) {
         this.reviewRounds.delete(roomId);
-        await this.transition(roomId, `@${reviewer.handle} approved — task complete.`);
+        await this.transition(roomId, `@${reviewer.handle} approved.`);
+        await this.transition(roomId, `Task complete.`);
         return;
       }
       // FAIL — count the round and stop ping-ponging once it clearly won't converge.
@@ -520,7 +520,7 @@ class RoomConductor {
       if (!this.spend(roomId)) return this.pauseRouting(roomId);
       await this.transition(
         roomId,
-        `Changes requested — @${leader.handle} is addressing the review.`
+        `@${leader.handle} is addressing the review (round ${rounds}).`
       );
       const fixes =
         verdict?.feedback?.trim() || 'Re-check the implementation against the requirement.';
