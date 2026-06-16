@@ -358,6 +358,7 @@
       "textPlaceholder": "追加到 system prompt 之后的原则内容",
       "toggle": "启用原则",
       "remove": "移除原则",
+      "reorder": "拖动排序",
       "empty": "暂无原则。"
     },
     "statusline": {
@@ -419,7 +420,7 @@
       "keyboardShortcuts": "键盘快捷键"
     },
     "terminalTab": {
-      "description": "配置终端字体、历史行数与剪贴板行为。"
+      "description": "配置终端字体、历史行数、剪贴板行为与 tmux 会话复用。"
     },
     "keyboardShortcutsTab": {
       "description": "自定义应用操作的键盘快捷键。"
@@ -566,7 +567,6 @@
       "autoTrustWorktreesInfoLabel": "关于自动信任 worktree 的更多信息",
       "enableTmux": "启用 tmux",
       "enableTmuxDescription": "在 tmux session 中运行代理与终端，使它们在重启 Yoda 后仍可继续连接。",
-      "tmuxMissing": "尚未安装 tmux。在安装前，会话会先直接运行。",
       "tmuxUnavailableTitle": "尚未安装 tmux",
       "tmuxUnavailableDescription": "这次会话会先直接运行。安装 tmux 后，agent 会话可在重启 Yoda 后继续连接。",
       "tmuxUnavailableRemoteDescription": "这次远程会话会先直接运行。请在远程主机安装 tmux，使 agent 会话可在重启 Yoda 后继续连接。",
@@ -577,10 +577,8 @@
       "tmuxNotDetectedAfterInstall": "安装后仍未检测到 tmux。",
       "tmuxNoInstallCommand": "当前系统没有可用的自动 tmux 安装命令。",
       "tmuxInstallFailed": "安装 tmux 失败",
-      "tmuxAvailable": "tmux 可用。",
-      "tmuxAvailableWithVersion": "tmux {{version}} 可用。",
-      "tmuxPathLabel": "路径：{{path}}",
       "tmuxError": "tmux 检测失败：{{error}}",
+      "tmuxStatusError": "检测失败",
       "recheckTmux": "重新检测",
       "recheckingTmux": "检测中…",
       "preArchiveCommand": "归档前调用 skill",
@@ -588,6 +586,7 @@
       "preArchiveCommandPlaceholder": "例如 lovstudio-git-commit-with-context"
     },
     "terminal": {
+      "tmux": "tmux",
       "font": "终端字体",
       "fontDescription": "选择终端使用的字体。",
       "searchFontPlaceholder": "搜索或输入自定义字体",

@@ -358,6 +358,7 @@
       "textPlaceholder": "Principle text appended after the system prompt",
       "toggle": "Enable principle",
       "remove": "Remove principle",
+      "reorder": "Drag to reorder",
       "empty": "No principles yet."
     },
     "statusline": {
@@ -419,7 +420,7 @@
       "keyboardShortcuts": "Keyboard shortcuts"
     },
     "terminalTab": {
-      "description": "Configure terminal font, history, and clipboard behavior."
+      "description": "Configure terminal font, history, clipboard behavior, and tmux session reuse."
     },
     "keyboardShortcutsTab": {
       "description": "Customize keyboard shortcuts for app actions."
@@ -566,7 +567,6 @@
       "autoTrustWorktreesInfoLabel": "More info about auto-trust worktrees",
       "enableTmux": "Enable tmux",
       "enableTmuxDescription": "Run agent sessions and terminals in tmux sessions so they survive Yoda restarts.",
-      "tmuxMissing": "tmux is not installed. Sessions will run directly until tmux is available.",
       "tmuxUnavailableTitle": "tmux is not installed",
       "tmuxUnavailableDescription": "This session will run directly for now. Install tmux to keep agent sessions alive across Yoda restarts.",
       "tmuxUnavailableRemoteDescription": "This remote session will run directly for now. Install tmux on the remote host to keep agent sessions alive across Yoda restarts.",
@@ -577,10 +577,8 @@
       "tmuxNotDetectedAfterInstall": "tmux was not detected after installation.",
       "tmuxNoInstallCommand": "No automatic tmux install command is available for this system.",
       "tmuxInstallFailed": "Failed to install tmux",
-      "tmuxAvailable": "tmux is available.",
-      "tmuxAvailableWithVersion": "tmux {{version}} is available.",
-      "tmuxPathLabel": "Path: {{path}}",
       "tmuxError": "tmux check failed: {{error}}",
+      "tmuxStatusError": "Check failed",
       "recheckTmux": "Re-check",
       "recheckingTmux": "Checking…",
       "preArchiveCommand": "Pre-archive skill",
@@ -588,6 +586,7 @@
       "preArchiveCommandPlaceholder": "e.g. lovstudio-git-commit-with-context"
     },
     "terminal": {
+      "tmux": "tmux",
       "font": "Terminal font",
       "fontDescription": "Choose the font family for the terminal.",
       "searchFontPlaceholder": "Search or type custom font",
