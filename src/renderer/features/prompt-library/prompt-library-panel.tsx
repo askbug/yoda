@@ -1,4 +1,4 @@
-import { Copy, Loader2, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { ChevronRight, Copy, Loader2, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Prompt, PromptCreateInput } from '@shared/prompt-library';
@@ -41,6 +41,7 @@ export function PromptLibraryPanel({ embedded = false }: { embedded?: boolean })
   const deletePrompt = useDeletePrompt();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PromptDraft>(EMPTY_DRAFT);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   const items = useMemo(() => data ?? [], [data]);
   const editorOpen = editingId !== null;
@@ -88,6 +89,15 @@ export function PromptLibraryPanel({ embedded = false }: { embedded?: boolean })
         deletePrompt.mutate(entry.id);
         if (editingId === entry.id) closeEditor();
       },
+    });
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
@@ -207,56 +217,78 @@ export function PromptLibraryPanel({ embedded = false }: { embedded?: boolean })
             {items.length === 0 ? (
               <p className="text-sm text-foreground-muted">{t('promptLibrary.empty')}</p>
             ) : (
-              <ul className="grid gap-3">
-                {items.map((entry) => (
-                  <li
-                    key={entry.id}
-                    className="group flex items-start gap-3 rounded-lg border border-border bg-background-secondary p-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-foreground">
-                        {entry.title}
+              <ul className="grid gap-2">
+                {items.map((entry) => {
+                  const isOpen = expandedIds.has(entry.id);
+                  return (
+                    <li
+                      key={entry.id}
+                      className="group overflow-hidden rounded-lg border border-border bg-background-secondary"
+                    >
+                      <div className="flex items-center gap-2 px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(entry.id)}
+                          aria-expanded={isOpen}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        >
+                          <ChevronRight
+                            className={cn(
+                              'size-4 shrink-0 text-foreground-muted transition-transform',
+                              isOpen && 'rotate-90'
+                            )}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-foreground">
+                              {entry.title}
+                            </span>
+                            {entry.description && (
+                              <span className="mt-0.5 block truncate text-xs text-foreground-muted">
+                                {entry.description}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('promptLibrary.copy')}
+                            onClick={() => handleCopy(entry)}
+                          >
+                            <Copy className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('common.edit')}
+                            onClick={() => openEdit(entry)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('common.delete')}
+                            onClick={() => handleDelete(entry)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
                       </div>
-                      {entry.description && (
-                        <div className="mt-0.5 truncate text-xs text-foreground-muted">
-                          {entry.description}
+                      {isOpen && (
+                        <div className="border-t border-border px-3 py-2.5 pl-9">
+                          <pre className="min-w-0 whitespace-pre-wrap break-words font-mono text-xs text-foreground-passive">
+                            {entry.content}
+                          </pre>
                         </div>
                       )}
-                      <div className="mt-2 line-clamp-2 whitespace-pre-wrap break-words text-xs text-foreground-passive">
-                        {entry.content}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('promptLibrary.copy')}
-                        onClick={() => handleCopy(entry)}
-                      >
-                        <Copy className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('common.edit')}
-                        onClick={() => openEdit(entry)}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('common.delete')}
-                        onClick={() => handleDelete(entry)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
