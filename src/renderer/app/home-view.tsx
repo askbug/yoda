@@ -656,7 +656,8 @@ export const HomeComposer = observer(function HomeComposer({
 
   // Base branch for forked tasks: the persisted pick, resolved against the
   // live branch list so a stale pick silently falls back to the default.
-  const draftBaseBranch = draft?.baseBranch ?? null;
+  const baseBranchOverridden = composerDefaults?.baseBranch !== undefined;
+  const draftBaseBranch = composerDefaults?.baseBranch ?? draft?.baseBranch ?? null;
   const pickedBaseBranch = draftBaseBranch
     ? repo?.branches.find(
         (b) =>
@@ -667,15 +668,15 @@ export const HomeComposer = observer(function HomeComposer({
     : undefined;
   const setBaseBranch = useCallback(
     (next: Branch) => {
-      updateDraft({
-        baseBranch: {
-          type: next.type,
-          branch: next.branch,
-          ...(next.type === 'remote' ? { remoteName: next.remote.name } : {}),
-        },
-      });
+      const value = {
+        type: next.type,
+        branch: next.branch,
+        ...(next.type === 'remote' ? { remoteName: next.remote.name } : {}),
+      };
+      if (baseBranchOverridden) setComposerDefault('baseBranch', value);
+      else updateDraft({ baseBranch: value });
     },
-    [updateDraft]
+    [baseBranchOverridden, setComposerDefault, updateDraft]
   );
   // Subtasks always branch off the parent task's branch.
   const forkBaseBranch: Branch | undefined = useMemo(
@@ -772,39 +773,51 @@ export const HomeComposer = observer(function HomeComposer({
     },
     [runModeOverridden, setComposerDefault, updateDraft]
   );
+  const compareRuntimesOverridden = composerDefaults?.compareRuntimes !== undefined;
   const compareRuntimes = useMemo(
-    () => normalizeCompareProviders(draft?.compareRuntimes, runtimeId),
-    [draft?.compareRuntimes, runtimeId]
+    () =>
+      normalizeCompareProviders(
+        composerDefaults?.compareRuntimes ?? draft?.compareRuntimes,
+        runtimeId
+      ),
+    [composerDefaults?.compareRuntimes, draft?.compareRuntimes, runtimeId]
+  );
+  const writeCompareRuntimes = useCallback(
+    (next: RuntimeId[]) => {
+      if (compareRuntimesOverridden) setComposerDefault('compareRuntimes', next);
+      else updateDraft({ compareRuntimes: next });
+    },
+    [compareRuntimesOverridden, setComposerDefault, updateDraft]
   );
   const setCompareProvider = useCallback(
     (index: number, next: RuntimeId) => {
       const providers = [...compareRuntimes];
       providers[index] = next;
-      updateDraft({ compareRuntimes: uniqueRuntimes(providers).slice(0, MAX_COMPARE_AGENTS) });
+      writeCompareRuntimes(uniqueRuntimes(providers).slice(0, MAX_COMPARE_AGENTS));
     },
-    [compareRuntimes, updateDraft]
+    [compareRuntimes, writeCompareRuntimes]
   );
   const addCompareProvider = useCallback(() => {
-    updateDraft({
-      compareRuntimes: [...compareRuntimes, nextAvailableProvider(compareRuntimes)].slice(
-        0,
-        MAX_COMPARE_AGENTS
-      ),
-    });
-  }, [compareRuntimes, updateDraft]);
+    writeCompareRuntimes(
+      [...compareRuntimes, nextAvailableProvider(compareRuntimes)].slice(0, MAX_COMPARE_AGENTS)
+    );
+  }, [compareRuntimes, writeCompareRuntimes]);
   const removeCompareProvider = useCallback(
     (index: number) => {
       if (compareRuntimes.length <= MIN_COMPARE_AGENTS) return;
-      updateDraft({ compareRuntimes: compareRuntimes.filter((_, i) => i !== index) });
+      writeCompareRuntimes(compareRuntimes.filter((_, i) => i !== index));
     },
-    [compareRuntimes, updateDraft]
+    [compareRuntimes, writeCompareRuntimes]
   );
-  const reviewerRuntime = draft?.reviewReviewerRuntime ?? DEFAULT_REVIEWER_RUNTIME;
+  const reviewerOverridden = composerDefaults?.reviewerRuntime !== undefined;
+  const reviewerRuntime =
+    composerDefaults?.reviewerRuntime ?? draft?.reviewReviewerRuntime ?? DEFAULT_REVIEWER_RUNTIME;
   const setReviewerProvider = useCallback(
     (next: RuntimeId) => {
-      updateDraft({ reviewReviewerRuntime: next });
+      if (reviewerOverridden) setComposerDefault('reviewerRuntime', next);
+      else updateDraft({ reviewReviewerRuntime: next });
     },
-    [updateDraft]
+    [reviewerOverridden, setComposerDefault, updateDraft]
   );
   // Agent Teams are reusable, project/task-decoupled templates surfaced as the
   // `team` paradigm (「多智能体（name）」). Built-ins + user teams come from the list.
@@ -2798,6 +2811,26 @@ export const HomeComposer = observer(function HomeComposer({
                   }
                 />
                 <ComposerScopeRow
+                  label={t('home.composerDefaultBaseBranchLabel')}
+                  value={forkBaseLabel}
+                  source={baseBranchOverridden ? 'project' : 'global'}
+                  canOverride={hasProjectOverrideTarget}
+                  onChange={(scope) =>
+                    setComposerDefault(
+                      'baseBranch',
+                      scope === 'project' && forkBaseBranch
+                        ? {
+                            type: forkBaseBranch.type,
+                            branch: forkBaseBranch.branch,
+                            ...(forkBaseBranch.type === 'remote'
+                              ? { remoteName: forkBaseBranch.remote.name }
+                              : {}),
+                          }
+                        : undefined
+                    )
+                  }
+                />
+                <ComposerScopeRow
                   label={t('home.composerDefaultStrategyLabel')}
                   source={standardStrategyOverridden ? 'project' : 'global'}
                   canOverride={hasProjectOverrideTarget}
@@ -2805,6 +2838,41 @@ export const HomeComposer = observer(function HomeComposer({
                     setComposerDefault(
                       'standardStrategyKind',
                       scope === 'project' ? strategyKind : undefined
+                    )
+                  }
+                />
+                <ComposerScopeRow
+                  label={t('home.composerDefaultReviewStrategyLabel')}
+                  source={reviewStrategyOverridden ? 'project' : 'global'}
+                  canOverride={hasProjectOverrideTarget}
+                  onChange={(scope) =>
+                    setComposerDefault(
+                      'reviewStrategyKind',
+                      scope === 'project' ? reviewStrategyKind : undefined
+                    )
+                  }
+                />
+                <ComposerScopeRow
+                  label={t('home.composerDefaultReviewerLabel')}
+                  value={getRuntime(reviewerRuntime)?.name ?? reviewerRuntime}
+                  source={reviewerOverridden ? 'project' : 'global'}
+                  canOverride={hasProjectOverrideTarget}
+                  onChange={(scope) =>
+                    setComposerDefault(
+                      'reviewerRuntime',
+                      scope === 'project' ? reviewerRuntime : undefined
+                    )
+                  }
+                />
+                <ComposerScopeRow
+                  label={t('home.composerDefaultCompareLabel')}
+                  value={String(compareRuntimes.length)}
+                  source={compareRuntimesOverridden ? 'project' : 'global'}
+                  canOverride={hasProjectOverrideTarget}
+                  onChange={(scope) =>
+                    setComposerDefault(
+                      'compareRuntimes',
+                      scope === 'project' ? compareRuntimes : undefined
                     )
                   }
                 />

@@ -87,11 +87,22 @@ export const composerStrategyKindValues = ['new-branch', 'no-worktree'] as const
  * can be committed to `.yoda.json` and shared across the team — the exact same
  * layering model as {@link projectPromptPrinciplesSchema}.
  */
+export const composerBaseBranchSchema = z.object({
+  type: z.enum(['local', 'remote']),
+  branch: z.string(),
+  remoteName: z.string().optional(),
+});
+
+export type ComposerBaseBranch = z.infer<typeof composerBaseBranchSchema>;
+
 export const composerDefaultsSchema = z.object({
   runtimeId: z.enum(RUNTIME_IDS).optional(),
   runMode: z.enum(composerRunModeValues).optional(),
+  baseBranch: composerBaseBranchSchema.optional(),
   standardStrategyKind: z.enum(composerStrategyKindValues).optional(),
   reviewStrategyKind: z.enum(composerStrategyKindValues).optional(),
+  compareRuntimes: z.array(z.enum(RUNTIME_IDS)).optional(),
+  reviewerRuntime: z.enum(RUNTIME_IDS).optional(),
   attachImagesAsPaths: z.boolean().optional(),
 });
 
