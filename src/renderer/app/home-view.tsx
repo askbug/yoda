@@ -74,6 +74,7 @@ import {
   getRepositoryStore,
   projectDisplayName,
 } from '@renderer/features/projects/stores/project-selectors';
+import { usePrompts } from '@renderer/features/prompt-library/use-prompts';
 import { useAppSettingsKey } from '@renderer/features/settings/use-app-settings-key';
 import { useSkills } from '@renderer/features/skills/components/useSkills';
 import { recordSkillInvocation } from '@renderer/features/skills/skill-usage-stats';
@@ -97,6 +98,7 @@ import { useNavigate, useParams } from '@renderer/lib/layout/navigation-provider
 import { useShowModal } from '@renderer/lib/modal/modal-provider';
 import { appState } from '@renderer/lib/stores/app-state';
 import { Badge } from '@renderer/lib/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@renderer/lib/ui/collapsible';
 import {
   Combobox,
   ComboboxCollection,
@@ -1329,6 +1331,12 @@ export const HomeComposer = observer(function HomeComposer({
   const { value: promptPrinciplesValue, update: updatePromptPrinciples } =
     useAppSettingsKey('promptPrinciples');
   const promptPrinciples = promptPrinciplesValue?.items ?? [];
+  // Saved prompt templates (opt-in): listed in the composer settings popover so
+  // they can be inserted into the prompt without leaving the home view.
+  const { data: savedPrompts = [] } = usePrompts();
+  // Run-defaults section is collapsed by default — it is rarely changed and its
+  // eight rows otherwise dominate the popover.
+  const [runDefaultsOpen, setRunDefaultsOpen] = useState(false);
   const setPromptPrincipleEnabled = useCallback(
     (id: string, enabled: boolean) => {
       const items = promptPrinciplesValue?.items ?? [];
@@ -2789,101 +2797,117 @@ export const HomeComposer = observer(function HomeComposer({
                   />
                 </div>
               </div>
-              <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-2">
-                <ComposerSettingsHeader
-                  label={t('home.composerRunDefaultsLabel')}
-                  hint={t('home.composerRunDefaultsHint')}
-                />
-                <ComposerScopeRow
-                  label={t('home.composerDefaultRuntimeLabel')}
-                  value={runtimeId ? (getRuntime(runtimeId)?.name ?? runtimeId) : undefined}
-                  source={runtimeOverridden ? 'project' : 'global'}
-                  canOverride={hasProjectOverrideTarget}
-                  onChange={(scope) =>
-                    setComposerDefault(
-                      'runtimeId',
-                      scope === 'project' ? (runtimeId ?? undefined) : undefined
-                    )
-                  }
-                />
-                <ComposerScopeRow
-                  label={t('home.composerDefaultRunModeLabel')}
-                  source={runModeOverridden ? 'project' : 'global'}
-                  canOverride={hasProjectOverrideTarget}
-                  onChange={(scope) =>
-                    setComposerDefault(
-                      'runMode',
-                      scope === 'project' ? persistedRunMode : undefined
-                    )
-                  }
-                />
-                <ComposerScopeRow
-                  label={t('home.composerDefaultBaseBranchLabel')}
-                  value={forkBaseLabel}
-                  source={baseBranchOverridden ? 'project' : 'global'}
-                  canOverride={hasProjectOverrideTarget}
-                  onChange={(scope) =>
-                    setComposerDefault(
-                      'baseBranch',
-                      scope === 'project' && forkBaseBranch
-                        ? {
-                            type: forkBaseBranch.type,
-                            branch: forkBaseBranch.branch,
-                            ...(forkBaseBranch.type === 'remote'
-                              ? { remoteName: forkBaseBranch.remote.name }
-                              : {}),
-                          }
-                        : undefined
-                    )
-                  }
-                />
-                <ComposerScopeRow
-                  label={t('home.composerDefaultStrategyLabel')}
-                  source={standardStrategyOverridden ? 'project' : 'global'}
-                  canOverride={hasProjectOverrideTarget}
-                  onChange={(scope) =>
-                    setComposerDefault(
-                      'standardStrategyKind',
-                      scope === 'project' ? strategyKind : undefined
-                    )
-                  }
-                />
-                <ComposerScopeRow
-                  label={t('home.composerDefaultReviewStrategyLabel')}
-                  source={reviewStrategyOverridden ? 'project' : 'global'}
-                  canOverride={hasProjectOverrideTarget}
-                  onChange={(scope) =>
-                    setComposerDefault(
-                      'reviewStrategyKind',
-                      scope === 'project' ? reviewStrategyKind : undefined
-                    )
-                  }
-                />
-                <ComposerScopeRow
-                  label={t('home.composerDefaultReviewerLabel')}
-                  value={getRuntime(reviewerRuntime)?.name ?? reviewerRuntime}
-                  source={reviewerOverridden ? 'project' : 'global'}
-                  canOverride={hasProjectOverrideTarget}
-                  onChange={(scope) =>
-                    setComposerDefault(
-                      'reviewerRuntime',
-                      scope === 'project' ? reviewerRuntime : undefined
-                    )
-                  }
-                />
-                <ComposerScopeRow
-                  label={t('home.composerDefaultCompareLabel')}
-                  value={String(compareRuntimes.length)}
-                  source={compareRuntimesOverridden ? 'project' : 'global'}
-                  canOverride={hasProjectOverrideTarget}
-                  onChange={(scope) =>
-                    setComposerDefault(
-                      'compareRuntimes',
-                      scope === 'project' ? compareRuntimes : undefined
-                    )
-                  }
-                />
-              </div>
+              <Collapsible
+                open={runDefaultsOpen}
+                onOpenChange={setRunDefaultsOpen}
+                className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-2"
+              >
+                <CollapsibleTrigger
+                  title={t('home.composerRunDefaultsHint')}
+                  className="group flex items-center justify-between gap-2 text-left"
+                >
+                  <MicroLabel className="text-[10px]">
+                    {t('home.composerRunDefaultsLabel')}
+                  </MicroLabel>
+                  <ChevronDown
+                    className={cn(
+                      'size-3.5 shrink-0 text-foreground-passive transition-transform',
+                      runDefaultsOpen && 'rotate-180'
+                    )}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="flex flex-col gap-1">
+                  <ComposerScopeRow
+                    label={t('home.composerDefaultRuntimeLabel')}
+                    value={runtimeId ? (getRuntime(runtimeId)?.name ?? runtimeId) : undefined}
+                    source={runtimeOverridden ? 'project' : 'global'}
+                    canOverride={hasProjectOverrideTarget}
+                    onChange={(scope) =>
+                      setComposerDefault(
+                        'runtimeId',
+                        scope === 'project' ? (runtimeId ?? undefined) : undefined
+                      )
+                    }
+                  />
+                  <ComposerScopeRow
+                    label={t('home.composerDefaultRunModeLabel')}
+                    source={runModeOverridden ? 'project' : 'global'}
+                    canOverride={hasProjectOverrideTarget}
+                    onChange={(scope) =>
+                      setComposerDefault(
+                        'runMode',
+                        scope === 'project' ? persistedRunMode : undefined
+                      )
+                    }
+                  />
+                  <ComposerScopeRow
+                    label={t('home.composerDefaultBaseBranchLabel')}
+                    value={forkBaseLabel}
+                    source={baseBranchOverridden ? 'project' : 'global'}
+                    canOverride={hasProjectOverrideTarget}
+                    onChange={(scope) =>
+                      setComposerDefault(
+                        'baseBranch',
+                        scope === 'project' && forkBaseBranch
+                          ? {
+                              type: forkBaseBranch.type,
+                              branch: forkBaseBranch.branch,
+                              ...(forkBaseBranch.type === 'remote'
+                                ? { remoteName: forkBaseBranch.remote.name }
+                                : {}),
+                            }
+                          : undefined
+                      )
+                    }
+                  />
+                  <ComposerScopeRow
+                    label={t('home.composerDefaultStrategyLabel')}
+                    source={standardStrategyOverridden ? 'project' : 'global'}
+                    canOverride={hasProjectOverrideTarget}
+                    onChange={(scope) =>
+                      setComposerDefault(
+                        'standardStrategyKind',
+                        scope === 'project' ? strategyKind : undefined
+                      )
+                    }
+                  />
+                  <ComposerScopeRow
+                    label={t('home.composerDefaultReviewStrategyLabel')}
+                    source={reviewStrategyOverridden ? 'project' : 'global'}
+                    canOverride={hasProjectOverrideTarget}
+                    onChange={(scope) =>
+                      setComposerDefault(
+                        'reviewStrategyKind',
+                        scope === 'project' ? reviewStrategyKind : undefined
+                      )
+                    }
+                  />
+                  <ComposerScopeRow
+                    label={t('home.composerDefaultReviewerLabel')}
+                    value={getRuntime(reviewerRuntime)?.name ?? reviewerRuntime}
+                    source={reviewerOverridden ? 'project' : 'global'}
+                    canOverride={hasProjectOverrideTarget}
+                    onChange={(scope) =>
+                      setComposerDefault(
+                        'reviewerRuntime',
+                        scope === 'project' ? reviewerRuntime : undefined
+                      )
+                    }
+                  />
+                  <ComposerScopeRow
+                    label={t('home.composerDefaultCompareLabel')}
+                    value={String(compareRuntimes.length)}
+                    source={compareRuntimesOverridden ? 'project' : 'global'}
+                    canOverride={hasProjectOverrideTarget}
+                    onChange={(scope) =>
+                      setComposerDefault(
+                        'compareRuntimes',
+                        scope === 'project' ? compareRuntimes : undefined
+                      )
+                    }
+                  />
+                </CollapsibleContent>
+              </Collapsible>
               <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-2">
                 <ComposerSettingsHeader
                   label={t('home.promptPrinciplesLabel')}
@@ -2962,6 +2986,47 @@ export const HomeComposer = observer(function HomeComposer({
                     ))}
                   </>
                 ) : null}
+              </div>
+              <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-2">
+                <ComposerSettingsHeader
+                  label={t('home.promptTemplatesLabel')}
+                  action={
+                    <button
+                      type="button"
+                      className="font-mono text-[10px] uppercase tracking-widest text-foreground-passive transition-colors hover:text-foreground"
+                      onClick={() => navigate('library', { section: 'prompts' })}
+                    >
+                      {t('home.manage')}
+                    </button>
+                  }
+                />
+                {savedPrompts.length === 0 ? (
+                  <p className="text-xs text-foreground-passive">
+                    {t('home.promptTemplatesEmpty')}
+                  </p>
+                ) : (
+                  savedPrompts.map((template) => (
+                    <div key={template.id} className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="min-w-0 truncate text-xs text-foreground">
+                          {template.title}
+                        </span>
+                        {template.description ? (
+                          <InfoTooltip label={template.title} content={template.description} />
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={t('home.promptTemplateInsert')}
+                        title={t('home.promptTemplateInsert')}
+                        onClick={() => insertPromptSnippet(template.content)}
+                        className="flex size-5 shrink-0 items-center justify-center rounded text-foreground-passive transition-colors hover:bg-background-2 hover:text-foreground"
+                      >
+                        <Plus className="size-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
               <InstructionFilesSection projectPath={skillProjectPath} />
             </PopoverContent>
