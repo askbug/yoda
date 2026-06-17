@@ -877,7 +877,7 @@ export const HomeComposer = observer(function HomeComposer({
       return t('home.modeSummaryAgentCount', { count: compareRuntimes.length });
     }
     if (runMode === 'team') {
-      return activeTeam?.name ?? null;
+      return activeTeam ? teamDisplayName(activeTeam, t) : null;
     }
 
     // Single-Agent modes (normal / brainstorm / review): the implementer slot's
@@ -3418,18 +3418,19 @@ const WORKFLOW_RUN_MODE_OPTIONS: RunModeOption[] = [
     descKey: 'home.modeNormalDesc',
   },
   {
-    id: 'brainstorm',
-    mode: 'brainstorm',
-    icon: Lightbulb,
-    labelKey: 'home.modeBrainstorm',
-    descKey: 'home.modeBrainstormDesc',
-  },
-  {
     id: 'review-workflow',
     mode: 'review',
     icon: Repeat2,
     labelKey: 'home.modeReview',
     descKey: 'home.modeReviewDesc',
+  },
+  {
+    id: 'brainstorm',
+    mode: 'brainstorm',
+    icon: Lightbulb,
+    labelKey: 'home.modeBrainstorm',
+    descKey: 'home.modeBrainstormDesc',
+    alpha: true,
   },
 ];
 
@@ -3443,17 +3444,38 @@ const EXPLORE_RUN_MODE_OPTIONS: RunModeOption[] = [
   },
 ];
 
+// Localized copy for the built-in teams so the zh/en picker reads naturally
+// rather than echoing the raw template name. User teams fall back to their name.
+const BUILTIN_TEAM_COPY: Record<string, { labelKey: string; descKey: string }> = {
+  [BUILTIN_REVIEW_TEAM_ID]: {
+    labelKey: 'home.modeTeamReview',
+    descKey: 'home.modeTeamReviewDesc',
+  },
+  [BUILTIN_STARTUP_TEAM_ID]: {
+    labelKey: 'home.modeTeamStartup',
+    descKey: 'home.modeTeamStartupDesc',
+  },
+};
+
 function teamToRunModeOption(team: AgentTeam): RunModeOption {
+  const copy = BUILTIN_TEAM_COPY[team.id];
   return {
     id: `team:${team.id}`,
     mode: 'team',
     teamId: team.id,
     emoji: team.icon,
-    label: team.name,
-    descKey: 'home.modeTeamDesc',
-    // Honors the original "startup is alpha" call; the review-loop team is GA.
+    ...(copy ? { labelKey: copy.labelKey } : { label: team.name }),
+    descKey: copy?.descKey ?? 'home.modeTeamDesc',
+    // Honors the original "startup is alpha" call; the review team is GA.
     alpha: team.id === BUILTIN_STARTUP_TEAM_ID,
   };
+}
+
+// Display name for a team across the composer (picker + summary chip): localized
+// for built-ins, the user-given name otherwise.
+function teamDisplayName(team: AgentTeam, t: (key: string) => string): string {
+  const copy = BUILTIN_TEAM_COPY[team.id];
+  return copy ? t(copy.labelKey) : team.name;
 }
 
 // Multi-agent teams in a stable order: the review-loop team leads, the startup

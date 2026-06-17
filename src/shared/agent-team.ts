@@ -66,7 +66,7 @@ export const BUILTIN_REVIEW_TEAM_ID = 'builtin:review';
 export const BUILTIN_TEAMS: AgentTeam[] = [
   {
     id: BUILTIN_STARTUP_TEAM_ID,
-    name: 'Startup company',
+    name: 'Startup',
     icon: '🏢',
     routing: 'fan-out',
     builtin: true,
@@ -112,7 +112,7 @@ export const BUILTIN_TEAMS: AgentTeam[] = [
   },
   {
     id: BUILTIN_REVIEW_TEAM_ID,
-    name: 'Review (implement → review)',
+    name: 'Review',
     icon: '🔍',
     routing: 'review-loop',
     builtin: true,
